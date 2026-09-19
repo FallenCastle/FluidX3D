@@ -213,7 +213,8 @@ try {
     $record['projectBlob'] = Invoke-GitText -ArgumentList @('rev-parse', 'HEAD:FluidX3D.vcxproj')
     $record['definesBlob'] = Invoke-GitText -ArgumentList @('rev-parse', 'HEAD:src/defines.hpp')
     $record['setupBlob'] = Invoke-GitText -ArgumentList @('rev-parse', 'HEAD:src/setup.cpp')
-    $record['declaredDefineLines'] = @(Get-Content -LiteralPath (Join-Path $RepositoryRoot 'src\defines.hpp') | Where-Object { $_ -match '^\s*#define\s+' })
+    # Get-Content adds provider metadata to strings; PS 5.1 recursively serializes it.
+    $record['declaredDefineLines'] = @([System.IO.File]::ReadAllLines((Join-Path $RepositoryRoot 'src\defines.hpp')) | Where-Object { $_ -match '^\s*#define\s+' })
     $record['msbuildArguments'] = $commonArguments + @('/t:Rebuild', '/m', '/nodeReuse:false', '/verbosity:minimal')
     Write-JsonFile $record $recordPath
 
