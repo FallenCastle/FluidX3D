@@ -129,30 +129,31 @@ def main():
             for height in [8,16,32]:
                 c = read(repo/'configs'/f'{case}.json')
                 c['domain']['cells']=[8,height+2,8]
-                nu = .1*height/8  # acoustic scaling: fixed U=0.05 and Re=4
+                speed = .1
+                nu = .2*height/8  # acoustic scaling: fixed U=0.1 and Re=4
                 c['fluid']['nu'] = nu
                 steps = math.ceil(1.6*height**2/nu)
                 c['run'].update(steps=steps,monitor_every=steps)
                 c['analysis'].update(start_step=steps-98,every=49)
                 c['analysis']['probes'][0]['position']=[4.5,height/2+.5,4.5]
-                if case=='poiseuille': c['fluid']['body_force']=[8*nu*.05/height**2,0,0]
+                if case=='poiseuille': c['fluid']['body_force']=[8*nu*speed/height**2,0,0]
+                else: c['boundaries'][2]['velocity']=[speed,0,0]
                 out=invoke(f'{case}-{height}',c)
                 u=p1.vtk(out/f'u-{steps:09d}.vtk')['values']
                 actual=[sum(u[3*(x+8*(y+(height+2)*z))] for x in range(8) for z in range(8))/64 for y in range(1,height+1)]
-                theory=[.05*(y-.5)/height if case=='couette' else 4*.05*(y-.5)*(height-y+.5)/height**2 for y in range(1,height+1)]
+                theory=[speed*(y-.5)/height if case=='couette' else 4*speed*(y-.5)*(height-y+.5)/height**2 for y in range(1,height+1)]
                 l2=math.sqrt(sum((a-b)**2 for a,b in zip(actual,theory))/sum(b*b for b in theory))
-                linf=max(abs(a-b) for a,b in zip(actual,theory))/.05
+                linf=max(abs(a-b) for a,b in zip(actual,theory))/speed
                 force=read(out/'statistics.json')['forces']
-                shear=nu*.05*64/height
-                expected=([4*nu*.05*64/height]*2 if case=='poiseuille' else [shear,-shear])
+                shear=nu*speed*64/height
+                expected=([4*nu*speed*64/height]*2 if case=='poiseuille' else [shear,-shear])
                 measured=[force[n]['fields']['fx']['mean'] for n in ['lower','upper']]
                 force_error=max(abs(a-b)/abs(b) for a,b in zip(measured,expected))
-                profile={'case':case,'H':height,'nu':nu,'Re':.05*height/nu,'steps':steps,'l2_relative':l2,'linf_over_U':linf,
+                profile={'case':case,'H':height,'nu':nu,'U':speed,'Re':speed*height/nu,'steps':steps,'l2_relative':l2,'linf_over_U':linf,
                          'force_measured':measured,'force_expected':expected,'force_relative_error':force_error,
                          'u':actual,'analytical_u':theory,'results':str(out)}
                 report['profiles'].append(profile);write(root/'report.json',report)
-                assert l2<.03 and linf<.03,(case,height,l2,linf)
-                assert force_error<.04,(case,height,measured,expected)
+
                 assert int(rows(out/'analysis.csv')[-1]['fluid_cells'])==64*height
         for case in ['poiseuille','couette']:
             lattice = copy.deepcopy(read(root/f'{case}-16'/'case.json'))
@@ -211,6 +212,9 @@ def main():
         assert result.returncode!=0
         summary=read(next((badstudy/'runs').glob('*/summary.json')))
         assert [x['status'] for x in summary['cases']]==['failed','succeeded']
+        for profile in report['profiles']:
+            assert profile['l2_relative']<.03 and profile['linf_over_U']<.03, profile
+            assert profile['force_relative_error']<.04, profile
         report['status']='succeeded'
     except Exception as error:
         report['status']='failed';report['error']=repr(error)
