@@ -1,0 +1,772 @@
+{
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "case": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "solver": {
+      "type": "object",
+      "properties": {
+        "lattice": {
+          "const": "D3Q19"
+        },
+        "collision": {
+          "const": "SRT"
+        },
+        "storage": {
+          "const": "FP16S"
+        },
+        "turbulence": {
+          "const": "smagorinsky"
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "units": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "enum": [
+            "lattice",
+            "si"
+          ]
+        },
+        "dt": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "reference_density": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "reference_velocity": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "lattice_velocity": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "additionalProperties": false
+    },
+    "domain": {
+      "type": "object",
+      "properties": {
+        "cells": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 3,
+            "maximum": 1000000
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "aspect_ratio": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "memory_budget_mb": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "length": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "dx": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "origin": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "fluid": {
+      "type": "object",
+      "properties": {
+        "rho": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "nu": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "reynolds": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "reference_length": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "reference_velocity": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      },
+      "required": [
+        "rho"
+      ],
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "nu"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "reynolds"
+                ]
+              },
+              {
+                "required": [
+                  "reference_length"
+                ]
+              },
+              {
+                "required": [
+                  "reference_velocity"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "required": [
+            "reynolds",
+            "reference_length",
+            "reference_velocity"
+          ],
+          "not": {
+            "required": [
+              "nu"
+            ]
+          }
+        }
+      ]
+    },
+    "initial": {
+      "type": "object",
+      "properties": {
+        "rho": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "velocity": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "regions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "box_min": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "box_max": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "rho": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "velocity": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              }
+            },
+            "required": [
+              "box_min",
+              "box_max",
+              "rho",
+              "velocity"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "velocity"
+      ],
+      "additionalProperties": false
+    },
+    "geometry": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "file": {
+            "type": "string",
+            "minLength": 1
+          },
+          "transform": {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "enum": [
+                  "fit",
+                  "scale"
+                ]
+              },
+              "size": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "center": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "factor": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "pivot": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "translation": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "axis": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "degrees": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "mode"
+            ],
+            "additionalProperties": false,
+            "oneOf": [
+              {
+                "properties": {
+                  "mode": {
+                    "const": "fit"
+                  }
+                },
+                "required": [
+                  "size",
+                  "center"
+                ],
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "factor"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "pivot"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "translation"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "properties": {
+                  "mode": {
+                    "const": "scale"
+                  }
+                },
+                "required": [
+                  "factor",
+                  "translation"
+                ],
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "size"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "center"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "file",
+          "transform"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "boundaries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "faces": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "xmin",
+                "xmax",
+                "ymin",
+                "ymax",
+                "zmin",
+                "zmax"
+              ]
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "type": {
+            "enum": [
+              "no_slip",
+              "equilibrium",
+              "periodic"
+            ]
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": -1000000,
+            "maximum": 1000000
+          },
+          "region": {
+            "type": "object",
+            "properties": {
+              "min": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "max": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              }
+            },
+            "required": [
+              "min",
+              "max"
+            ],
+            "additionalProperties": false
+          },
+          "rho": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "velocity": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3
+          }
+        },
+        "required": [
+          "id",
+          "faces",
+          "type"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "type": {
+                  "const": "equilibrium"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "rho",
+                "velocity"
+              ]
+            },
+            "else": {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "rho"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "velocity"
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "type": {
+                  "const": "periodic"
+                }
+              }
+            },
+            "then": {
+              "not": {
+                "required": [
+                  "region"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    "run": {
+      "type": "object",
+      "properties": {
+        "steps": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "duration": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "monitor_every": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [],
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "steps"
+          ],
+          "not": {
+            "required": [
+              "duration"
+            ]
+          }
+        },
+        {
+          "required": [
+            "duration"
+          ],
+          "not": {
+            "required": [
+              "steps"
+            ]
+          }
+        }
+      ]
+    },
+    "output": {
+      "type": "object",
+      "properties": {
+        "vtk_fields": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "u",
+              "rho",
+              "flags"
+            ]
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "vtk_every": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "initial": {
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema_version",
+    "case",
+    "units",
+    "domain",
+    "fluid",
+    "initial",
+    "geometry",
+    "boundaries",
+    "run"
+  ],
+  "additionalProperties": false,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FluidX3D CLI case schema version 1",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "units": {
+            "properties": {
+              "mode": {
+                "const": "si"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "units": {
+            "required": [
+              "reference_density"
+            ],
+            "oneOf": [
+              {
+                "required": [
+                  "dt"
+                ],
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "reference_velocity"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "lattice_velocity"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "required": [
+                  "reference_velocity",
+                  "lattice_velocity"
+                ],
+                "not": {
+                  "required": [
+                    "dt"
+                  ]
+                }
+              }
+            ]
+          },
+          "domain": {
+            "required": [
+              "length",
+              "dx"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "cells"
+                  ]
+                },
+                {
+                  "required": [
+                    "aspect_ratio"
+                  ]
+                },
+                {
+                  "required": [
+                    "memory_budget_mb"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "units": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "reference_density"
+                  ]
+                },
+                {
+                  "required": [
+                    "dt"
+                  ]
+                },
+                {
+                  "required": [
+                    "reference_velocity"
+                  ]
+                },
+                {
+                  "required": [
+                    "lattice_velocity"
+                  ]
+                }
+              ]
+            }
+          },
+          "domain": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "length"
+                  ]
+                },
+                {
+                  "required": [
+                    "dx"
+                  ]
+                }
+              ]
+            },
+            "oneOf": [
+              {
+                "required": [
+                  "cells"
+                ],
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "aspect_ratio"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "memory_budget_mb"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "required": [
+                  "aspect_ratio",
+                  "memory_budget_mb"
+                ],
+                "not": {
+                  "required": [
+                    "cells"
+                  ]
+                }
+              }
+            ]
+          },
+          "run": {
+            "not": {
+              "required": [
+                "duration"
+              ]
+            }
+          }
+        }
+      }
+    }
+  ]
+}

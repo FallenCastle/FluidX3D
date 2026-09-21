@@ -127,13 +127,21 @@ def main():
         assert sorted(int(p.stem.split("-")[-1]) for p in periodic.glob("u-*.vtk")) == [0, 7, 14, 21, 23]
         u0 = vtk(periodic / "u-000000000.vtk"); uf = vtk(periodic / "u-000000023.vtk")
         assert max(abs(a-b) for a,b in zip(u0["values"],uf["values"])) < 1e-6
-        assert max(abs(v-1) for v in vtk(periodic / "rho-000000023.vtk")["values"]) < 1e-6
+        # FP16S stores shifted populations in half precision. Uniform fields remain
+        # spatially constant, but their reconstructed density need not equal 1 to
+        # FP32 precision. Bound this case's density/mass drift at 1e-4 relative.
+        density_final = vtk(periodic / "rho-000000023.vtk")["values"]
+        assert max(density_final) == min(density_final)
+        assert max(abs(v-1) for v in density_final) < 1e-4
+        assert max(abs(v-expected) for v,expected in zip(uf["values"], [0.03,0,0]*4096)) < 1e-5
         assert u0["origin"] == (0.5, 0.5, 0.5)
         si = invoke("SI 中文 paths", example("periodic-si.json"))
         su = vtk(si / "u-000000023.vtk")
         assert su["origin"] == (0.005, 0.005, 0.005) and su["spacing"] == (0.01,)*3
         assert max(abs(a-b*0.003/0.01) for a,b in zip(uf["values"],su["values"])) < 1e-7
-        assert max(abs(v-1000) for v in vtk(si / "rho-000000023.vtk")["values"]) < 1e-3
+        si_density = vtk(si / "rho-000000023.vtk")["values"]
+        assert max(abs(v-1000) for v in si_density) < 0.1
+        assert max(abs(a-b/1000) for a,b in zip(density_final,si_density)) < 1e-7
         sr = example("periodic-si.json"); sr["units"].pop("dt")
         sr["units"].update(reference_velocity=0.1, lattice_velocity=0.03)
         sr["run"] = {"duration": 0.069, "monitor_every": 7}
