@@ -65,7 +65,7 @@ def replace(obj, path, value):
 def generate(args):
     spec_path = args.spec.resolve()
     spec = read(spec_path)
-    if set(spec) != {'schema_version', 'base_config', 'parameters'} or spec['schema_version'] != 1:
+    if set(spec) != {'schema_version', 'base_config', 'parameters'} or type(spec['schema_version']) is not int or spec['schema_version'] != 1:
         raise ValueError('Study requires schema_version=1, base_config and parameters only')
     base_path = (spec_path.parent / spec['base_config']).resolve()
     base = read(base_path)
@@ -163,7 +163,8 @@ def run(args):
             if record['build']['executableSha256'] != expected:
                 raise ValueError('Run binary changed')
             row.update(status='succeeded', steps=record['validation']['completion']['steps'],
-                       statistics=str(Path(row['results']) / 'statistics.json'))
+                       statistics=(str(Path(row['results']) / 'statistics.json')
+                                   if (Path(row['results']) / 'statistics.json').is_file() else None))
         except Exception as error:
             row['error'] = str(error)
         report['cases'].append(row)
