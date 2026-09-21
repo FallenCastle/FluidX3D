@@ -26,7 +26,7 @@
 
 //#define INTERACTIVE_GRAPHICS // enable interactive graphics; start/pause the simulation by pressing P; either Windows or Linux X11 desktop must be available; on Linux: change to "compile on Linux with X11" command in make.sh
 //#define INTERACTIVE_GRAPHICS_ASCII // enable interactive graphics in ASCII mode the console; start/pause the simulation by pressing P
-#define GRAPHICS // run FluidX3D in the console, but still enable graphics functionality for writing rendered frames to the hard drive
+//#define GRAPHICS // configuration runner uses console and VTK output only
 
 #define GRAPHICS_FRAME_WIDTH 1280 // set frame width if only GRAPHICS is enabled
 #define GRAPHICS_FRAME_HEIGHT 720 // set frame height if only GRAPHICS is enabled

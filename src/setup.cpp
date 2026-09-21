@@ -37,18 +37,15 @@ void main_setup() {
             lbm.flags[n] = TYPE_E;
     });
 
-    lbm.graphics.visualization_modes = VIS_FLAG_SURFACE|VIS_Q_CRITERION;
-    lbm.graphics.set_camera_free(
-        float3((float)Nx, -0.4f*(float)Ny, 2.0f*(float)Nz), -33.0f, 42.0f, 68.0f);
     lbm.run(0u, lbm_T);
     lbm.flags.write_device_to_vtk("", false);
-    lbm.graphics.write_frame();
+    lbm.u.write_device_to_vtk("", false);
+    lbm.rho.write_device_to_vtk("", false);
 
     while(lbm.get_t()<lbm_T) {
         const ulong remaining = lbm_T-lbm.get_t();
         const ulong step = remaining<100ull ? remaining : 100ull;
         lbm.run(step, lbm_T);
-        lbm.graphics.write_frame();
     }
     lbm.u.write_device_to_vtk("", false);
     lbm.rho.write_device_to_vtk("", false);
