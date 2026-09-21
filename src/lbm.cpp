@@ -133,6 +133,7 @@ void LBM_Domain::allocate(Device& device) {
 	object_sum = Memory<float>(device, 1u, 4u); // x, y, z, cell count
 	kernel_stream_collide.add_parameters(F);
 	kernel_update_fields.add_parameters(F);
+	kernel_config_force_field = Kernel(device, N, "config_force_field", fi, flags, t, F, u, 1.0f);
 	kernel_update_force_field = Kernel(device, N, "update_force_field", fi, flags, t, F);
 	kernel_reset_force_field = Kernel(device, N, "reset_force_field", F);
 	kernel_object_center_of_mass = Kernel(device, N, "object_center_of_mass", flags, (uchar)0u, object_sum);
@@ -204,6 +205,10 @@ void LBM_Domain::enqueue_surface_3() {
 }
 #endif // SURFACE
 #ifdef FORCE_FIELD
+void LBM_Domain::enqueue_config_force_field(const float reference_rho) {
+    kernel_config_force_field.set_parameters(2u, t);
+    kernel_config_force_field.set_parameters(6u, reference_rho).enqueue_run();
+}
 void LBM_Domain::enqueue_update_force_field() { // calculate forces from fluid on TYPE_S cells
 	if(t!=t_last_force_field) { // only run kernel_update_force_field if the time step has changed since last update
 		kernel_update_force_field.set_parameters(2u, t).enqueue_run();

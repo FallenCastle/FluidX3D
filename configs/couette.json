@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "case": {
+    "name": "couette"
+  },
+  "units": {
+    "mode": "lattice"
+  },
+  "domain": {
+    "cells": [
+      8,
+      18,
+      8
+    ]
+  },
+  "fluid": {
+    "rho": 1.0,
+    "nu": 0.1
+  },
+  "initial": {
+    "velocity": [
+      0,
+      0,
+      0
+    ]
+  },
+  "geometry": [],
+  "boundaries": [
+    {
+      "id": "periodic",
+      "faces": [
+        "xmin",
+        "xmax",
+        "zmin",
+        "zmax"
+      ],
+      "type": "periodic"
+    },
+    {
+      "id": "lower",
+      "faces": [
+        "ymin"
+      ],
+      "type": "no_slip"
+    },
+    {
+      "id": "upper",
+      "faces": [
+        "ymax"
+      ],
+      "type": "moving_wall",
+      "velocity": [
+        0.05,
+        0,
+        0
+      ]
+    }
+  ],
+  "run": {
+    "steps": 4000,
+    "monitor_every": 1000
+  },
+  "output": {
+    "vtk_fields": [
+      "u",
+      "rho",
+      "flags",
+      "p"
+    ],
+    "vtk_every": 0,
+    "initial": true
+  },
+  "analysis": {
+    "every": 50,
+    "start_step": 3900,
+    "probes": [
+      {
+        "id": "center",
+        "position": [
+          4.5,
+          8.5,
+          4.5
+        ]
+      }
+    ],
+    "forces": [
+      {
+        "id": "lower",
+        "target": "boundary:lower"
+      },
+      {
+        "id": "upper",
+        "target": "boundary:upper"
+      },
+      {
+        "id": "total",
+        "target": "all_solids"
+      }
+    ]
+  }
+}

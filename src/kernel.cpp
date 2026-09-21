@@ -1869,6 +1869,25 @@ string opencl_c_container() { return R( // ########################## begin of O
 } // update_fields()
 
 )+"#ifdef FORCE_FIELD"+R(
+)+R(kernel void config_force_field(const global fpxx* fi, const global uchar* flags, const ulong t, global float* F, const global float* u, const float reference_rho) {
+    const uxx n = get_global_id(0);
+    if(n>=(uxx)def_N||is_halo(n)||(flags[n]&TYPE_BO)!=TYPE_S) return;
+    uxx j[def_velocity_set]; neighbors(n, j);
+    const float3 wall = load3(u, n);
+    float3 force = (float3)(0.0f);
+    for(uint i=1u; i<def_velocity_set; i++) {
+        const uxx m = j[i]; // direction i points from solid n toward fluid m
+        if((flags[m]&TYPE_BO)==TYPE_S) continue;
+        // Incoming reflected population at m, before its moving-wall correction.
+        // Esoteric-Pull: odd directions are local, even directions use the solid slot.
+        const uint opposite = (i&1u) ? i+1u : i-1u;
+        const float incoming = load(fi, index_f((i&1u) ? m : n, t%2ul ? i : opposite));
+        const float3 ci = (float3)(c(i), c(def_velocity_set+i), c(2u*def_velocity_set+i));
+        const float exchange = 2.0f*(incoming+w(i)*(1.0f-reference_rho))+6.0f*w(i)*dot(ci, wall);
+        force -= exchange*ci; // fluid-on-solid; background pressure is subtracted
+    }
+    store3(F, n, force); // fluid F stays zero: diagnostic force never feeds back
+}
 )+R(kernel void update_force_field(const global fpxx* fi, const global uchar* flags, const ulong t, global float* F) { // calculate force from the fluid on solid boundaries from fi directly
 	const uxx n = get_global_id(0); // n = x+(y+z*Ny)*Nx
 	if(n>=(uxx)def_N||is_halo(n)) return; // don't execute update_force_field() on halo

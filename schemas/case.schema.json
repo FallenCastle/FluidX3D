@@ -140,6 +140,14 @@
         "reference_velocity": {
           "type": "number",
           "exclusiveMinimum": 0
+        },
+        "body_force": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
         }
       },
       "required": [
@@ -414,7 +422,8 @@
             "enum": [
               "no_slip",
               "equilibrium",
-              "periodic"
+              "periodic",
+              "moving_wall"
             ]
           },
           "priority": {
@@ -483,19 +492,38 @@
               ]
             },
             "else": {
-              "not": {
-                "anyOf": [
-                  {
-                    "required": [
-                      "rho"
-                    ]
-                  },
-                  {
-                    "required": [
-                      "velocity"
-                    ]
+              "if": {
+                "properties": {
+                  "type": {
+                    "const": "moving_wall"
                   }
-                ]
+                }
+              },
+              "then": {
+                "required": [
+                  "velocity"
+                ],
+                "not": {
+                  "required": [
+                    "rho"
+                  ]
+                }
+              },
+              "else": {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "rho"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "velocity"
+                      ]
+                    }
+                  ]
+                }
               }
             }
           },
@@ -570,7 +598,8 @@
             "enum": [
               "u",
               "rho",
-              "flags"
+              "flags",
+              "p"
             ]
           },
           "minItems": 1,
@@ -583,6 +612,72 @@
         },
         "initial": {
           "type": "boolean"
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "analysis": {
+      "type": "object",
+      "properties": {
+        "every": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "start_step": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "statistics": {
+          "type": "boolean"
+        },
+        "probes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "position": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              }
+            },
+            "required": [
+              "id",
+              "position"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "forces": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "target": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "id",
+              "target"
+            ],
+            "additionalProperties": false
+          }
         }
       },
       "required": [],

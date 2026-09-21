@@ -116,9 +116,12 @@ Json capabilities() {
             {"storage", "FP16S"},
             {"turbulence", "smagorinsky"},
             {"units", {"lattice", "si"}},
-            {"boundaries", {"no_slip", "equilibrium", "periodic"}},
+            {"boundaries", {"no_slip", "moving_wall", "equilibrium", "periodic"}},
             {"geometry", "binary STL static union"},
             {"outputs", {"VTK", "CSV", "JSON"}},
+            {"body_force", "constant force density"},
+            {"analysis", {"probes", "temporal statistics", "gauge force on solids"}},
+            {"device_bytes_per_cell", device_cell_bytes},
             {"graphics", false},
             {"devices_per_run", 1}};
 }
@@ -142,7 +145,7 @@ Config read_config(const fs::path &path) {
     const auto &j = c.source;
     keys(j,
          {"schema_version", "case", "solver", "units", "domain", "fluid", "initial", "geometry", "boundaries", "run",
-          "output"},
+          "output", "analysis"},
          "config");
     require(integer(field(j, "schema_version"), "schema_version") == 1, "Unsupported schema_version");
     const auto &ca = field(j, "case");
@@ -206,7 +209,7 @@ Config read_config(const fs::path &path) {
             // Match the upstream float calculation and nearest-integer conversion.
             float ax = static_cast<float>(aspect[0]), ay = static_cast<float>(aspect[1]),
                   az = static_cast<float>(aspect[2]);
-            float bytes = ax * ay * az * 55.0f / 1048576.0f;
+            float bytes = ax * ay * az * static_cast<float>(device_cell_bytes) / 1048576.0f;
             float scale = std::cbrt(static_cast<float>(mb) / bytes);
             for (int a = 0; a < 3; a++) {
                 double n = static_cast<float>(scale * static_cast<float>(aspect[a])) + 0.5f;
@@ -236,9 +239,17 @@ Config read_config(const fs::path &path) {
                 "Domain origin is too large to resolve the chosen spacing");
     }
     const auto &f = field(j, "fluid");
-    keys(f, {"rho", "nu", "reynolds", "reference_length", "reference_velocity"}, "fluid");
+    keys(f, {"rho", "nu", "reynolds", "reference_length", "reference_velocity", "body_force"}, "fluid");
     double density = positive(field(f, "rho"), "fluid.rho");
     c.rho = density / c.reference_density;
+    c.pressure_rho = c.rho;
+    if (f.contains("body_force")) {
+        c.body_force = vec(f["body_force"], "fluid.body_force");
+        for (auto &x : c.body_force) {
+            x *= c.dt * c.dt / (c.reference_density * c.dx);
+            finite_float(x, "lattice body force");
+        }
+    }
     double viscosity;
     if (f.contains("nu")) {
         require(!f.contains("reynolds") && !f.contains("reference_length") && !f.contains("reference_velocity"),
@@ -327,7 +338,8 @@ Config read_config(const fs::path &path) {
         bound.id = string_value(field(b, "id"), "boundary.id");
         require(!bound.id.empty() && ids.insert(bound.id).second, "Empty/duplicate boundary ID");
         bound.type = string_value(field(b, "type"), "boundary.type");
-        require(bound.type == "periodic" || bound.type == "equilibrium" || bound.type == "no_slip",
+        require(bound.type == "periodic" || bound.type == "equilibrium" || bound.type == "no_slip" ||
+                    bound.type == "moving_wall",
                 "Unsupported boundary type");
         if (b.contains("priority")) {
             require(b["priority"].is_number_integer(), "priority must be integer");
@@ -365,8 +377,13 @@ Config read_config(const fs::path &path) {
             bound.rho = positive(field(b, "rho"), "boundary.rho") / c.reference_density;
             finite_float(bound.rho, "boundary.rho", true);
             bound.velocity = velocity(field(b, "velocity"), "boundary.velocity");
+        } else if (bound.type == "moving_wall") {
+            require(!b.contains("rho"), "moving_wall does not accept rho");
+            bound.velocity = velocity(field(b, "velocity"), "moving_wall.velocity");
+            for (int face : bound.faces)
+                require(bound.velocity[face / 2] == 0, "moving_wall velocity must be tangential");
         } else
-            require(!b.contains("rho") && !b.contains("velocity"), "Only equilibrium accepts rho/velocity");
+            require(!b.contains("rho") && !b.contains("velocity"), "Only equilibrium/moving_wall accept velocity");
         c.boundaries.push_back(bound);
     }
     for (int a = 0; a < 3; a++) {
@@ -408,12 +425,76 @@ Config read_config(const fs::path &path) {
             std::set<std::string> unique;
             for (const auto &item : out["vtk_fields"]) {
                 auto name = string_value(item, "vtk_fields");
-                require(name == "u" || name == "rho" || name == "flags", "Unknown output field");
+                require(name == "u" || name == "rho" || name == "flags" || name == "p", "Unknown output field");
                 require(unique.insert(name).second, "Duplicate output field");
                 c.vtk_fields.push_back(name);
             }
         }
     }
+    for (const auto &b : c.boundaries)
+        if (b.type == "moving_wall") {
+            require(c.pressure_rho == 1 && c.rho == 1, "moving_wall requires lattice density 1");
+            for (const auto &r : c.regions)
+                require(r.rho == 1, "moving_wall requires lattice density 1");
+            for (const auto &e : c.boundaries)
+                require(e.rho == 1, "moving_wall requires lattice density 1");
+        }
+    c.sample_every = c.monitor_every;
+    if (j.contains("analysis")) {
+        c.analysis = true;
+        const auto &a = j["analysis"];
+        keys(a, {"every", "start_step", "statistics", "probes", "forces"}, "analysis");
+        if (a.contains("every"))
+            c.sample_every = integer(a["every"], "analysis.every");
+        if (a.contains("start_step"))
+            c.sample_start = integer(a["start_step"], "analysis.start_step", true);
+        require(c.sample_start <= c.steps, "analysis.start_step exceeds run.steps");
+        if (a.contains("statistics")) {
+            require(a["statistics"].is_boolean(), "analysis.statistics must be boolean");
+            c.statistics = a["statistics"].get<bool>();
+        }
+        ids.clear();
+        if (a.contains("probes")) {
+            require(a["probes"].is_array(), "analysis.probes must be an array");
+            for (const auto &v : a["probes"]) {
+                keys(v, {"id", "position"}, "probe");
+                Probe p;
+                p.id = string_value(field(v, "id"), "probe.id");
+                require(!p.id.empty() && ids.insert(p.id).second, "Empty/duplicate probe ID");
+                p.position = vec(field(v, "position"), "probe.position");
+                for (int k = 0; k < 3; k++) {
+                    double q = (p.position[k] - c.origin[k]) / c.dx;
+                    require(q >= 0 && q < c.cells[k], "Probe outside domain: " + p.id);
+                    p.cell[k] = static_cast<unsigned>(std::floor(q));
+                    p.actual[k] = c.origin[k] + (p.cell[k] + 0.5) * c.dx;
+                }
+                p.index = p.cell[0] + static_cast<unsigned long long>(c.cells[0]) *
+                                          (p.cell[1] + static_cast<unsigned long long>(c.cells[1]) * p.cell[2]);
+                c.probes.push_back(p);
+            }
+        }
+        ids.clear();
+        if (a.contains("forces")) {
+            require(a["forces"].is_array(), "analysis.forces must be an array");
+            for (const auto &v : a["forces"]) {
+                keys(v, {"id", "target"}, "force target");
+                ForceTarget t;
+                t.id = string_value(field(v, "id"), "force.id");
+                t.target = string_value(field(v, "target"), "force.target");
+                require(!t.id.empty() && ids.insert(t.id).second, "Empty/duplicate force ID");
+                bool valid = t.target == "all_solids";
+                for (const auto &g : c.geometry)
+                    valid = valid || t.target == "geometry:" + g.id;
+                for (const auto &b : c.boundaries)
+                    valid =
+                        valid || ((b.type == "no_slip" || b.type == "moving_wall") && t.target == "boundary:" + b.id);
+                require(valid, "Unknown or non-solid force target: " + t.target);
+                c.forces.push_back(t);
+            }
+        }
+    }
+    finite_float(c.reference_density * (c.dx / c.dt) * (c.dx / c.dt), "pressure scale", true);
+    finite_float(c.reference_density * std::pow(c.dx, 4) / (c.dt * c.dt), "force scale", true);
     require(std::isfinite(c.steps * c.dt), "Actual duration overflows");
     double umax = 0;
     auto speed = [&](const Vec &v) { return std::hypot(v[0], std::hypot(v[1], v[2])); };
@@ -433,15 +514,28 @@ Config read_config(const fs::path &path) {
                   {"reference_density", c.reference_density},
                   {"origin", c.origin},
                   {"lattice_nu", c.nu},
+                  {"lattice_body_force", c.body_force},
+                  {"pressure_reference_lattice_rho", c.pressure_rho},
                   {"initial_lattice_rho", c.rho},
                   {"initial_lattice_velocity", c.velocity},
                   {"tau", 0.5 + 3 * c.nu},
                   {"max_prescribed_mach", umax * std::sqrt(3.0)},
                   {"steps", c.steps},
                   {"actual_duration", c.steps * c.dt},
-                  {"device_field_bytes", count * 55},
-                  {"host_field_and_union_bytes", count * 18},
+                  {"device_field_bytes", count * device_cell_bytes},
+                  {"host_field_and_union_bytes", count * (host_cell_bytes + 1)},
                   {"actual_domain_length", {c.cells[0] * c.dx, c.cells[1] * c.dx, c.cells[2] * c.dx}}};
+    if (c.analysis) {
+        c.resolved["analysis"] = {{"every", c.sample_every},
+                                  {"start_step", c.sample_start},
+                                  {"statistics", c.statistics},
+                                  {"units", c.si ? "SI: m,s,kg,kg/m^3,m/s,Pa,J,N" : "lattice"},
+                                  {"pressure_reference", "fluid.rho"}};
+        c.resolved["analysis"]["probes"] = Json::array();
+        for (const auto &p : c.probes)
+            c.resolved["analysis"]["probes"].push_back(
+                {{"id", p.id}, {"requested", p.position}, {"actual", p.actual}, {"cell", p.cell}});
+    }
     return c;
 }
 } // namespace fxconfig

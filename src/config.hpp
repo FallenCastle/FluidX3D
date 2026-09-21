@@ -29,6 +29,16 @@ struct InitialRegion {
     Vec lower{}, upper{}, velocity{};
     double rho = 1;
 };
+struct Probe {
+    std::string id;
+    Vec position{}, actual{};
+    std::array<unsigned, 3> cell{};
+    unsigned long long index = 0;
+};
+struct ForceTarget {
+    std::string id, target;
+};
+constexpr unsigned device_cell_bytes = 67, host_cell_bytes = 29;
 struct Config {
     Json source;
     fs::path path;
@@ -37,7 +47,12 @@ struct Config {
     std::array<unsigned, 3> cells{};
     Vec origin{};
     double dx = 1, dt = 1, reference_density = 1, nu = 0, rho = 1;
-    Vec velocity{};
+    Vec velocity{}, body_force{};
+    double pressure_rho = 1;
+    bool analysis = false, statistics = true;
+    unsigned long long sample_every = 100, sample_start = 0;
+    std::vector<Probe> probes;
+    std::vector<ForceTarget> forces;
     std::vector<InitialRegion> regions;
     std::vector<Geometry> geometry;
     std::vector<Boundary> boundaries;

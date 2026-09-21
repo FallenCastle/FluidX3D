@@ -66,6 +66,6 @@ temp/config.o: src/config.cpp src/config.hpp src/third_party/nlohmann/json.hpp
 	@mkdir -p temp
 	$(CC) -c src/config.cpp -o temp/config.o $(CFLAGS)
 
-temp/config_runner.o: src/config_runner.cpp src/config.hpp src/lbm.hpp
+temp/config_runner.o: src/config_runner.cpp src/config.hpp src/config_analysis.hpp src/lbm.hpp src/defines.hpp
 	@mkdir -p temp
 	$(CC) -c src/config_runner.cpp -o temp/config_runner.o $(CFLAGS) $(LDFLAGS_OPENCL)

@@ -38,6 +38,7 @@ private:
 	Memory<fpxx> fi; // LBM density distribution functions (DDFs); only exist in device memory
 	ulong t_last_update_fields = max_ulong; // optimization to not call kernel_update_fields multiple times if (rho, u, T) are already up-to-date
 #ifdef FORCE_FIELD
+	Kernel kernel_config_force_field;
 	Kernel kernel_update_force_field; // calculate forces from fluid on TYPE_S cells
 	Kernel kernel_reset_force_field; // reset force field (also on TYPE_S cells)
 	Kernel kernel_object_center_of_mass; // calculate center of mass of all cells flagged with flag_marker
@@ -103,6 +104,7 @@ public:
 	void enqueue_surface_3();
 #endif // SURFACE
 #ifdef FORCE_FIELD
+	void enqueue_config_force_field(const float reference_rho);
 	void enqueue_update_force_field(); // calculate forces from fluid on TYPE_S cells
 	void enqueue_object_center_of_mass(const uchar flag_marker=TYPE_S); // calculate center of mass of all cells flagged with flag_marker
 	void enqueue_object_force(const uchar flag_marker=TYPE_S); // add up force for all cells flagged with flag_marker

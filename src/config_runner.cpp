@@ -1,4 +1,5 @@
 #include "config.hpp"
+#include "config_analysis.hpp"
 #include "info.hpp"
 #include "lbm.hpp"
 #include <cstring>
@@ -8,8 +9,8 @@
 #include <sstream>
 #if !defined(D3Q19) || !defined(SRT) || !defined(FP16S) || !defined(SUBGRID) || !defined(EQUILIBRIUM_BOUNDARIES) ||    \
     defined(GRAPHICS) || defined(TRT) || defined(D3Q27) || defined(D3Q15) || defined(D2Q9) || defined(FP16C) ||        \
-    defined(VOLUME_FORCE) || defined(FORCE_FIELD) || defined(SURFACE) || defined(TEMPERATURE) || defined(PARTICLES) || \
-    defined(MOVING_BOUNDARIES) || defined(BENCHMARK)
+    !defined(VOLUME_FORCE) || !defined(FORCE_FIELD) || defined(SURFACE) || defined(TEMPERATURE) ||                     \
+    defined(PARTICLES) || !defined(MOVING_BOUNDARIES) || defined(BENCHMARK)
 #error The configuration runner requires its documented fixed headless solver profile.
 #endif
 #ifdef _WIN32
@@ -198,6 +199,8 @@ static void vtk(LBM &lbm, const Config &c, const fs::path &output, const std::st
                 float value = fieldname == "rho"
                                   ? lbm.rho[n] * static_cast<float>(c.reference_density)
                                   : lbm.u[n + static_cast<ulong>(a) * lbm.get_N()] * static_cast<float>(c.dx / c.dt);
+                if (fieldname == "p")
+                    value = static_cast<float>(pressure(c, lbm.rho[n]));
                 require(std::isfinite(value), "Non-finite VTK value");
                 uint32_t bits;
                 std::memcpy(&bits, &value, 4);
@@ -225,7 +228,7 @@ static void monitor(LBM &lbm, const Config &c, std::ofstream &file) {
     double mass = 0, umax = 0, rmin = std::numeric_limits<double>::infinity(), rmax = 0;
     ulong count = 0;
     for (ulong n = 0; n < lbm.get_N(); n++)
-        if (!(lbm.flags[n] & TYPE_S)) {
+        if (!is_solid(lbm.flags[n])) {
             double rho = lbm.rho[n], x = lbm.u.x[n], y = lbm.u.y[n], z = lbm.u.z[n];
             require(std::isfinite(rho) && rho > 0 && std::isfinite(x) && std::isfinite(y) && std::isfinite(z),
                     "Non-finite velocity or non-positive density at step " + std::to_string(lbm.get_t()));
@@ -259,17 +262,25 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
     unsigned long long count = static_cast<unsigned long long>(c.cells[0]) * c.cells[1] * c.cells[2], mesh_bytes = 0;
     for (const auto &g : c.geometry)
         mesh_bytes = std::max(mesh_bytes, (fs::file_size(g.file) - 84) / 50 * 36ull);
-    require(count * 55 + mesh_bytes + 64 <= static_cast<unsigned long long>(selected.memory) * 1048576,
+    require(count * device_cell_bytes + mesh_bytes + 64 <= static_cast<unsigned long long>(selected.memory) * 1048576,
             "Estimated device memory exceeds selected device capacity");
     require(count * 38 <= static_cast<unsigned long long>(selected.max_global_buffer) * 1048576,
             "Distribution buffer exceeds selected device allocation limit");
-    c.resolved["estimated_device_peak_bytes"] = count * 55 + mesh_bytes + 64;
-    c.resolved["estimated_host_fields_union_and_mesh_bytes"] = count * 18 + mesh_bytes;
-    LBM lbm(c.cells[0], c.cells[1], c.cells[2], static_cast<float>(c.nu));
+    c.resolved["estimated_device_peak_bytes"] = count * device_cell_bytes + mesh_bytes + 64;
+    c.resolved["estimated_host_fields_union_and_mesh_bytes"] = count * (host_cell_bytes + 1) + mesh_bytes;
+    LBM lbm(c.cells[0], c.cells[1], c.cells[2], static_cast<float>(c.nu), static_cast<float>(c.body_force[0]),
+            static_cast<float>(c.body_force[1]), static_cast<float>(c.body_force[2]));
     c.resolved["device_id"] = lbm.lbm_domain[0]->get_device().info.id;
     c.resolved["device_name"] = lbm.lbm_domain[0]->get_device().info.name;
     c.resolved["device_driver"] = lbm.lbm_domain[0]->get_device().info.driver_version;
     std::vector<uchar> solid(static_cast<size_t>(lbm.get_N()), 0);
+    std::vector<std::vector<ulong>> force_groups(c.forces.size());
+    std::vector<int> owner;
+    bool need_owner = false;
+    for (const auto &f : c.forces)
+        need_owner = need_owner || f.target.rfind("geometry:", 0) == 0;
+    if (need_owner)
+        owner.assign(static_cast<size_t>(lbm.get_N()), -1);
     Json geometries = Json::array();
     for (const auto &g : c.geometry) {
         for (ulong n = 0; n < lbm.get_N(); n++)
@@ -281,6 +292,18 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
         for (ulong n = 0; n < lbm.get_N(); n++)
             if (lbm.flags[n] & TYPE_S) {
                 solid[static_cast<size_t>(n)] = TYPE_S;
+                if (need_owner) {
+                    int &o = owner[static_cast<size_t>(n)];
+                    int id = static_cast<int>(&g - c.geometry.data());
+                    if (o != -1) {
+                        for (const auto &f : c.forces)
+                            require(f.target != "geometry:" + g.id &&
+                                        (o < 0 || f.target != "geometry:" + c.geometry[o].id),
+                                    "Overlapping geometry force target: " + g.id);
+                        o = -2;
+                    } else
+                        o = id;
+                }
                 count++;
             }
         require(count > 0, "STL voxelized to zero solid cells: " + g.id);
@@ -305,9 +328,16 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
         if (b >= 0) {
             const auto &rule = c.boundaries[b];
             coverage[b]++;
-            if (rule.type == "no_slip")
+            if (rule.type == "no_slip" || rule.type == "moving_wall") {
+                require(rule.type != "moving_wall" || !solid[static_cast<size_t>(n)],
+                        "Geometry intersects moving_wall: " + rule.id);
+                if (need_owner && owner[static_cast<size_t>(n)] >= 0)
+                    for (const auto &f : c.forces)
+                        require(f.target != "geometry:" + c.geometry[owner[static_cast<size_t>(n)]].id,
+                                "Geometry force target touches domain wall");
                 lbm.flags[n] = TYPE_S;
-            else {
+                velocity = rule.velocity;
+            } else {
                 require(!(lbm.flags[n] & TYPE_S), "Geometry intersects equilibrium boundary: " + rule.id);
                 lbm.flags[n] = TYPE_E;
                 rho = rule.rho;
@@ -315,8 +345,17 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
             }
         }
         if (lbm.flags[n] & TYPE_S) {
-            velocity = {0, 0, 0};
+            if (b < 0 || c.boundaries[b].type != "moving_wall")
+                velocity = {0, 0, 0};
             solid_count++;
+            for (size_t i = 0; i < c.forces.size(); i++) {
+                const auto &target = c.forces[i].target;
+                bool matches = target == "all_solids" || (b >= 0 && target == "boundary:" + c.boundaries[b].id);
+                if (need_owner && owner[static_cast<size_t>(n)] >= 0)
+                    matches = matches || target == "geometry:" + c.geometry[owner[static_cast<size_t>(n)]].id;
+                if (matches)
+                    force_groups[i].push_back(n);
+            }
         }
         lbm.rho[n] = static_cast<float>(rho);
         lbm.u.x[n] = static_cast<float>(velocity[0]);
@@ -327,6 +366,18 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
     c.resolved["solid_cells"] = solid_count;
     for (size_t i = 0; i < c.boundaries.size(); i++)
         c.resolved["boundary_coverage"].push_back({{"id", c.boundaries[i].id}, {"winning_cells", coverage[i]}});
+    unsigned long long group_bytes = 0;
+    for (size_t i = 0; i < force_groups.size(); i++) {
+        require(!force_groups[i].empty(), "Empty force target: " + c.forces[i].id);
+        group_bytes += force_groups[i].capacity() * sizeof(ulong);
+        c.resolved["analysis"]["forces"].push_back(
+            {{"id", c.forces[i].id}, {"target", c.forces[i].target}, {"solid_cells", force_groups[i].size()}});
+    }
+    for (const auto &p : c.probes)
+        require(!is_solid(lbm.flags[p.index]), "Probe is inside solid: " + p.id);
+    c.resolved["force_group_host_bytes"] = group_bytes;
+    c.resolved["geometry_owner_peak_host_bytes"] = owner.capacity() * sizeof(int);
+    std::vector<int>().swap(owner);
     save_json(output / "resolved-config.json", c.resolved);
     units.set_m_kg_s(static_cast<float>(c.dx), static_cast<float>(c.reference_density * c.dx * c.dx * c.dx),
                      static_cast<float>(c.dt));
@@ -336,6 +387,12 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
     require(bool(stats), "Cannot create monitor.csv");
     stats << "step,time,fluid_cells,mass_lattice,rho_min_lattice,rho_max_lattice,speed_max_lattice\n";
     monitor(lbm, c, stats);
+    Analysis analysis(c, output, std::move(force_groups));
+    auto next_sample = c.sample_start;
+    if (!prepare && c.analysis && next_sample == 0) {
+        analysis.sample(lbm);
+        next_sample = c.sample_every;
+    }
     if (prepare || c.initial_output) {
         for (const auto &name : c.vtk_fields)
             vtk(lbm, c, output, name);
@@ -346,10 +403,16 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
     ulong last_output = 0;
     while (!prepare && lbm.get_t() < c.steps) {
         auto next = std::min(c.steps, next_monitor);
+        if (c.analysis)
+            next = std::min(next, next_sample);
         if (c.vtk_every)
             next = std::min(next, next_vtk);
         lbm.run(next - lbm.get_t(), c.steps);
         sync(lbm);
+        if (c.analysis && next == next_sample) {
+            analysis.sample(lbm);
+            next_sample = next + c.sample_every; // both <= 2^53; sum fits uint64
+        }
         if (next == next_monitor || next == c.steps) {
             monitor(lbm, c, stats);
             next_monitor = next > c.steps - std::min(c.monitor_every, c.steps) ? c.steps : next + c.monitor_every;
@@ -363,6 +426,7 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
         }
     }
     (void)last_output;
+    analysis.finish();
     std::ofstream status(output / "status.txt", std::ios::binary);
     status << "FluidX3D configuration runner\nCase = " << c.name << "\nSteps = " << lbm.get_t()
            << "\nRequested steps = " << c.steps << "\nLattice viscosity = " << std::setprecision(17) << c.nu
