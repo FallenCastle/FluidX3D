@@ -22,6 +22,8 @@
 #include <chrono>
 #include <thread>
 #include <functional> // for parallel_for(...)
+#include <stdexcept>
+inline bool console_batch_mode = false;
 #undef min
 #undef max
 using std::string;
@@ -4072,6 +4074,7 @@ inline void print_message(const string& message, const string& keyword="", const
 	println(p+"|");
 }
 inline void print_error(const string& s) { // print formatted error message
+	if(console_batch_mode) throw std::runtime_error(s);
 	print_message(s, "Error", color_red);
 #ifdef _WIN32
 	print_message("Press Enter to exit.", "     ", -1, false);
@@ -4157,6 +4160,7 @@ inline void print_message(const string& message, const string& keyword="", const
 	println(keyword+": "+message);
 }
 inline void print_error(const string& s) { // print error message
+	if(console_batch_mode) throw std::runtime_error(s);
 	println("Error: "+s);
 #ifdef _WIN32
 	println("       Press Enter to exit.");

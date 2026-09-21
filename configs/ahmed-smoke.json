@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "case": {
+    "name": "ahmed-smoke"
+  },
+  "units": {
+    "mode": "lattice"
+  },
+  "domain": {
+    "cells": [
+      96,
+      48,
+      48
+    ]
+  },
+  "fluid": {
+    "rho": 1,
+    "nu": 0.02
+  },
+  "initial": {
+    "velocity": [
+      0.04,
+      0,
+      0
+    ]
+  },
+  "geometry": [
+    {
+      "id": "car",
+      "file": "../../workingdir/ahmed-body/assets/ahmed_25deg_m.stl",
+      "transform": {
+        "mode": "fit",
+        "size": 32,
+        "center": [
+          32,
+          24,
+          20
+        ]
+      }
+    }
+  ],
+  "boundaries": [
+    {
+      "id": "farfield",
+      "faces": [
+        "xmin",
+        "xmax",
+        "ymin",
+        "ymax",
+        "zmin",
+        "zmax"
+      ],
+      "type": "equilibrium",
+      "rho": 1,
+      "velocity": [
+        0.04,
+        0,
+        0
+      ]
+    }
+  ],
+  "run": {
+    "steps": 37,
+    "monitor_every": 13
+  },
+  "output": {
+    "vtk_fields": [
+      "u",
+      "rho",
+      "flags"
+    ],
+    "vtk_every": 0,
+    "initial": true
+  }
+}

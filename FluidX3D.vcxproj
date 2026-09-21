@@ -58,6 +58,8 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\config.cpp"><FloatingPointModel>Precise</FloatingPointModel></ClCompile>
+    <ClCompile Include="src\config_runner.cpp"><FloatingPointModel>Precise</FloatingPointModel></ClCompile>
     <ClCompile Include="src\graphics.cpp" />
     <ClCompile Include="src\info.cpp" />
     <ClCompile Include="src\kernel.cpp" />
@@ -68,6 +70,7 @@
     <ClCompile Include="src\shapes.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\config.hpp" />
     <ClInclude Include="src\defines.hpp" />
     <ClInclude Include="src\graphics.hpp" />
     <ClInclude Include="src\info.hpp" />

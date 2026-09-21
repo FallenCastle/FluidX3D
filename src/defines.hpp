@@ -1,5 +1,7 @@
 #pragma once
 
+// This branch provides a headless, configuration-driven executable.
+
 
 
 //#define D2Q9 // choose D2Q9 velocity set for 2D; allocates 53 (FP32) or 35 (FP16) Bytes/cell

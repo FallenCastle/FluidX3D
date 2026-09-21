@@ -10,7 +10,9 @@ param(
     [int]$DeviceId,
     [ValidateRange(1, 86400)]
     [int]$TimeoutSeconds = 900,
-    [switch]$ExpectBenchmark
+    [switch]$ExpectBenchmark,
+    [string]$ConfigPath,
+    [switch]$PrepareOnly
 )
 
 Set-StrictMode -Version Latest
@@ -71,6 +73,15 @@ if ($PSBoundParameters.ContainsKey('DeviceId')) {
     $requestedDevice = $DeviceId
     $programArguments = @($DeviceId.ToString([Globalization.CultureInfo]::InvariantCulture))
 }
+if ($ConfigPath) {
+    if ($ExpectBenchmark) { throw 'ConfigPath and ExpectBenchmark cannot be combined.' }
+    $ConfigPath = (Resolve-Path -LiteralPath $ConfigPath -ErrorAction Stop).ProviderPath
+    $programArguments = @('--config', ('"' + $ConfigPath + '"'), '--output', ('"' + $resultsDirectory + '"'))
+    if ($PSBoundParameters.ContainsKey('DeviceId')) {
+        $programArguments += @('--device', $DeviceId.ToString([Globalization.CultureInfo]::InvariantCulture))
+    }
+    if ($PrepareOnly) { $programArguments += '--prepare-only' }
+} elseif ($PrepareOnly) { throw 'PrepareOnly requires ConfigPath.' }
 
 # Never reuse another run's directory or export mapping.
 New-Item -ItemType Directory -Path $caseDirectory -Force | Out-Null
@@ -215,6 +226,28 @@ try {
     $record.exitCode = $process.ExitCode
     if ($process.ExitCode -ne 0) {
         throw "FluidX3D exited with code $($process.ExitCode). See $stderrPath and $stdoutPath"
+    }
+    if ($ConfigPath) {
+        $completionPath = Join-Path $resultsDirectory 'completion.json'
+        $completion = Get-Content -LiteralPath $completionPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $expectedState = if ($PrepareOnly) { 'prepared' } else { 'succeeded' }
+        if ($completion.status -ne $expectedState) { throw "Solver did not finish: $($completion.status)" }
+        if (($PrepareOnly -and $completion.steps -ne 0) -or
+            (-not $PrepareOnly -and $completion.steps -ne $completion.requested_steps)) {
+            throw 'Completed step count does not match requested calculation.'
+        }
+        foreach ($artifact in @('manifest.json', 'resolved-config.json', 'original-config.json', 'effective-config.json', 'monitor.csv')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $resultsDirectory $artifact) -PathType Leaf)) {
+                throw "Missing configuration runner artifact: $artifact"
+            }
+        }
+        $vtk = @(Get-ChildItem -LiteralPath $resultsDirectory -Filter '*.vtk' -File)
+        if ($vtk.Count -eq 0 -or @($vtk | Where-Object { $_.Length -eq 0 }).Count -gt 0) {
+            throw 'No complete VTK output was produced.'
+        }
+        $record.validation['configPath'] = $ConfigPath
+        $record.validation['completion'] = $completion
+        $record.validation['vtkCount'] = $vtk.Count
     }
     if (@(Select-String -LiteralPath @($stdoutPath, $stderrPath) `
             -Pattern '(?m)(?:^|\r)\s*(?:\|\s*)?Error\s*:' -List).Count -gt 0) {

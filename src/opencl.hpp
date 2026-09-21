@@ -237,6 +237,7 @@ inline vector<Device_Info> get_devices(const bool print_info=true) { // returns 
 		}
 	}
 	if((uint)cl_platforms.size()==0u||(uint)devices.size()==0u) {
+		if(console_batch_mode) print_error("No OpenCL devices are available. Install the GPU OpenCL driver.");
 		print_message("No OpenCL devices are available. Please install the drivers for your GPU(s) and/or the CPU Runtime for OpenCL. Instructions:", "Error", 12);
 		print(driver_installation_instructions);
 #ifdef _WIN32

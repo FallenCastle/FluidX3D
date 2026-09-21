@@ -4,4 +4,4 @@
 #include "lbm.hpp"
 #include "shapes.hpp"
 
-void main_setup(); // main setup script
+int main_setup(int argc, char* argv[]); // configuration-driven console entry

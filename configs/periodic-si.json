@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "case": {
+    "name": "uniform-periodic-si"
+  },
+  "units": {
+    "mode": "si",
+    "reference_density": 1000,
+    "dt": 0.003
+  },
+  "domain": {
+    "length": [
+      0.16,
+      0.16,
+      0.16
+    ],
+    "dx": 0.01
+  },
+  "fluid": {
+    "rho": 1000,
+    "nu": 0.0006666666666666668
+  },
+  "initial": {
+    "velocity": [
+      0.1,
+      0,
+      0
+    ]
+  },
+  "geometry": [],
+  "boundaries": [
+    {
+      "id": "periodic",
+      "faces": [
+        "xmin",
+        "xmax",
+        "ymin",
+        "ymax",
+        "zmin",
+        "zmax"
+      ],
+      "type": "periodic"
+    }
+  ],
+  "run": {
+    "steps": 23,
+    "monitor_every": 7
+  },
+  "output": {
+    "vtk_fields": [
+      "u",
+      "rho",
+      "flags"
+    ],
+    "vtk_every": 7,
+    "initial": true
+  }
+}

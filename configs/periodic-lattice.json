@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "case": {
+    "name": "uniform-periodic"
+  },
+  "units": {
+    "mode": "lattice"
+  },
+  "domain": {
+    "cells": [
+      16,
+      16,
+      16
+    ]
+  },
+  "fluid": {
+    "rho": 1.0,
+    "nu": 0.02
+  },
+  "initial": {
+    "velocity": [
+      0.03,
+      0,
+      0
+    ]
+  },
+  "geometry": [],
+  "boundaries": [
+    {
+      "id": "periodic",
+      "faces": [
+        "xmin",
+        "xmax",
+        "ymin",
+        "ymax",
+        "zmin",
+        "zmax"
+      ],
+      "type": "periodic"
+    }
+  ],
+  "run": {
+    "steps": 23,
+    "monitor_every": 7
+  },
+  "output": {
+    "vtk_fields": [
+      "u",
+      "rho",
+      "flags"
+    ],
+    "vtk_every": 7,
+    "initial": true
+  }
+}

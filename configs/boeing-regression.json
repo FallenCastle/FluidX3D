@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "case": {
+    "name": "boeing-747-regression"
+  },
+  "units": {
+    "mode": "lattice"
+  },
+  "domain": {
+    "aspect_ratio": [
+      1,
+      2,
+      0.5
+    ],
+    "memory_budget_mb": 256
+  },
+  "fluid": {
+    "rho": 1,
+    "reynolds": 1000000,
+    "reference_length": 170,
+    "reference_velocity": 0.075
+  },
+  "initial": {
+    "velocity": [
+      0,
+      0.075,
+      0
+    ]
+  },
+  "geometry": [
+    {
+      "id": "aircraft",
+      "file": "../../workingdir/boeing-747/assets/techtris_airplane.stl",
+      "transform": {
+        "mode": "fit",
+        "size": 170,
+        "center": [
+          85,
+          94,
+          42.5
+        ],
+        "axis": [
+          1,
+          0,
+          0
+        ],
+        "degrees": -15
+      }
+    }
+  ],
+  "boundaries": [
+    {
+      "id": "farfield",
+      "faces": [
+        "xmin",
+        "xmax",
+        "ymin",
+        "ymax",
+        "zmin",
+        "zmax"
+      ],
+      "type": "equilibrium",
+      "rho": 1,
+      "velocity": [
+        0,
+        0.075,
+        0
+      ]
+    }
+  ],
+  "run": {
+    "steps": 1000,
+    "monitor_every": 100
+  },
+  "output": {
+    "vtk_fields": [
+      "u",
+      "rho",
+      "flags"
+    ],
+    "vtk_every": 0,
+    "initial": true
+  }
+}
