@@ -38,7 +38,7 @@ struct Probe {
 struct ForceTarget {
     std::string id, target;
 };
-constexpr unsigned device_cell_bytes = 67, host_cell_bytes = 29;
+constexpr unsigned device_cell_bytes = 105, host_cell_bytes = 29;
 struct Config {
     Json source;
     fs::path path;

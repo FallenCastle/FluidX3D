@@ -113,7 +113,7 @@ Json capabilities() {
     return {{"schema_version", 1},
             {"lattice", "D3Q19"},
             {"collision", "SRT"},
-            {"storage", "FP16S"},
+            {"storage", "FP32"},
             {"turbulence", "smagorinsky"},
             {"units", {"lattice", "si"}},
             {"boundaries", {"no_slip", "moving_wall", "equilibrium", "periodic"}},

@@ -7,7 +7,7 @@
 #include <memory>
 #include <set>
 #include <sstream>
-#if !defined(D3Q19) || !defined(SRT) || !defined(FP16S) || !defined(SUBGRID) || !defined(EQUILIBRIUM_BOUNDARIES) ||    \
+#if !defined(D3Q19) || !defined(SRT) || defined(FP16S) || !defined(SUBGRID) || !defined(EQUILIBRIUM_BOUNDARIES) ||    \
     defined(GRAPHICS) || defined(TRT) || defined(D3Q27) || defined(D3Q15) || defined(D2Q9) || defined(FP16C) ||        \
     !defined(VOLUME_FORCE) || !defined(FORCE_FIELD) || defined(SURFACE) || defined(TEMPERATURE) ||                     \
     defined(PARTICLES) || !defined(MOVING_BOUNDARIES) || defined(BENCHMARK)
@@ -264,7 +264,7 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
         mesh_bytes = std::max(mesh_bytes, (fs::file_size(g.file) - 84) / 50 * 36ull);
     require(count * device_cell_bytes + mesh_bytes + 64 <= static_cast<unsigned long long>(selected.memory) * 1048576,
             "Estimated device memory exceeds selected device capacity");
-    require(count * 38 <= static_cast<unsigned long long>(selected.max_global_buffer) * 1048576,
+    require(count * 76 <= static_cast<unsigned long long>(selected.max_global_buffer) * 1048576,
             "Distribution buffer exceeds selected device allocation limit");
     c.resolved["estimated_device_peak_bytes"] = count * device_cell_bytes + mesh_bytes + 64;
     c.resolved["estimated_host_fields_union_and_mesh_bytes"] = count * (host_cell_bytes + 1) + mesh_bytes;
