@@ -54,13 +54,7 @@ void Info::print_initialize(LBM* lbm) {
 #elif defined(TRT)
 	collision = "TRT";
 #endif // TRT
-#if defined(FP16S)
-	collision += " (FP32/FP16S)";
-#elif defined(FP16C)
-	collision += " (FP32/FP16C)";
-#else // FP32
-	collision += " (FP32/FP32)";
-#endif // FP32
+	collision += " (FP32/"+string(ddf_storage_name(lbm->get_storage()))+")";
 	bool all_domains_use_ram = true; // reset cpu/gpu_mem_required to get valid values for consecutive simulations
 	for(uint d=0u; d<lbm->get_D(); d++) {
 		all_domains_use_ram = all_domains_use_ram&&lbm->lbm_domain[d]->get_device().info.uses_ram;
@@ -78,7 +72,7 @@ void Info::print_initialize(LBM* lbm) {
 	println("| Grid Domains    | "+alignr(57u, to_string(lbm->get_Dx())+" x "+to_string(lbm->get_Dy())+" x "+to_string(lbm->get_Dz())+" = "+to_string(lbm->get_D()))+" |");
 	println("| LBM Type        | "+alignr(57u, /***************/ "D"+to_string(lbm->get_velocity_set()==9?2:3)+"Q"+to_string(lbm->get_velocity_set())+" "+collision)+" |");
 	println("| Memory Usage    | "+alignr(54u, /*******/ "CPU "+to_string(cpu_mem_required)+" MB, GPU "+to_string(lbm->get_D())+"x "+to_string(gpu_mem_required))+" MB |");
-	println("| Max Alloc Size  | "+alignr(54u, /*************/ (uint)(lbm->get_N()/(ulong)lbm->get_D()*(ulong)(lbm->get_velocity_set()*sizeof(fpxx))/1048576ull))+" MB |");
+	println("| Max Alloc Size  | "+alignr(54u, /*************/ (uint)(lbm->get_N()/(ulong)lbm->get_D()*(ulong)(lbm->get_velocity_set()*lbm->get_ddf_bytes())/1048576ull))+" MB |");
 	println("| Time Steps      | "+alignr(57u, /***************************************************************/ (steps==max_ulong ? "infinite" : to_string(steps)))+" |");
 	println("| Kin. Viscosity  | "+alignr(57u, /*************************************************************************************/ to_string(lbm->get_nu(), 8u))+" |");
 	println("| Relaxation Time | "+alignr(57u, /************************************************************************************/ to_string(lbm->get_tau(), 8u))+" |");
@@ -107,7 +101,7 @@ void Info::print_update() const {
 	info.allow_printing.lock();
 	reprint(
 		"|"+alignr(8, to_uint((double)lbm->get_N()*1E-6/runtime_lbm_timestep_smooth))+" |"+ // MLUPs
-		alignr(7, to_uint((double)lbm->get_N()*(double)bandwidth_bytes_per_cell_device()*1E-9/runtime_lbm_timestep_smooth))+" GB/s |"+ // memory bandwidth
+		alignr(7, to_uint((double)lbm->get_N()*(double)bandwidth_bytes_per_cell_device(lbm->get_storage())*1E-9/runtime_lbm_timestep_smooth))+" GB/s |"+ // memory bandwidth
 		alignr(10, to_uint(1.0/runtime_lbm_timestep_smooth))+" | "+ // steps/s
 		(steps==max_ulong ? alignr(17, lbm->get_t()) : alignr(12, lbm->get_t())+" "+print_percentage((float)(lbm->get_t()-steps_last)/(float)steps))+" | "+ // current step
 		alignr(19, print_time(time()))+" |" // either elapsed time or remaining time

@@ -1,5 +1,6 @@
 #pragma once
 #include "third_party/nlohmann/json.hpp"
+#include "storage.hpp"
 #include <array>
 #include <filesystem>
 #include <string>
@@ -38,12 +39,14 @@ struct Probe {
 struct ForceTarget {
     std::string id, target;
 };
-constexpr unsigned device_cell_bytes = 67, host_cell_bytes = 29;
+constexpr unsigned host_cell_bytes = 29;
 struct Config {
     Json source;
     fs::path path;
     std::string name;
     bool si = false;
+    DdfStorage storage = DdfStorage::Float16Scaled;
+    unsigned device_cell_bytes() const { return 19 * ddf_storage_bytes(storage) + host_cell_bytes; }
     std::array<unsigned, 3> cells{};
     Vec origin{};
     double dx = 1, dt = 1, reference_density = 1, nu = 0, rho = 1;

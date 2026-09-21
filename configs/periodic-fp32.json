@@ -47,27 +47,12 @@
     "vtk_fields": [
       "u",
       "rho",
-      "flags",
-      "p"
+      "flags"
     ],
     "vtk_every": 7,
     "initial": true
   },
-  "analysis": {
-    "every": 7,
-    "start_step": 3,
-    "probes": [
-      {
-        "id": "center",
-        "position": [
-          8.5,
-          8.5,
-          8.5
-        ]
-      }
-    ]
-  },
   "solver": {
-    "storage": "FP16S"
+    "storage": "FP32"
   }
 }

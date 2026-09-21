@@ -38,7 +38,9 @@ def main():
     parser.add_argument('--workspace-root', type=Path, required=True)
     parser.add_argument('--build-name', default='config-runner-p2')
     parser.add_argument('--device', default='0')
-    parser.add_argument('--diffusive-refinement', action='store_true')
+    scaling=parser.add_mutually_exclusive_group()
+    scaling.add_argument('--diffusive-refinement', dest='diffusive_refinement', action='store_true', default=True)
+    scaling.add_argument('--acoustic-refinement', dest='diffusive_refinement', action='store_false')
     args = parser.parse_args()
     if os.name != 'nt':
         parser.error('Run on Windows NUC only')

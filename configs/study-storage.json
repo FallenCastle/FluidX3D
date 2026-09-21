@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "base_config": "probes-periodic.json",
+  "parameters": [
+    {
+      "path": "/solver/storage",
+      "values": [
+        "FP16S",
+        "FP32"
+      ]
+    }
+  ]
+}

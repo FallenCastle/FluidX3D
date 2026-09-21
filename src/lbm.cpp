@@ -35,8 +35,8 @@ uint bytes_per_cell_host() { // returns the number of Bytes per cell allocated i
 #endif // TEMPERATURE
 	return bytes_per_cell;
 }
-uint bytes_per_cell_device() { // returns the number of Bytes per cell allocated in device memory
-	uint bytes_per_cell = velocity_set*sizeof(fpxx)+17u; // fi, rho, u, flags
+uint bytes_per_cell_device(const DdfStorage storage) { // returns the number of Bytes per cell allocated in device memory
+	uint bytes_per_cell = velocity_set*ddf_storage_bytes(storage)+17u; // fi, rho, u, flags
 #ifdef FORCE_FIELD
 	bytes_per_cell += 12u; // F
 #endif // FORCE_FIELD
@@ -44,12 +44,12 @@ uint bytes_per_cell_device() { // returns the number of Bytes per cell allocated
 	bytes_per_cell += 12u; // phi, mass, flags
 #endif // SURFACE
 #ifdef TEMPERATURE
-	bytes_per_cell += 7u*sizeof(fpxx)+4u; // gi, T
+	bytes_per_cell += 7u*ddf_storage_bytes(storage)+4u; // gi, T
 #endif // TEMPERATURE
 	return bytes_per_cell;
 }
-uint bandwidth_bytes_per_cell_device() { // returns the bandwidth in Bytes per cell per time step from/to device memory
-	uint bandwidth_bytes_per_cell = velocity_set*2u*sizeof(fpxx)+1u; // lattice.set()*2*fi, flags
+uint bandwidth_bytes_per_cell_device(const DdfStorage storage) { // returns the bandwidth in Bytes per cell per time step from/to device memory
+	uint bandwidth_bytes_per_cell = velocity_set*2u*ddf_storage_bytes(storage)+1u; // lattice.set()*2*fi, flags
 #ifdef UPDATE_FIELDS
 	bandwidth_bytes_per_cell += 16u; // rho, u
 #ifdef TEMPERATURE
@@ -63,10 +63,10 @@ uint bandwidth_bytes_per_cell_device() { // returns the bandwidth in Bytes per c
 	bandwidth_bytes_per_cell += (velocity_set-1u)*1u; // neighbor flags have to be loaded
 #endif // MOVING_BOUNDARIES, SURFACE or TEMPERATURE
 #ifdef SURFACE
-	bandwidth_bytes_per_cell += (1u+(2u*velocity_set-1u)*sizeof(fpxx)+8u+(velocity_set-1u)*4u) + 1u + 1u + (4u+velocity_set+4u+4u+4u); // surface_0 (flags, fi, mass, massex), surface_1 (flags), surface_2 (flags), surface_3 (rho, flags, mass, massex, phi)
+	bandwidth_bytes_per_cell += (1u+(2u*velocity_set-1u)*ddf_storage_bytes(storage)+8u+(velocity_set-1u)*4u) + 1u + 1u + (4u+velocity_set+4u+4u+4u); // surface_0 (flags, fi, mass, massex), surface_1 (flags), surface_2 (flags), surface_3 (rho, flags, mass, massex, phi)
 #endif // SURFACE
 #ifdef TEMPERATURE
-	bandwidth_bytes_per_cell += 7u*2u*sizeof(fpxx); // 2*gi
+	bandwidth_bytes_per_cell += 7u*2u*ddf_storage_bytes(storage); // 2*gi
 #endif // TEMPERATURE
 	return bandwidth_bytes_per_cell;
 }
@@ -93,7 +93,7 @@ string default_filename(const string& name, const string& extension, const ulong
 
 
 
-LBM_Domain::LBM_Domain(const Device_Info& device_info, const uint Nx, const uint Ny, const uint Nz, const uint Dx, const uint Dy, const uint Dz, const int Ox, const int Oy, const int Oz, const float nu, const float fx, const float fy, const float fz, const float sigma, const float alpha, const float beta, const uint particles_N, const float particles_rho) { // constructor with manual device selection and domain offset
+LBM_Domain::LBM_Domain(const Device_Info& device_info, const uint Nx, const uint Ny, const uint Nz, const uint Dx, const uint Dy, const uint Dz, const int Ox, const int Oy, const int Oz, const float nu, const float fx, const float fy, const float fz, const float sigma, const float alpha, const float beta, const uint particles_N, const float particles_rho, const DdfStorage storage) : storage(storage) { // constructor with manual device selection and domain offset
 	this->Nx = Nx; this->Ny = Ny; this->Nz = Nz;
 	this->Dx = Dx; this->Dy = Dy; this->Dz = Dz;
 	this->Ox = Ox; this->Oy = Oy; this->Oz = Oz;
@@ -120,7 +120,7 @@ LBM_Domain::LBM_Domain(const Device_Info& device_info, const uint Nx, const uint
 
 void LBM_Domain::allocate(Device& device) {
 	const ulong N = get_N();
-	fi = Memory<fpxx>(device, N, velocity_set, false);
+	fi = Memory<uchar>(device, N, velocity_set*get_ddf_bytes(), false);
 	rho = Memory<float>(device, N, 1u, true, true, 1.0f);
 	u = Memory<float>(device, N, 3u);
 	flags = Memory<uchar>(device, N);
@@ -412,22 +412,18 @@ string LBM_Domain::device_defines(const Device_Info& device_info) const { return
 	"\n	#define TYPE_SU 0x38" // 0b00111000 // any flag bit used for SURFACE
 	"\n	#define TYPE_XY 0xC0" // 0b11000000 // any flag bit used for X or Y markers
 
-#if defined(FP16S)
-	"\n	#define fpxx half" // switchable data type (scaled IEEE-754 16-bit floating-point format: 1-5-10, exp-30, +-1.99902344, +-1.86446416E-9, +-1.81898936E-12, 3.311 digits)
-	"\n	#define fpxx_copy ushort" // switchable data type for direct copying (scaled IEEE-754 16-bit floating-point format: 1-5-10, exp-30, +-1.99902344, +-1.86446416E-9, +-1.81898936E-12, 3.311 digits)
-	"\n	#define load(p,o) (vload_half(o,p)*3.0517578E-5f)" // special function for loading half
-	"\n	#define store(p,o,x) vstore_half_rte((x)*32768.0f,o,p)" // special function for storing half
-#elif defined(FP16C)
-	"\n	#define fpxx ushort" // switchable data type (custom 16-bit floating-point format: 1-4-11, exp-15, +-1.99951168, +-6.10351562E-5, +-2.98023224E-8, 3.612 digits), 12.5% slower than IEEE-754 16-bit
-	"\n	#define fpxx_copy ushort" // switchable data type for direct copying (custom 16-bit floating-point format: 1-4-11, exp-15, +-1.99951168, +-6.10351562E-5, +-2.98023224E-8, 3.612 digits), 12.5% slower than IEEE-754 16-bit
-	"\n	#define load(p,o) half_to_float_custom((p)[o])" // special function for loading half
-	"\n	#define store(p,o,x) (p)[o]=float_to_half_custom(x)" // special function for storing half
-#else // FP32
-	"\n	#define fpxx float" // switchable data type (regular 32-bit float)
-	"\n	#define fpxx_copy float" // switchable data type for direct copying (regular 32-bit float)
-	"\n	#define load(p,o) (p)[o]" // regular float read
-	"\n	#define store(p,o,x) (p)[o]=(x)" // regular float write
-#endif // FP32
++(storage==DdfStorage::Float16Scaled ? string(
+    "\n\t#define fpxx half"
+    "\n\t#define fpxx_copy ushort"
+    "\n\t#define load(p,o) (vload_half(o,p)*3.0517578E-5f)"
+    "\n\t#define store(p,o,x) vstore_half_rte((x)*32768.0f,o,p)"
+) : string(
+    "\n\t#define fpxx float"
+    "\n\t#define fpxx_copy float"
+    "\n\t#define load(p,o) (p)[o]"
+    "\n\t#define store(p,o,x) (p)[o]=(x)"
+))+
+
 
 #ifdef UPDATE_FIELDS
 	"\n	#define UPDATE_FIELDS"
@@ -723,7 +719,13 @@ LBM::LBM(const uint3 N, const float nu, const uint particles_N, const float part
 LBM::LBM(const uint3 N, const float nu, const float fx, const float fy, const float fz, const uint particles_N, const float particles_rho)
 	:LBM(N.x, N.y, N.z, 1u, 1u, 1u, nu, fx, fy, fz, 0.0f, 0.0f, 0.0f, particles_N, particles_rho) { // delegating constructor
 }
-LBM::LBM(const uint Nx, const uint Ny, const uint Nz, const uint Dx, const uint Dy, const uint Dz, const float nu, const float fx, const float fy, const float fz, const float sigma, const float alpha, const float beta, const uint particles_N, const float particles_rho) { // multiple devices
+LBM::LBM(const uint Nx, const uint Ny, const uint Nz, const uint Dx, const uint Dy, const uint Dz, const float nu, const float fx, const float fy, const float fz, const float sigma, const float alpha, const float beta, const uint particles_N, const float particles_rho, const DdfStorage storage) : storage(storage) { // multiple devices
+    if(storage!=DdfStorage::Float16Scaled && storage!=DdfStorage::Float32) print_error("Unsupported DDF storage");
+    if(storage==DdfStorage::Float32 && (Dx!=1u||Dy!=1u||Dz!=1u)) print_error("Runtime FP32 currently requires one device");
+#if defined(TEMPERATURE)||defined(SURFACE)||defined(PARTICLES)||defined(GRAPHICS)||defined(FP16C)
+    if(storage==DdfStorage::Float32) print_error("Runtime FP32 is supported only by the headless single-phase profile");
+#endif
+
 	const uint NDx=(Nx/Dx)*Dx, NDy=(Ny/Dy)*Dy, NDz=(Nz/Dz)*Dz; // make resolution equally divisible by domains
 	if(NDx!=Nx||NDy!=Ny||NDz!=Nz) print_warning("LBM grid ("+to_string(Nx)+"x"+to_string(Ny)+"x"+to_string(Nz)+") is not equally divisible in domains ("+to_string(Dx)+"x"+to_string(Dy)+"x"+to_string(Dz)+"). Changing resolution to ("+to_string(NDx)+"x"+to_string(NDy)+"x"+to_string(NDz)+").");
 	this->Nx = NDx; this->Ny = NDy; this->Nz = NDz;
@@ -735,7 +737,7 @@ LBM::LBM(const uint Nx, const uint Ny, const uint Nz, const uint Dx, const uint 
 	lbm_domain = new LBM_Domain*[D];
 	for(uint d=0u; d<D; d++) { // parallel_for((ulong)D, D, [&](ulong d) {
 		const uint x=((uint)d%(Dx*Dy))%Dx, y=((uint)d%(Dx*Dy))/Dx, z=(uint)d/(Dx*Dy); // d = x+(y+z*Dy)*Dx
-		lbm_domain[d] = new LBM_Domain(device_infos[d], this->Nx/Dx+2u*Hx, this->Ny/Dy+2u*Hy, this->Nz/Dz+2u*Hz, Dx, Dy, Dz, (int)(x*this->Nx/Dx)-(int)Hx, (int)(y*this->Ny/Dy)-(int)Hy, (int)(z*this->Nz/Dz)-(int)Hz, nu, fx, fy, fz, sigma, alpha, beta, particles_N, particles_rho);
+		lbm_domain[d] = new LBM_Domain(device_infos[d], this->Nx/Dx+2u*Hx, this->Ny/Dy+2u*Hy, this->Nz/Dz+2u*Hz, Dx, Dy, Dz, (int)(x*this->Nx/Dx)-(int)Hx, (int)(y*this->Ny/Dy)-(int)Hy, (int)(z*this->Nz/Dz)-(int)Hz, nu, fx, fy, fz, sigma, alpha, beta, particles_N, particles_rho, storage);
 	} // });
 	{
 		Memory<float>** buffers_rho = new Memory<float>*[D];
@@ -776,6 +778,9 @@ LBM::LBM(const uint Nx, const uint Ny, const uint Nz, const uint Dx, const uint 
 	graphics = Graphics(this);
 #endif // GRAPHICS
 }
+LBM::LBM(const uint Nx, const uint Ny, const uint Nz, const float nu, const DdfStorage storage, const float fx, const float fy, const float fz)
+    :LBM(Nx, Ny, Nz, 1u, 1u, 1u, nu, fx, fy, fz, 0.0f, 0.0f, 0.0f, 0u, 1.0f, storage) {
+}
 LBM::~LBM() {
 #ifdef GRAPHICS
 	camera.allow_rendering = false;
@@ -791,17 +796,12 @@ void LBM::sanity_checks_constructor(const vector<Device_Info>& device_infos, con
 	const uint local_Nx=Nx/Dx+2u*(Dx>1u), local_Ny=Ny/Dy+2u*(Dy>1u), local_Nz=Nz/Dz+2u*(Dz>1u);
 	uint memory_available = max_uint; // in MB
 	for(Device_Info device_info : device_infos) memory_available = min(memory_available, device_info.memory);
-	uint memory_required = (uint)((ulong)Nx*(ulong)Ny*(ulong)Nz/((ulong)(Dx*Dy*Dz))*(ulong)bytes_per_cell_device()/1048576ull); // in MB
+	uint memory_required = (uint)((ulong)Nx*(ulong)Ny*(ulong)Nz/((ulong)(Dx*Dy*Dz))*(ulong)bytes_per_cell_device(storage)/1048576ull); // in MB
 	if(memory_required>memory_available) {
 		float factor = cbrt((float)memory_available/(float)memory_required);
 		const uint maxNx=(uint)(factor*(float)Nx), maxNy=(uint)(factor*(float)Ny), maxNz=(uint)(factor*(float)Nz);
 		string message = "Grid resolution ("+to_string(Nx)+", "+to_string(Ny)+", "+to_string(Nz)+") is too large: "+to_string(Dx*Dy*Dz)+"x "+to_string(memory_required)+" MB required, "+to_string(Dx*Dy*Dz)+"x "+to_string(memory_available)+" MB available. Largest possible resolution is ("+to_string(maxNx)+", "+to_string(maxNy)+", "+to_string(maxNz)+"). Restart the simulation with lower resolution or on different device(s) with more memory.";
-#if !defined(FP16S)&&!defined(FP16C)
-		uint memory_required_fp16 = (uint)((ulong)Nx*(ulong)Ny*(ulong)Nz/((ulong)(Dx*Dy*Dz))*(ulong)(bytes_per_cell_device()-velocity_set*2u)/1048576ull); // in MB
-		float factor_fp16 = cbrt((float)memory_available/(float)memory_required_fp16);
-		const uint maxNx_fp16=(uint)(factor_fp16*(float)Nx), maxNy_fp16=(uint)(factor_fp16*(float)Ny), maxNz_fp16=(uint)(factor_fp16*(float)Nz);
-		message += " Consider using FP16S/FP16C memory compression to double maximum grid resolution to a maximum of ("+to_string(maxNx_fp16)+", "+to_string(maxNy_fp16)+", "+to_string(maxNz_fp16)+"); for this, uncomment \"#define FP16S\" or \"#define FP16C\" in defines.hpp.";
-#endif // !FP16S&&!FP16C
+
 		print_error(message);
 	}
 	if(nu==0.0f) print_error("Viscosity cannot be 0. Change it in setup.cpp."); // sanity checks for viscosity
@@ -1055,7 +1055,7 @@ void LBM::write_status(const string& path) { // write LBM status report to a .tx
 	status += "Grid Domains = "+to_string(Dx)+" x "+to_string(Dy)+" x "+to_string(Dz)+" = "+to_string(get_D())+"\n";
 	status += "LBM Type = D"+string(get_velocity_set()==9 ? "2" : "3")+"Q"+to_string(get_velocity_set())+" "+info.collision+"\n";
 	status += "Memory Usage = CPU "+to_string(info.cpu_mem_required)+" MB, GPU "+to_string(get_D())+"x "+to_string(info.gpu_mem_required)+" MB\n";
-	status += "Maximum Allocation Size = "+to_string((uint)(get_N()/(ulong)get_D()*(ulong)(get_velocity_set()*sizeof(fpxx))/1048576ull))+" MB\n";
+	status += "Maximum Allocation Size = "+to_string((uint)(get_N()/(ulong)get_D()*(ulong)(get_velocity_set()*get_ddf_bytes())/1048576ull))+" MB\n";
 	status += "Time Steps = "+to_string(get_t())+" / "+(info.steps==max_ulong ? "infinite" : to_string(info.steps))+"\n";
 	status += "Runtime = "+print_time(info.runtime_total)+" (total) = "+print_time(info.runtime_lbm)+" (LBM) + "+print_time(info.runtime_total-info.runtime_lbm)+" (rendering and data evaluation)\n";
 	status += "Average MLUPs/s = "+to_string(to_uint(1E-6*(double)get_N()*(double)get_t()/info.runtime_lbm))+"\n";
@@ -1316,8 +1316,8 @@ void LBM_Domain::allocate_transfer(Device& device) { // allocate all memory for 
 	if(Dy>1u) Amax = max(Amax, (ulong)Nz*(ulong)Nx); // Ay
 	if(Dz>1u) Amax = max(Amax, (ulong)Nx*(ulong)Ny); // Az
 
-	transfer_buffer_p = Memory<char>(device, Amax, max(transfers*(uint)sizeof(fpxx), 17u), true, true, 0, false); // only allocate one set of transfer buffers in plus/minus directions, for all x/y/z transfers
-	transfer_buffer_m = Memory<char>(device, Amax, max(transfers*(uint)sizeof(fpxx), 17u), true, true, 0, false); // these transfer buffers must not be zero-copy!
+	transfer_buffer_p = Memory<char>(device, Amax, max(transfers*(uint)get_ddf_bytes(), 17u), true, true, 0, false); // only allocate one set of transfer buffers in plus/minus directions, for all x/y/z transfers
+	transfer_buffer_m = Memory<char>(device, Amax, max(transfers*(uint)get_ddf_bytes(), 17u), true, true, 0, false); // these transfer buffers must not be zero-copy!
 
 	kernel_transfer[enum_transfer_field::fi              ][0] = Kernel(device, 0ull, "transfer_extract_fi"              , 0u, t, transfer_buffer_p, transfer_buffer_m, fi);
 	kernel_transfer[enum_transfer_field::fi              ][1] = Kernel(device, 0ull, "transfer__insert_fi"              , 0u, t, transfer_buffer_p, transfer_buffer_m, fi);
@@ -1388,7 +1388,7 @@ void LBM::communicate_field(const enum_transfer_field field, const uint bytes_pe
 }
 
 void LBM::communicate_fi() {
-	communicate_field(enum_transfer_field::fi, transfers*sizeof(fpxx));
+	communicate_field(enum_transfer_field::fi, transfers*get_ddf_bytes());
 }
 void LBM::communicate_rho_u_flags() {
 	communicate_field(enum_transfer_field::rho_u_flags, 17u);
@@ -1408,7 +1408,7 @@ void LBM::communicate_phi_massex_flags() {
 #endif // SURFACE
 #ifdef TEMPERATURE
 void LBM::communicate_gi() {
-	communicate_field(enum_transfer_field::gi, sizeof(fpxx));
+	communicate_field(enum_transfer_field::gi, get_ddf_bytes());
 }
 void LBM::communicate_T() {
 	communicate_field(enum_transfer_field::T, 4u);

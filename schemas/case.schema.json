@@ -27,7 +27,10 @@
           "const": "SRT"
         },
         "storage": {
-          "const": "FP16S"
+          "enum": [
+            "FP16S",
+            "FP32"
+          ]
         },
         "turbulence": {
           "const": "smagorinsky"

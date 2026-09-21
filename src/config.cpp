@@ -113,7 +113,9 @@ Json capabilities() {
     return {{"schema_version", 1},
             {"lattice", "D3Q19"},
             {"collision", "SRT"},
-            {"storage", "FP16S"},
+            {"storage", {"FP16S", "FP32"}},
+            {"default_storage", "FP16S"},
+            {"arithmetic", "FP32"},
             {"turbulence", "smagorinsky"},
             {"units", {"lattice", "si"}},
             {"boundaries", {"no_slip", "moving_wall", "equilibrium", "periodic"}},
@@ -121,7 +123,7 @@ Json capabilities() {
             {"outputs", {"VTK", "CSV", "JSON"}},
             {"body_force", "constant force density"},
             {"analysis", {"probes", "temporal statistics", "gauge force on solids"}},
-            {"device_bytes_per_cell", device_cell_bytes},
+            {"device_bytes_per_cell", {{"FP16S", 67}, {"FP32", 105}}},
             {"graphics", false},
             {"devices_per_run", 1}};
 }
@@ -155,8 +157,14 @@ Config read_config(const fs::path &path) {
     if (j.contains("solver")) {
         keys(j["solver"], {"lattice", "collision", "storage", "turbulence"}, "solver");
         auto cap = capabilities();
-        for (auto it = j["solver"].begin(); it != j["solver"].end(); ++it)
-            require(it.value() == cap[it.key()], "Unsupported solver." + it.key() + "; use --capabilities");
+        for (auto it = j["solver"].begin(); it != j["solver"].end(); ++it) {
+            if (it.key() == "storage") {
+                auto name = string_value(it.value(), "solver.storage");
+                require(name == "FP16S" || name == "FP32", "Unsupported solver.storage; use --capabilities");
+                c.storage = name == "FP32" ? DdfStorage::Float32 : DdfStorage::Float16Scaled;
+            } else
+                require(it.value() == cap[it.key()], "Unsupported solver." + it.key() + "; use --capabilities");
+        }
     }
     const auto &u = field(j, "units");
     keys(u, {"mode", "reference_density", "dt", "reference_velocity", "lattice_velocity"}, "units");
@@ -209,7 +217,7 @@ Config read_config(const fs::path &path) {
             // Match the upstream float calculation and nearest-integer conversion.
             float ax = static_cast<float>(aspect[0]), ay = static_cast<float>(aspect[1]),
                   az = static_cast<float>(aspect[2]);
-            float bytes = ax * ay * az * static_cast<float>(device_cell_bytes) / 1048576.0f;
+            float bytes = ax * ay * az * static_cast<float>(c.device_cell_bytes()) / 1048576.0f;
             float scale = std::cbrt(static_cast<float>(mb) / bytes);
             for (int a = 0; a < 3; a++) {
                 double n = static_cast<float>(scale * static_cast<float>(aspect[a])) + 0.5f;
@@ -508,6 +516,9 @@ Config read_config(const fs::path &path) {
     c.resolved = {{"schema_version", 1},
                   {"case", c.name},
                   {"capabilities", capabilities()},
+                  {"storage", ddf_storage_name(c.storage)},
+                  {"distribution_bytes_per_value", ddf_storage_bytes(c.storage)},
+                  {"distribution_buffer_bytes", count * 19 * ddf_storage_bytes(c.storage)},
                   {"cells", c.cells},
                   {"dx", c.dx},
                   {"dt", c.dt},
@@ -522,7 +533,7 @@ Config read_config(const fs::path &path) {
                   {"max_prescribed_mach", umax * std::sqrt(3.0)},
                   {"steps", c.steps},
                   {"actual_duration", c.steps * c.dt},
-                  {"device_field_bytes", count * device_cell_bytes},
+                  {"device_field_bytes", count * c.device_cell_bytes()},
                   {"host_field_and_union_bytes", count * (host_cell_bytes + 1)},
                   {"actual_domain_length", {c.cells[0] * c.dx, c.cells[1] * c.dx, c.cells[2] * c.dx}}};
     if (c.analysis) {

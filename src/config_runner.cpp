@@ -262,14 +262,21 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
     unsigned long long count = static_cast<unsigned long long>(c.cells[0]) * c.cells[1] * c.cells[2], mesh_bytes = 0;
     for (const auto &g : c.geometry)
         mesh_bytes = std::max(mesh_bytes, (fs::file_size(g.file) - 84) / 50 * 36ull);
-    require(count * device_cell_bytes + mesh_bytes + 64 <= static_cast<unsigned long long>(selected.memory) * 1048576,
+    require(count * c.device_cell_bytes() + mesh_bytes + 64 <=
+                static_cast<unsigned long long>(selected.memory) * 1048576,
             "Estimated device memory exceeds selected device capacity");
-    require(count * 38 <= static_cast<unsigned long long>(selected.max_global_buffer) * 1048576,
+    require(count * 19 * ddf_storage_bytes(c.storage) <=
+                static_cast<unsigned long long>(selected.max_global_buffer) * 1048576,
             "Distribution buffer exceeds selected device allocation limit");
-    c.resolved["estimated_device_peak_bytes"] = count * device_cell_bytes + mesh_bytes + 64;
+    c.resolved["estimated_device_peak_bytes"] = count * c.device_cell_bytes() + mesh_bytes + 64;
     c.resolved["estimated_host_fields_union_and_mesh_bytes"] = count * (host_cell_bytes + 1) + mesh_bytes;
-    LBM lbm(c.cells[0], c.cells[1], c.cells[2], static_cast<float>(c.nu), static_cast<float>(c.body_force[0]),
-            static_cast<float>(c.body_force[1]), static_cast<float>(c.body_force[2]));
+    LBM lbm(c.cells[0], c.cells[1], c.cells[2], static_cast<float>(c.nu), c.storage,
+            static_cast<float>(c.body_force[0]), static_cast<float>(c.body_force[1]),
+            static_cast<float>(c.body_force[2]));
+    const auto actual_capacity = lbm.lbm_domain[0]->get_distribution_capacity();
+    require(actual_capacity == count * 19 * ddf_storage_bytes(c.storage),
+            "DDF allocation does not match requested storage");
+    c.resolved["actual_distribution_buffer_bytes"] = actual_capacity;
     c.resolved["device_id"] = lbm.lbm_domain[0]->get_device().info.id;
     c.resolved["device_name"] = lbm.lbm_domain[0]->get_device().info.name;
     c.resolved["device_driver"] = lbm.lbm_domain[0]->get_device().info.driver_version;
@@ -430,10 +437,11 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
     std::ofstream status(output / "status.txt", std::ios::binary);
     status << "FluidX3D configuration runner\nCase = " << c.name << "\nSteps = " << lbm.get_t()
            << "\nRequested steps = " << c.steps << "\nLattice viscosity = " << std::setprecision(17) << c.nu
-           << "\nTime per step = " << c.dt << "\n";
+           << "\nTime per step = " << c.dt << "\nStorage = " << ddf_storage_name(c.storage) << "\n";
     status.close();
     require(bool(status), "Cannot write status report");
     save_json(output / "completion.json", {{"status", prepare ? "prepared" : "succeeded"},
+                                           {"storage", ddf_storage_name(c.storage)},
                                            {"steps", lbm.get_t()},
                                            {"requested_steps", c.steps},
                                            {"actual_time", lbm.get_t() * c.dt}});
