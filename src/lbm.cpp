@@ -207,7 +207,7 @@ void LBM_Domain::enqueue_surface_3() {
 #ifdef FORCE_FIELD
 void LBM_Domain::enqueue_config_force_field(const float reference_rho) {
     kernel_config_force_field.set_parameters(2u, t);
-    kernel_config_force_field.set_parameters(6u, reference_rho).enqueue_run();
+    kernel_config_force_field.set_parameters(5u, reference_rho).enqueue_run();
 }
 void LBM_Domain::enqueue_update_force_field() { // calculate forces from fluid on TYPE_S cells
 	if(t!=t_last_force_field) { // only run kernel_update_force_field if the time step has changed since last update

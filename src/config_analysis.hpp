@@ -3,7 +3,6 @@
 #include "lbm.hpp"
 #include <fstream>
 #include <iomanip>
-#include <map>
 
 namespace fxconfig {
 inline bool is_solid(uchar flags) { return (flags & (TYPE_S | TYPE_E)) == TYPE_S; }
@@ -22,7 +21,7 @@ inline std::string csv_string(const std::string &s) {
 struct Moments {
     unsigned long long count = 0, first = 0, last = 0;
     std::vector<double> mean, m2;
-    void add(unsigned long long step, const std::vector<double> &v) {
+    template <class Values> void add(unsigned long long step, const Values &v) {
         if (!count) {
             first = step;
             mean.resize(v.size(), 0);
@@ -60,7 +59,7 @@ class Analysis {
     const std::vector<std::string> global_names{"mass",    "rho_mean",   "ux_mean", "uy_mean",
                                                 "uz_mean", "speed_mean", "p_mean",  "kinetic_energy"};
     const std::vector<std::string> force_names{"fx", "fy", "fz"};
-    void row(std::ofstream &out, const std::vector<double> &values) {
+    template <class Values> void row(std::ofstream &out, const Values &values) {
         for (double x : values) {
             require(std::isfinite(x), "Non-finite analysis value");
             out << ',' << x;
@@ -90,7 +89,7 @@ class Analysis {
             double rho = lbm.rho[n] * c.reference_density, ux = lbm.u.x[n] * c.dx / c.dt, uy = lbm.u.y[n] * c.dx / c.dt,
                    uz = lbm.u.z[n] * c.dx / c.dt;
             require(rho > 0, "Non-positive analysis density");
-            return std::vector<double>{
+            return std::array<double, 6>{
                 rho, ux, uy, uz, std::sqrt(ux * ux + uy * uy + uz * uz), pressure(c, lbm.rho[n])};
         };
         auto step = lbm.get_t();

@@ -130,7 +130,7 @@ def main():
                 c['domain']['cells']=[8,height+2,8]
                 steps = math.ceil(1.6*height**2/.1)
                 c['run'].update(steps=steps,monitor_every=steps)
-                c['analysis'].update(start_step=steps-100,every=50)
+                c['analysis'].update(start_step=steps-98,every=49)
                 c['analysis']['probes'][0]['position']=[4.5,height/2+.5,4.5]
                 if case=='poiseuille': c['fluid']['body_force']=[8*.1*.05/height**2,0,0]
                 out=invoke(f'{case}-{height}',c)
@@ -151,6 +151,29 @@ def main():
                 assert l2<.03 and linf<.03,(case,height,l2,linf)
                 assert force_error<.04,(case,height,measured,expected)
                 assert int(rows(out/'analysis.csv')[-1]['fluid_cells'])==64*height
+        for case in ['poiseuille','couette']:
+            lattice = copy.deepcopy(read(root/f'{case}-16'/'case.json'))
+            config = copy.deepcopy(lattice)
+            dx,dt,rho=.01,.003,1000
+            config['units']={'mode':'si','reference_density':rho,'dt':dt}
+            config['domain']={'length':[n*dx for n in lattice['domain']['cells']],'dx':dx}
+            config['fluid']['rho']=rho
+            config['fluid']['nu']*=dx*dx/dt
+            if 'body_force' in config['fluid']:
+                config['fluid']['body_force']=[x*rho*dx/dt**2 for x in config['fluid']['body_force']]
+            for b in config['boundaries']:
+                if 'velocity' in b: b['velocity']=[x*dx/dt for x in b['velocity']]
+            for p in config['analysis']['probes']:p['position']=[x*dx for x in p['position']]
+            out=invoke(case+'-SI',config)
+            before=read(root/f'{case}-16'/'results'/'statistics.json')
+            after=read(out/'statistics.json')
+            for side in ['lower','upper','total']:
+                for field in ['fx','fy','fz']:
+                    a=before['forces'][side]['fields'][field]['mean']
+                    b=after['forces'][side]['fields'][field]['mean']
+                    assert math.isclose(b,a*rho*dx**4/dt**2,rel_tol=1e-5,abs_tol=1e-7),(case,side,field,a,b)
+            fields=p1.vtk(out/f"u-{config['run']['steps']:09d}.vtk")
+            assert fields['spacing']==(.01,.01,.01)
         wall=read(repo/'configs'/'couette.json');wall['boundaries'][2]['velocity'][1]=.01
         invoke('normal-wall-speed',wall,error='tangential')
         wall['boundaries'][2]['velocity'][1]=0;wall['fluid']['rho']=2

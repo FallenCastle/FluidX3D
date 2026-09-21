@@ -245,6 +245,21 @@ try {
         if ($vtk.Count -eq 0 -or @($vtk | Where-Object { $_.Length -eq 0 }).Count -gt 0) {
             throw 'No complete VTK output was produced.'
         }
+        $resolved = Get-Content -LiteralPath (Join-Path $resultsDirectory 'resolved-config.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ($resolved.PSObject.Properties.Name -contains 'analysis') {
+            foreach ($artifact in @('probes.csv', 'analysis.csv', 'forces.csv')) {
+                if (-not (Test-Path -LiteralPath (Join-Path $resultsDirectory $artifact) -PathType Leaf)) {
+                    throw "Missing analysis artifact: $artifact"
+                }
+            }
+            if ($resolved.analysis.statistics) {
+                $statistics = Get-Content -LiteralPath (Join-Path $resultsDirectory 'statistics.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+                $expectedSamples = if ($PrepareOnly) { 0 } else {
+                    [Math]::Floor(($completion.steps - $resolved.analysis.start_step) / $resolved.analysis.every) + 1
+                }
+                if ($statistics.global.count -ne $expectedSamples) { throw 'Analysis sample count mismatch.' }
+            }
+        }
         $record.validation['configPath'] = $ConfigPath
         $record.validation['completion'] = $completion
         $record.validation['vtkCount'] = $vtk.Count
