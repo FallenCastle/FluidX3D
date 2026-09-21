@@ -29,12 +29,12 @@ static bool same(const Boundary &a, const Boundary &b) {
 static int boundary_at(const Config &c, unsigned x, unsigned y, unsigned z) {
     unsigned xyz[3]{x, y, z};
     auto p = point(c, x, y, z);
-    int winner = -1;
+    std::vector<int> candidates;
     for (int face = 0; face < 6; face++) {
         int axis = face / 2;
         if (c.periodic[axis] || xyz[axis] != (face % 2 ? c.cells[axis] - 1 : 0))
             continue;
-        int local = -1;
+        bool covered = false;
         for (size_t i = 0; i < c.boundaries.size(); i++) {
             const auto &b = c.boundaries[i];
             if (b.type == "periodic" || std::find(b.faces.begin(), b.faces.end(), face) == b.faces.end())
@@ -50,20 +50,22 @@ static int boundary_at(const Config &c, unsigned x, unsigned y, unsigned z) {
                 if (!matches)
                     continue;
             }
-            if (local < 0 || b.priority > c.boundaries[local].priority)
-                local = static_cast<int>(i);
-            else if (b.priority == c.boundaries[local].priority)
-                require(same(b, c.boundaries[local]),
-                        "Conflicting boundaries: " + b.id + " / " + c.boundaries[local].id);
+            covered = true;
+            candidates.push_back(static_cast<int>(i));
         }
-        require(local >= 0, "Uncovered boundary face at cell " + std::to_string(x) + "," + std::to_string(y) + "," +
-                                std::to_string(z));
-        if (winner < 0 || c.boundaries[local].priority > c.boundaries[winner].priority)
-            winner = local;
-        else if (c.boundaries[local].priority == c.boundaries[winner].priority)
-            require(same(c.boundaries[local], c.boundaries[winner]),
-                    "Conflicting face intersection: " + c.boundaries[local].id + " / " + c.boundaries[winner].id);
+        require(covered, "Uncovered boundary face at cell " + std::to_string(x) + "," + std::to_string(y) + "," +
+                             std::to_string(z));
     }
+    if (candidates.empty())
+        return -1;
+    int winner = candidates.front();
+    for (int i : candidates)
+        if (c.boundaries[i].priority > c.boundaries[winner].priority)
+            winner = i;
+    for (int i : candidates)
+        if (c.boundaries[i].priority == c.boundaries[winner].priority)
+            require(same(c.boundaries[i], c.boundaries[winner]),
+                    "Conflicting boundaries: " + c.boundaries[i].id + " / " + c.boundaries[winner].id);
     return winner;
 }
 static void validate_faces(const Config &c) {

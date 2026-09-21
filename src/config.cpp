@@ -9,8 +9,8 @@
 #include <stdexcept>
 #ifdef _WIN32
 #define NOMINMAX
-#include <wincrypt.h>
 #include <windows.h>
+#include <wincrypt.h>
 #endif
 
 namespace fxconfig {
@@ -371,7 +371,11 @@ Config read_config(const fs::path &path) {
         c.steps = integer(run["steps"], "run.steps");
     else {
         require(c.si, "duration requires SI units");
-        double steps = std::ceil(positive(run["duration"], "run.duration") / c.dt);
+        double raw_steps = positive(run["duration"], "run.duration") / c.dt;
+        double nearest = std::round(raw_steps);
+        if (std::abs(raw_steps - nearest) < 1e-10 * std::max(1.0, raw_steps))
+            raw_steps = nearest;
+        double steps = std::ceil(raw_steps);
         require(std::isfinite(steps) && steps >= 1 && steps <= 9007199254740991.,
                 "duration/dt outside supported range");
         c.steps = static_cast<unsigned long long>(steps);
