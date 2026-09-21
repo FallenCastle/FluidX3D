@@ -4,6 +4,8 @@
 
 设计契约见 [config-runner-design.md](config-runner-design.md)，格式定义见 [case.schema.json](../schemas/case.schema.json)。C++ 执行器还会检查 schema 无法表达的周期配对、边界冲突、单位转换、几何范围和设备资源。OpenCL 内核仍在程序启动时根据网格编译，无须重新构建 C++ 可执行文件。
 
+P2 的体积力、固定位置运动壁面、受力、探针和参数扫描见 [config-runner-p2.md](config-runner-p2.md)；P2 发布构建名为 `config-runner-p2`，下文基础命令中的 BuildName/目录可替换为该名称。
+
 ## 构建一次
 
 所有命令在 NUC PowerShell 中执行。源码先按项目约定由 Mac 提交推送，NUC 拉取；不要在 Mac 编译运行。
@@ -86,7 +88,7 @@ Boeing/Ahmed 模板中的 STL 相对路径适配 NUC 的 `workingdir/<case>/asse
 
 ## 单位、域和几何
 
-格子模式 `units.mode="lattice"`：使用 `domain.cells`；或 `aspect_ratio + memory_budget_mb` 估算网格，最终整数网格见 resolved-config。55 Bytes/cell 是该固定求解配置的设备场占用，实际资源检查另外考虑 STL 临时缓冲。
+格子模式 `units.mode="lattice"`：使用 `domain.cells`；或 `aspect_ratio + memory_budget_mb` 估算网格，最终整数网格见 resolved-config。P2 为 67 Bytes/cell（P1 为 55），这是固定求解配置的设备场占用，实际资源检查另外考虑 STL 临时缓冲。
 
 SI 模式示例：
 

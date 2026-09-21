@@ -15,7 +15,7 @@
   },
   "fluid": {
     "rho": 1.0,
-    "nu": 0.1
+    "nu": 0.2
   },
   "initial": {
     "velocity": [
