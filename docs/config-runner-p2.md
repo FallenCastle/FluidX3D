@@ -104,3 +104,7 @@ python .\scripts\parameter-study.py run `
 P2 设备字段为 67 B/cell（P1 为 55），主机字段为 29 B/cell，另加并集掩码、必要的部件归属与目标索引。resolved-config 保存估算与目标索引实际分配量；这些不包含驱动全部额外峰值。同样的 memory_budget_mb 可能得到比 P1 小的网格。Boeing 回归配置已经固定原 [170,339,85] 网格。
 
 运行 `scripts/test-config-p2.py --workspace-root ...` 验证解析流动、受力、单位、采样、分组和批量流程；P1 回归继续用 test-config-runner.py。Smagorinsky 与 FP16S 对解析剖面有可测影响，验收报告记录三档网格的实际误差，不把复杂外形短算等同于物理精度验证。
+
+## 当前精度限制
+
+生产 FP16S 在已测细网格 Couette 中出现约 8.15% 的受力误差，未达到本次 4% 阈值；同参数 FP32 诊断为约 0.014%。默认 P2 精度验收脚本因此仍返回非零，不应将功能通过等同于所有网格物理精度通过。固定 tau 的 FP32 三档网格验证通过；详见 [完整验收记录](validation/config-runner-p2-2026-09-22.md)。当前没有生产 EXE 的运行时 FP32 选项。

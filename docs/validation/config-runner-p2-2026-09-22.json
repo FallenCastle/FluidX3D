@@ -1,0 +1,501 @@
+{
+  "date": "2026-09-22",
+  "implementation": "complete",
+  "precision_scope_decision": "pending user selection",
+  "production": {
+    "gitCommit": "cfb07d727721f936cdaff1b1a4c21abd79053707",
+    "sourceTree": "f5987e0b92a9612f07680cdde1913fa0876ad0a8",
+    "executablePath": "F:\\01-Project\\Opensource\\01-FluidX3D\\bin\\config-runner-p2\\FluidX3D.exe",
+    "executableSha256": "53a2283e75ac3c5204b1c5c3fda7207450b1a372c60466b0dea27925a6982a43"
+  },
+  "diagnostic_fp32": {
+    "gitCommit": "0d67091afae6cb928d3cf5ecaf9e157e02845122",
+    "sourceTree": "763f17b20644951597e0b55df344182d492dd12e",
+    "executablePath": "F:\\01-Project\\Opensource\\01-FluidX3D\\bin\\config-runner-p2-fp32-diagnostic\\FluidX3D.exe",
+    "executableSha256": "18d076c8c44b84f58c9ac3553de8d8c193c57324ea5f152517a47a1ca31086ab"
+  },
+  "p1_regression": {
+    "status": "succeeded",
+    "invocations": 29,
+    "baseline_run": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\config-baseline-boeing\\20260921T154709034Z-f038c65dfbe0"
+  },
+  "p2_functional": {
+    "status": "passed",
+    "direct_invocations": 25,
+    "successful_batch_cases": 4,
+    "mixed_batch_cases": [
+      "failed as expected",
+      "succeeded"
+    ]
+  },
+  "fp16_acoustic_refinement": {
+    "status": "failed analytic force tolerance",
+    "profiles": [
+      {
+        "case": "poiseuille",
+        "H": 8,
+        "nu": 0.2,
+        "U": 0.1,
+        "Re": 4.0,
+        "steps": 512,
+        "l2_relative": 0.011520055775261039,
+        "linf_over_U": 0.012210048735141754,
+        "force_measured": [
+          0.6376953125,
+          0.6376953125
+        ],
+        "force_expected": [
+          0.6400000000000001,
+          0.6400000000000001
+        ],
+        "force_relative_error": 0.0036010742187501934,
+        "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p2-validation\\20260921T163819477191Z\\poiseuille-8\\results"
+      },
+      {
+        "case": "poiseuille",
+        "H": 16,
+        "nu": 0.4,
+        "U": 0.1,
+        "Re": 4.0,
+        "steps": 1024,
+        "l2_relative": 0.02545502950225229,
+        "linf_over_U": 0.02492825128138065,
+        "force_measured": [
+          0.634765625,
+          0.634765625
+        ],
+        "force_expected": [
+          0.6400000000000001,
+          0.6400000000000001
+        ],
+        "force_relative_error": 0.008178710937500193,
+        "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p2-validation\\20260921T163819477191Z\\poiseuille-16\\results"
+      },
+      {
+        "case": "poiseuille",
+        "H": 32,
+        "nu": 0.8,
+        "U": 0.1,
+        "Re": 4.0,
+        "steps": 2048,
+        "l2_relative": 0.021032255156382202,
+        "linf_over_U": 0.027951162308454507,
+        "force_measured": [
+          0.628173828125,
+          0.628173828125
+        ],
+        "force_expected": [
+          0.6400000000000001,
+          0.6400000000000001
+        ],
+        "force_relative_error": 0.01847839355468769,
+        "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p2-validation\\20260921T163819477191Z\\poiseuille-32\\results"
+      },
+      {
+        "case": "couette",
+        "H": 8,
+        "nu": 0.2,
+        "U": 0.1,
+        "Re": 4.0,
+        "steps": 512,
+        "l2_relative": 0.0037598105449636755,
+        "linf_over_U": 0.0030036792159080644,
+        "force_measured": [
+          0.15901692708333334,
+          -0.16311860084533691
+        ],
+        "force_expected": [
+          0.16000000000000003,
+          -0.16000000000000003
+        ],
+        "force_relative_error": 0.019491255283355515,
+        "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p2-validation\\20260921T163819477191Z\\couette-8\\results"
+      },
+      {
+        "case": "couette",
+        "H": 16,
+        "nu": 0.4,
+        "U": 0.1,
+        "Re": 4.0,
+        "steps": 1024,
+        "l2_relative": 0.008813556989485211,
+        "linf_over_U": 0.007376879453659113,
+        "force_measured": [
+          0.1572265625,
+          -0.16556000709533691
+        ],
+        "force_expected": [
+          0.16000000000000003,
+          -0.16000000000000003
+        ],
+        "force_relative_error": 0.03475004434585551,
+        "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p2-validation\\20260921T163819477191Z\\couette-16\\results"
+      },
+      {
+        "case": "couette",
+        "H": 32,
+        "nu": 0.8,
+        "U": 0.1,
+        "Re": 4.0,
+        "steps": 2048,
+        "l2_relative": 0.019412086963130216,
+        "linf_over_U": 0.015819661319255857,
+        "force_measured": [
+          0.154052734375,
+          -0.17304698626200357
+        ],
+        "force_expected": [
+          0.16000000000000003,
+          -0.16000000000000003
+        ],
+        "force_relative_error": 0.0815436641375221,
+        "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p2-validation\\20260921T163819477191Z\\couette-32\\results"
+      }
+    ]
+  },
+  "fp32_same_acoustic_comparison": {
+    "status": "force accuracy passed; Poiseuille velocity error exceeds 3% at finer grids",
+    "profiles": [
+      {
+        "case": "poiseuille",
+        "H": 8,
+        "nu": 0.2,
+        "U": 0.1,
+        "Re": 4.0,
+        "steps": 512,
+        "l2_relative": 0.015033762796178306,
+        "linf_over_U": 0.013151466846466064,
+        "force_measured": [
+          0.6399986545244852,
+          0.6399986346562704
+        ],
+        "force_expected": [
+          0.6400000000000001,
+          0.6400000000000001
+        ],
+        "force_relative_error": 2.1333495777223206e-06,
+        "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p2-validation\\20260921T164103306724Z\\poiseuille-8\\results"
+      },
+      {
+        "case": "poiseuille",
+        "H": 16,
+        "nu": 0.4,
+        "U": 0.1,
+        "Re": 4.0,
+        "steps": 1024,
+        "l2_relative": 0.03449715835845103,
+        "linf_over_U": 0.025940533727407452,
+        "force_measured": [
+          0.6399979591369629,
+          0.6399980783462524
+        ],
+        "force_expected": [
+          0.6400000000000001,
+          0.6400000000000001
+        ],
+        "force_relative_error": 3.188848495677687e-06,
+        "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p2-validation\\20260921T164103306724Z\\poiseuille-16\\results"
+      },
+      {
+        "case": "poiseuille",
+        "H": 32,
+        "nu": 0.8,
+        "U": 0.1,
+        "Re": 4.0,
+        "steps": 2048,
+        "l2_relative": 0.03942542947506007,
+        "linf_over_U": 0.029009228572249406,
+        "force_measured": [
+          0.6399966478347778,
+          0.6399968266487122
+        ],
+        "force_expected": [
+          0.6400000000000001,
+          0.6400000000000001
+        ],
+        "force_relative_error": 5.237758159831739e-06,
+        "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p2-validation\\20260921T164103306724Z\\poiseuille-32\\results"
+      },
+      {
+        "case": "couette",
+        "H": 8,
+        "nu": 0.2,
+        "U": 0.1,
+        "Re": 4.0,
+        "steps": 512,
+        "l2_relative": 1.2974213619904915e-06,
+        "linf_over_U": 1.1697411537309188e-06,
+        "force_measured": [
+          0.16029968857765198,
+          -0.1603010892868042
+        ],
+        "force_expected": [
+          0.16000000000000003,
+          -0.16000000000000003
+        ],
+        "force_relative_error": 0.0018818080425260504,
+        "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p2-validation\\20260921T164103306724Z\\couette-8\\results"
+      },
+      {
+        "case": "couette",
+        "H": 16,
+        "nu": 0.4,
+        "U": 0.1,
+        "Re": 4.0,
+        "steps": 1024,
+        "l2_relative": 2.9413065730786798e-06,
+        "linf_over_U": 2.577900886577278e-06,
+        "force_measured": [
+          0.16007408499717712,
+          -0.16007683674494425
+        ],
+        "force_expected": [
+          0.16000000000000003,
+          -0.16000000000000003
+        ],
+        "force_relative_error": 0.00048022965590133876,
+        "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p2-validation\\20260921T164103306724Z\\couette-16\\results"
+      },
+      {
+        "case": "couette",
+        "H": 32,
+        "nu": 0.8,
+        "U": 0.1,
+        "Re": 4.0,
+        "steps": 2048,
+        "l2_relative": 6.732399180313366e-06,
+        "linf_over_U": 5.4389238357543945e-06,
+        "force_measured": [
+          0.16001653671264648,
+          -0.16002245744069418
+        ],
+        "force_expected": [
+          0.16000000000000003,
+          -0.16000000000000003
+        ],
+        "force_relative_error": 0.00014035900433844586,
+        "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p2-validation\\20260921T164103306724Z\\couette-32\\results"
+      }
+    ]
+  },
+  "fp32_diffusive_refinement": {
+    "status": "succeeded",
+    "profiles": [
+      {
+        "case": "poiseuille",
+        "H": 8,
+        "nu": 0.1,
+        "reference_speed": 0.05,
+        "Re": 4.0,
+        "steps": 1024,
+        "l2_relative": 0.0161197345764768,
+        "linf_over_U": 0.012967184185981862,
+        "force_measured": [
+          0.1599990725517273,
+          0.159999281167984
+        ],
+        "force_expected": [
+          0.16000000000000003,
+          0.16000000000000003
+        ],
+        "force_relative_error": 5.7965517046010265e-06,
+        "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p2-validation\\20260921T164401382586Z\\poiseuille-8\\results"
+      },
+      {
+        "case": "poiseuille",
+        "H": 16,
+        "nu": 0.1,
+        "reference_speed": 0.025,
+        "Re": 4.0,
+        "steps": 4096,
+        "l2_relative": 0.004091149298120884,
+        "linf_over_U": 0.0032868236303330856,
+        "force_measured": [
+          0.039999574422836304,
+          0.039999544620513916
+        ],
+        "force_expected": [
+          0.04000000000000001,
+          0.04000000000000001
+        ],
+        "force_relative_error": 1.1384487152293897e-05,
+        "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p2-validation\\20260921T164401382586Z\\poiseuille-16\\results"
+      },
+      {
+        "case": "poiseuille",
+        "H": 32,
+        "nu": 0.1,
+        "reference_speed": 0.0125,
+        "Re": 4.0,
+        "steps": 16384,
+        "l2_relative": 0.00110141382954324,
+        "linf_over_U": 0.0009062588214875378,
+        "force_measured": [
+          0.009999338537454605,
+          0.009999379826088747
+        ],
+        "force_expected": [
+          0.010000000000000002,
+          0.010000000000000002
+        ],
+        "force_relative_error": 6.614625453968402e-05,
+        "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p2-validation\\20260921T164401382586Z\\poiseuille-32\\results"
+      },
+      {
+        "case": "couette",
+        "H": 8,
+        "nu": 0.1,
+        "reference_speed": 0.05,
+        "Re": 4.0,
+        "steps": 1024,
+        "l2_relative": 3.396315061532415e-06,
+        "linf_over_U": 2.7343630790849227e-06,
+        "force_measured": [
+          0.04007479548454285,
+          -0.04007557034492493
+        ],
+        "force_expected": [
+          0.04000000000000001,
+          -0.04000000000000001
+        ],
+        "force_relative_error": 0.0018892586231229742,
+        "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p2-validation\\20260921T164401382586Z\\couette-8\\results"
+      },
+      {
+        "case": "couette",
+        "H": 16,
+        "nu": 0.1,
+        "reference_speed": 0.025,
+        "Re": 4.0,
+        "steps": 4096,
+        "l2_relative": 1.2218488142602175e-05,
+        "linf_over_U": 9.693205356639534e-06,
+        "force_measured": [
+          0.010004431009292603,
+          -0.010005146265029907
+        ],
+        "force_expected": [
+          0.010000000000000002,
+          -0.010000000000000002
+        ],
+        "force_relative_error": 0.0005146265029905283,
+        "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p2-validation\\20260921T164401382586Z\\couette-16\\results"
+      },
+      {
+        "case": "couette",
+        "H": 32,
+        "nu": 0.1,
+        "reference_speed": 0.0125,
+        "Re": 4.0,
+        "steps": 16384,
+        "l2_relative": 6.644852144529482e-05,
+        "linf_over_U": 5.386024713519011e-05,
+        "force_measured": [
+          0.0024999591211477914,
+          -0.0025009016195933023
+        ],
+        "force_expected": [
+          0.0025000000000000005,
+          -0.0025000000000000005
+        ],
+        "force_relative_error": 0.0003606478373207114,
+        "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p2-validation\\20260921T164401382586Z\\couette-32\\results"
+      }
+    ]
+  },
+  "study_assets": {
+    "status": "succeeded",
+    "checks": [
+      {
+        "name": "generate",
+        "exit_code": 0,
+        "expected_success": true
+      },
+      {
+        "name": "refuse-overwrite",
+        "exit_code": 1,
+        "expected_success": false
+      },
+      {
+        "name": "run-without-original-asset",
+        "exit_code": 0,
+        "expected_success": true
+      },
+      {
+        "name": "reject-tampered-config",
+        "exit_code": 1,
+        "expected_success": false
+      },
+      {
+        "name": "missing-path",
+        "exit_code": 1,
+        "expected_success": false
+      },
+      {
+        "name": "duplicate-path",
+        "exit_code": 1,
+        "expected_success": false
+      },
+      {
+        "name": "ancestor-path",
+        "exit_code": 1,
+        "expected_success": false
+      },
+      {
+        "name": "bad-escape",
+        "exit_code": 1,
+        "expected_success": false
+      },
+      {
+        "name": "asset-path",
+        "exit_code": 1,
+        "expected_success": false
+      }
+    ],
+    "cases": 2
+  },
+  "overhead": {
+    "description": "Whole process elapsed time includes OpenCL compile/cache, initialization and final I/O; not isolated kernel throughput.",
+    "cases": [
+      {
+        "name": "p1",
+        "executable_sha256": "6e274ea066773c9769c17dbf9ed7cfba9bb23c86641e0c3526ece5b22943c24a",
+        "seconds": [
+          1.4689100000541657,
+          0.9830161000136286,
+          1.0599993999348953
+        ],
+        "device_field_bytes": 32440320,
+        "host_field_and_union_bytes": 10616832,
+        "warm_median_seconds": 1.021507749974262
+      },
+      {
+        "name": "p2",
+        "executable_sha256": "53a2283e75ac3c5204b1c5c3fda7207450b1a372c60466b0dea27925a6982a43",
+        "seconds": [
+          1.7353184999665245,
+          1.082211000029929,
+          1.068006300018169
+        ],
+        "device_field_bytes": 39518208,
+        "host_field_and_union_bytes": 17694720,
+        "warm_median_seconds": 1.075108650024049
+      },
+      {
+        "name": "p2-sampled",
+        "executable_sha256": "53a2283e75ac3c5204b1c5c3fda7207450b1a372c60466b0dea27925a6982a43",
+        "seconds": [
+          3.9169624000787735,
+          3.9254712000256404,
+          3.8752811000449583
+        ],
+        "device_field_bytes": 39518208,
+        "host_field_and_union_bytes": 17694720,
+        "warm_median_seconds": 3.9003761500352994
+      }
+    ],
+    "p2_over_p1": 1.0524723381209173,
+    "sampling_over_plain_p2": 3.6278902136524085
+  },
+  "raw_evidence": "Project outer reports/config-runner-p2-2026-09-22/; original NUC run directories retained"
+}
