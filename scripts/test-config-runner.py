@@ -175,6 +175,18 @@ def main():
         shifted_result=invoke("translated-origin",shifted,options=("--prepare-only",))
         vf=vtk(shifted_result/"flags-000000000.vtk")
         assert vf["values"]==af and vf["origin"]==(10.5,20.5,30.5)
+        distant=copy.deepcopy(geo);distant["domain"]["origin"]=[1e9,1e9,1e9]
+        distant["geometry"][0]["transform"]["translation"]=[1e9+3]*3
+        distant_result=invoke("distant-origin",distant,options=("--prepare-only",))
+        assert vtk(distant_result/"flags-000000000.vtk")["values"]==af
+        local=copy.deepcopy(lattice)
+        local["boundaries"]=[{"id":"walls","faces":lattice["boundaries"][0]["faces"],"type":"no_slip"},
+            {"id":"patch","faces":["xmin"],"type":"equilibrium","priority":1,
+             "region":{"min":[4,4],"max":[12,12]},"rho":1,"velocity":[0.03,0,0]}]
+        patch=invoke("local-boundary",local,options=("--prepare-only",))
+        pf=vtk(patch/"flags-000000000.vtk")["values"]
+        assert sum(v==2 for v in pf)==64
+        assert all(pf[16*y+256*z]==2 for y in range(4,12) for z in range(4,12))
         outside=copy.deepcopy(geo);outside["geometry"][0]["transform"]["translation"]=[-5,3,3]
         invoke("outside",outside,success=False,expected_error="outside domain")
         # Snapshot input geometry and configuration are sufficient for a repeat run.

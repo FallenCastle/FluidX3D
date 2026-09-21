@@ -110,28 +110,47 @@ static std::unique_ptr<Mesh> mesh(const Config &c, const Geometry &g) {
             float3 p(v[0], v[1], v[2]);
             if (g.mode == "fit")
                 p = rotation * p;
-            else
-                p = f3(g.translation) + rotation * (static_cast<float>(g.factor) * (p - f3(g.pivot)));
+            else {
+                // Subtract world origins in double precision before converting to native float coordinates.
+                double x = (v[0] - g.pivot[0]) * (g.factor / c.dx);
+                double y = (v[1] - g.pivot[1]) * (g.factor / c.dx);
+                double z = (v[2] - g.pivot[2]) * (g.factor / c.dx);
+                p = float3(static_cast<float>((g.translation[0] - c.origin[0]) / c.dx + rotation.xx * x +
+                                              rotation.xy * y + rotation.xz * z - 0.5),
+                           static_cast<float>((g.translation[1] - c.origin[1]) / c.dx + rotation.yx * x +
+                                              rotation.yy * y + rotation.yz * z - 0.5),
+                           static_cast<float>((g.translation[2] - c.origin[2]) / c.dx + rotation.zx * x +
+                                              rotation.zy * y + rotation.zz * z - 0.5));
+            }
+            require(std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z), "Invalid transformed STL: " + g.id);
             (vertex == 0 ? m->p0 : vertex == 1 ? m->p1 : m->p2)[i] = p;
         }
     }
-    m->find_bounds();
+    auto bounds = [&]() {
+        m->pmin = m->pmax = m->p0[0];
+        for (uint32_t i = 0; i < triangles; i++)
+            for (auto vertices : {m->p0, m->p1, m->p2}) {
+                auto p = vertices[i];
+                m->pmin = float3(std::min(m->pmin.x, p.x), std::min(m->pmin.y, p.y), std::min(m->pmin.z, p.z));
+                m->pmax = float3(std::max(m->pmax.x, p.x), std::max(m->pmax.y, p.y), std::max(m->pmax.z, p.z));
+            }
+    };
+    bounds();
     require(m->get_max_size() > 0, "Zero-size STL: " + g.id);
-    const float scale =
-        g.mode == "fit" ? static_cast<float>(g.size / c.dx) / m->get_max_size() : static_cast<float>(1.0 / c.dx);
-    const float3 offset = g.mode == "fit" ? -0.5f * (m->pmin + m->pmax) : -f3(c.origin);
+    const float scale = g.mode == "fit" ? static_cast<float>(g.size / c.dx) / m->get_max_size() : 1.0f;
+    const float3 offset = g.mode == "fit" ? -0.5f * (m->pmin + m->pmax) : float3(0.0f);
     Vec target{};
     if (g.mode == "fit")
         for (int a = 0; a < 3; a++)
             target[a] = (g.center[a] - c.origin[a]) / c.dx - 0.5;
-    const float3 translation = g.mode == "fit" ? f3(target) : float3(-0.5f);
+    const float3 translation = g.mode == "fit" ? f3(target) : float3(0.0f);
     for (uint32_t i = 0; i < triangles; i++)
         for (auto points : {m->p0, m->p1, m->p2}) {
             points[i] = translation + scale * (offset + points[i]);
             require(std::isfinite(points[i].x) && std::isfinite(points[i].y) && std::isfinite(points[i].z),
                     "Non-finite transformed STL: " + g.id);
         }
-    m->find_bounds();
+    bounds();
     for (int a = 0; a < 3; a++) {
         float lo = a == 0 ? m->pmin.x : a == 1 ? m->pmin.y : m->pmin.z;
         float hi = a == 0 ? m->pmax.x : a == 1 ? m->pmax.y : m->pmax.z;

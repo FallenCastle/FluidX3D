@@ -225,6 +225,16 @@ Config read_config(const fs::path &path) {
     require(count <= std::numeric_limits<size_t>::max() / 64 && count <= 10000000000ull,
             "Grid exceeds supported allocation range");
     require(std::isfinite(c.dt) && c.dt > 0, "Invalid dt");
+    finite_float(c.dx, "dx", true);
+    finite_float(c.dt, "dt", true);
+    finite_float(c.reference_density, "reference_density", true);
+    finite_float(c.dx / c.dt, "velocity unit scale", true);
+    finite_float(c.reference_density * c.dx * c.dx * c.dx, "mass unit scale", true);
+    for (int a = 0; a < 3; a++) {
+        require(std::isfinite(c.origin[a] + c.cells[a] * c.dx), "Domain coordinates overflow");
+        require(c.origin[a] + 0.5 * c.dx != c.origin[a] + 1.5 * c.dx,
+                "Domain origin is too large to resolve the chosen spacing");
+    }
     const auto &f = field(j, "fluid");
     keys(f, {"rho", "nu", "reynolds", "reference_length", "reference_velocity"}, "fluid");
     double density = positive(field(f, "rho"), "fluid.rho");
@@ -240,6 +250,7 @@ Config read_config(const fs::path &path) {
                     positive(field(f, "reynolds"), "fluid.reynolds");
     c.nu = viscosity * c.dt / (c.dx * c.dx);
     finite_float(c.nu, "lattice viscosity", true);
+    finite_float(0.5 + 3 * c.nu, "relaxation time", true);
     finite_float(c.rho, "lattice density", true);
     auto velocity = [&](const Json &v, const std::string &at) {
         Vec out = vec(v, at);
@@ -403,6 +414,7 @@ Config read_config(const fs::path &path) {
             }
         }
     }
+    require(std::isfinite(c.steps * c.dt), "Actual duration overflows");
     double umax = 0;
     auto speed = [&](const Vec &v) { return std::hypot(v[0], std::hypot(v[1], v[2])); };
     umax = speed(c.velocity);

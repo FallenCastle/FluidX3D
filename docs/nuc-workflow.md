@@ -1,5 +1,7 @@
 # NUC 构建、运行与结果目录
 
+配置驱动分支使用 `-ConfigPath` 选择实际算例，另支持 `-PrepareOnly` 进行零步体素化检查；详细命令、单位和输入格式见 [config-runner.md](config-runner.md)。`CaseName` 继续只用于归档。该模式的配置/STL 快照及求解器记录位于本次 `results/` 内，外层 `inputs/` 保留兼容旧硬编码算例。
+
 源码在 Mac 上阅读和修改，经 Git 推送到 fork，再由 NUC 拉取。编译、程序运行和算例计算均在 Windows NUC 上完成。项目根目录的 `AGENTS.md` 暂不纳入 Git；本说明和辅助脚本随源码仓库管理。
 
 ## 目录约定
