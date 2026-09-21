@@ -1,0 +1,39 @@
+{
+  "acceptedAt": "2026-09-22",
+  "testedSourceCommit": "c7cde15bbc2e8cd16f9767b89a8f58037d994d40",
+  "sourceTree": "2aafa8e3375695656d729790046f16c469c36987",
+  "executableSha256": "6e274ea066773c9769c17dbf9ed7cfba9bb23c86641e0c3526ece5b22943c24a",
+  "integrationInvocationCount": 29,
+  "integrationStatus": "succeeded",
+  "runnerStatus": "succeeded",
+  "runnerSteps": 23,
+  "prepareStatus": "succeeded",
+  "prepareSteps": 0,
+  "baselineComparisons": [
+    {
+      "file": "flags-000000000.vtk",
+      "payload_exact": true
+    },
+    {
+      "file": "rho-000000000.vtk",
+      "payload_exact": true
+    },
+    {
+      "file": "u-000000000.vtk",
+      "payload_exact": true
+    },
+    {
+      "file": "flags-000001000.vtk",
+      "payload_exact": true
+    },
+    {
+      "file": "rho-000001000.vtk",
+      "payload_exact": true
+    },
+    {
+      "file": "u-000001000.vtk",
+      "payload_exact": true
+    }
+  ],
+  "reportDirectory": "F:/01-Project/Opensource/01-FluidX3D/workingdir/config-validation/20260921T160241Z"
+}
