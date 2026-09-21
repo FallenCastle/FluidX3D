@@ -38,6 +38,7 @@ def main():
     parser.add_argument('--workspace-root', type=Path, required=True)
     parser.add_argument('--build-name', default='config-runner-p2')
     parser.add_argument('--device', default='0')
+    parser.add_argument('--diffusive-refinement', action='store_true')
     args = parser.parse_args()
     if os.name != 'nt':
         parser.error('Run on Windows NUC only')
@@ -131,6 +132,8 @@ def main():
                 c['domain']['cells']=[8,height+2,8]
                 speed = .1
                 nu = .2*height/8  # acoustic scaling: fixed U=0.1 and Re=4
+                if args.diffusive_refinement:
+                    speed, nu = .05*8/height, .1  # fixed tau, dt proportional to dx^2, Re=4
                 c['fluid']['nu'] = nu
                 steps = math.ceil(1.6*height**2/nu)
                 c['run'].update(steps=steps,monitor_every=steps)
@@ -149,7 +152,7 @@ def main():
                 expected=([4*nu*speed*64/height]*2 if case=='poiseuille' else [shear,-shear])
                 measured=[force[n]['fields']['fx']['mean'] for n in ['lower','upper']]
                 force_error=max(abs(a-b)/abs(b) for a,b in zip(measured,expected))
-                profile={'case':case,'H':height,'nu':nu,'U':speed,'Re':speed*height/nu,'steps':steps,'l2_relative':l2,'linf_over_U':linf,
+                profile={'case':case,'H':height,'nu':nu,'reference_speed':speed,'Re':speed*height/nu,'steps':steps,'l2_relative':l2,'linf_over_U':linf,
                          'force_measured':measured,'force_expected':expected,'force_relative_error':force_error,
                          'u':actual,'analytical_u':theory,'results':str(out)}
                 report['profiles'].append(profile);write(root/'report.json',report)
@@ -201,6 +204,7 @@ def main():
         subprocess.run([sys.executable,str(script),'generate','--spec',str(repo/'configs'/'study-periodic.json'),'--output',str(study)],check=True)
         subprocess.run([sys.executable,str(script),'run','--study',str(study),'--workspace-root',str(workspace),'--build-name',args.build_name,'--device',args.device],check=True)
         summary=read(next((study/'runs').glob('*/summary.json')))
+        report['batch_success']=summary
         assert summary['status']=='succeeded' and len(summary['cases'])==4
         assert all(x['steps']==23 for x in summary['cases'])
         # Failed combination is retained and does not stop the remaining case.
@@ -211,6 +215,7 @@ def main():
         result=subprocess.run([sys.executable,str(script),'run','--study',str(badstudy),'--workspace-root',str(workspace),'--build-name',args.build_name,'--device',args.device])
         assert result.returncode!=0
         summary=read(next((badstudy/'runs').glob('*/summary.json')))
+        report['batch_mixed']=summary
         assert [x['status'] for x in summary['cases']]==['failed','succeeded']
         for profile in report['profiles']:
             assert profile['l2_relative']<.03 and profile['linf_over_U']<.03, profile
