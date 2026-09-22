@@ -1,6 +1,6 @@
 # P2 实现与 NUC 验证记录
 
-2026-09-22。功能实现及 P1 回归通过；**生产 FP16S 的最细 Couette 网格未通过 4% 受力误差阈值，不能宣称全部数值精度验收通过**。独立 FP32 对照确认存在存储精度限制；固定松弛时间的 FP32 网格细化验收通过。是否将运行时 FP32 选择提前到本轮，等待用户范围选择。
+2026-09-22。功能实现及 P1 回归通过；**生产 FP16S 的最细 Couette 网格未通过 4% 受力误差阈值，不能宣称全部数值精度验收通过**。独立 FP32 对照确认存在存储精度限制；固定松弛时间的 FP32 网格细化验收通过。这是运行时精度扩展前的历史验收记录。用户随后批准提前加入 FP16S/FP32 选择，最新生产能力与验收见 [运行时精度验收](runtime-storage-2026-09-22.md)。
 
 ## 产物与 Git
 
@@ -55,7 +55,8 @@ Poiseuille 速度误差随 H 翻倍约下降四倍，符合本次参数下接近
 ```powershell
 python scripts/test-config-runner.py --workspace-root F:\01-Project\Opensource\01-FluidX3D --build-name config-runner-p2
 python scripts/test-config-p2.py --workspace-root F:\01-Project\Opensource\01-FluidX3D --build-name config-runner-p2
-# 上一条会因已记录的 FP16S 受力精度限制返回非零；不屏蔽失败。
+# 上述命令对应本报告的历史提交；当时 FP16S 精度验收非零退出。
+# 当前脚本默认已改为 FP32 固定 tau 验收。
 python scripts/test-config-p2.py --workspace-root F:\01-Project\Opensource\01-FluidX3D --build-name config-runner-p2-fp32-diagnostic --diffusive-refinement
 python scripts/test-parameter-study.py --workspace-root F:\01-Project\Opensource\01-FluidX3D
 ```

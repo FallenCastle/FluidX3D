@@ -1,7 +1,7 @@
 {
   "date": "2026-09-22",
   "implementation": "complete",
-  "precision_scope_decision": "pending user selection",
+  "precision_scope_decision": "subsequently approved runtime FP16S/FP32; see runtime-storage-2026-09-22.json",
   "production": {
     "gitCommit": "cfb07d727721f936cdaff1b1a4c21abd79053707",
     "sourceTree": "f5987e0b92a9612f07680cdde1913fa0876ad0a8",

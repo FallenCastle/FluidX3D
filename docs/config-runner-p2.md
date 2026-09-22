@@ -1,6 +1,6 @@
 # P2 研究功能使用说明
 
-在 P1 的配置运行器上增加恒定体积力、固定位置的运动壁面、探针、时间统计、表压、固体受力和参数扫描。D3Q19/SRT/FP16S/Smagorinsky 仍固定；一个 P2 EXE 运行以下全部算例，不因输入变化重新构建。
+在 P1 的配置运行器上增加恒定体积力、固定位置的运动壁面、探针、时间统计、表压、固体受力和参数扫描。D3Q19/SRT/Smagorinsky 仍固定，分布函数存储支持 FP16S/FP32 运行时选择；一个 P2 EXE 运行以下全部算例，不因输入变化重新构建。
 
 ## NUC 入口
 
@@ -15,6 +15,20 @@ Set-Location "$root\src"
 ```
 
 `configs/probes-periodic.json` 是探针与采样示例。更换 device 前用 `--list-devices` 核实编号。所有运行沿用 EXE/输入快照、SHA256、独立 RunId 和失败退出码。
+
+## 运行时存储精度
+
+在配置中指定：
+
+```json
+"solver": {"storage": "FP32"}
+```
+
+`storage` 接受 `FP16S` 或 `FP32`，省略时为 FP16S。一个 EXE 可连续运行不同精度的配置，无需重新构建；一次计算开始后精度固定。两种模式的计算算术都为 FP32，区别是分布函数在 GPU 中以 16 位压缩或 32 位浮点数存储，不影响 VTK 输出类型。
+
+FP16S 适合优先节省显存的计算；小速度、弱强迫及壁面剪切力精度敏感的算例应检查量化误差。Poiseuille/Couette 示例显式采用 FP32。切换示例见 `configs/periodic-fp32.json`；扫描示例 `configs/study-storage.json` 用 `/solver/storage` 一次生成两种模式。
+
+`--capabilities` 列出支持值、默认值及每格点设备字段字节数。`resolved-config.json` 记录 `storage`、`distribution_bytes_per_value`、预期和实际的分布函数缓冲区容量；`completion.json`、`status.txt` 及运行日志同时标明实际精度。非法值直接报错，不自动降级。当前仍仅支持单设备、无图形的静态单相配置能力。
 
 ## 强迫与壁面
 
@@ -101,10 +115,12 @@ python .\scripts\parameter-study.py run `
 
 ## 存储与验证
 
-P2 设备字段为 67 B/cell（P1 为 55），主机字段为 29 B/cell，另加并集掩码、必要的部件归属与目标索引。resolved-config 保存估算与目标索引实际分配量；这些不包含驱动全部额外峰值。同样的 memory_budget_mb 可能得到比 P1 小的网格。Boeing 回归配置已经固定原 [170,339,85] 网格。
+P2 设备字段在 FP16S 下为 67 B/cell、FP32 下为 105 B/cell（P1 FP16S 为 55），两种模式的主机字段均为 29 B/cell，另加并集掩码、必要的部件归属与目标索引。resolved-config 保存估算与目标索引实际分配量；这些不包含驱动全部额外峰值。网格预算按所选精度计算，同样的 memory_budget_mb 在 FP32 下得到更小的网格；预算沿用最近整数取整，属于网格估算而非严格显存上限。Boeing 回归配置已经固定原 [170,339,85] 网格。
 
-运行 `scripts/test-config-p2.py --workspace-root ...` 验证解析流动、受力、单位、采样、分组和批量流程；P1 回归继续用 test-config-runner.py。Smagorinsky 与 FP16S 对解析剖面有可测影响，验收报告记录三档网格的实际误差，不把复杂外形短算等同于物理精度验证。
+运行 `scripts/test-config-p2.py --workspace-root ...` 验证解析流动、受力、单位、采样、分组和批量流程；P1 回归继续用 test-config-runner.py。默认采用 FP32、固定 tau 的扩散尺度细化（H=8/16/32，Re=4）。Smagorinsky 与存储精度对解析剖面有可测影响，验收报告记录三档网格的实际误差，不把复杂外形短算等同于物理精度验证。
 
-## 当前精度限制
+## 精度验收与历史限制
 
-生产 FP16S 在已测细网格 Couette 中出现约 8.15% 的受力误差，未达到本次 4% 阈值；同参数 FP32 诊断为约 0.014%。默认 P2 精度验收脚本因此仍返回非零，不应将功能通过等同于所有网格物理精度通过。固定 tau 的 FP32 三档网格验证通过；详见 [完整验收记录](validation/config-runner-p2-2026-09-22.md)。当前没有生产 EXE 的运行时 FP32 选项。
+当前运行时 FP32 的三档 Poiseuille/Couette 速度及受力验收通过，默认 P2 验收脚本返回零。详见 [运行时精度验收记录](validation/runtime-storage-2026-09-22.md)。
+
+此前 FP16S 在声学尺度细化的 Couette H=32 中出现约 8.15% 受力误差，同参数 FP32 约为 0.014%。该量化限制仍存在，不因增加 FP32 选项而消失。另有声学尺度的 FP32 Poiseuille 速度误差未过阈值，说明单纯提高存储精度不能替代合理的离散参数选择。历史失败及独立诊断结果保留在 [原 P2 验收记录](validation/config-runner-p2-2026-09-22.md)，本次没有放宽验收容差。

@@ -1,6 +1,6 @@
 # 配置驱动的命令行算例
 
-本分支提供一个固定能力的 `FluidX3D.exe`，通过 JSON 和二进制 STL 切换静态单相流算例。支持格子单位和 SI；固定 D3Q19/SRT/FP16S/SUBGRID。无 GRAPHICS、PNG 或交互窗口，使用 VTK 检查几何和流场。
+本分支提供一个固定能力的 `FluidX3D.exe`，通过 JSON 和二进制 STL 切换静态单相流算例。支持格子单位和 SI；固定 D3Q19/SRT/SUBGRID，P2 支持通过 `solver.storage` 选择 FP16S（默认）或 FP32；两者算术均为 FP32。无 GRAPHICS、PNG 或交互窗口，使用 VTK 检查几何和流场。
 
 设计契约见 [config-runner-design.md](config-runner-design.md)，格式定义见 [case.schema.json](../schemas/case.schema.json)。C++ 执行器还会检查 schema 无法表达的周期配对、边界冲突、单位转换、几何范围和设备资源。OpenCL 内核仍在程序启动时根据网格编译，无须重新构建 C++ 可执行文件。
 
@@ -88,7 +88,7 @@ Boeing/Ahmed 模板中的 STL 相对路径适配 NUC 的 `workingdir/<case>/asse
 
 ## 单位、域和几何
 
-格子模式 `units.mode="lattice"`：使用 `domain.cells`；或 `aspect_ratio + memory_budget_mb` 估算网格，最终整数网格见 resolved-config。P2 为 67 Bytes/cell（P1 为 55），这是固定求解配置的设备场占用，实际资源检查另外考虑 STL 临时缓冲。
+格子模式 `units.mode="lattice"`：使用 `domain.cells`；或 `aspect_ratio + memory_budget_mb` 估算网格，最终整数网格见 resolved-config。P2 的 FP16S 为 67 Bytes/cell、FP32 为 105 Bytes/cell（P1 FP16S 为 55），这是所选精度的设备场占用，实际资源检查另外考虑 STL 临时缓冲。
 
 SI 模式示例：
 
@@ -148,7 +148,7 @@ STL 必须为二进制三角面文件，且体素化后至少存在一个固体�
 
 SI VTK 的坐标、速度和密度已转换为 SI；格子模式保留格子单位。CSV 的密度、速度和总质量明确标为 lattice，time 列使用所选时间单位。总质量只统计非固体格点；开放边界不要求质量保持不变。
 
-`completion.json` 的 succeeded 只表示达到目标步数并通过本次运行检查；不代表达到物理稳态、网格收敛或工程精度。当前没有断点续算，status.txt 仅为报告。固定 FP16S 会产生可测的分布函数量化误差，均匀周期流测试使用密度相对1e-4及速度绝对1e-5的上限，同时要求空间均匀和 SI 等价；Boeing 回归另要求场数组逐字节一致。
+`completion.json` 的 succeeded 只表示达到目标步数并通过本次运行检查；不代表达到物理稳态、网格收敛或工程精度。当前没有断点续算，status.txt 仅为报告。默认 FP16S 会产生可测的分布函数量化误差，均匀周期流测试使用密度相对1e-4及速度绝对1e-5的上限，同时要求空间均匀和 SI 等价；Boeing 回归另要求场数组逐字节一致。
 
 复现时使用 `effective-config.json` 与其 inputs/assets；它记录的是实际使用的快照路径。若原配置采用预算/时长推导，resolved-config 中可核对实际网格/步数；格式版本不变时推导算法固定，不依赖 GPU 显存大小自动改网格。EXE、输入哈希与运行脚本保存的构建提交共同标识本次计算。
 
