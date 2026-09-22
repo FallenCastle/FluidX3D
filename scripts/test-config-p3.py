@@ -203,7 +203,7 @@ def main():
         regions=[];initial=[]
         for z,y,x in itertools.product(range(n),repeat=3):
             v=amplitude*math.sin(2*math.pi*(x+y+z+1.5)/n);initial.extend([v,-v,0])
-            regions.append({'box_min':[x,y,z],'box_max':[x+1,y+1,z+1],'velocity':[v,-v,0]})
+            regions.append({'box_min':[x,y,z],'box_max':[x+1,y+1,z+1],'rho':1,'velocity':[v,-v,0]})
         c['initial']={'velocity':[0,0,0],'regions':regions}
         r,_=invoke('three-dimensional-shear-wave',c)
         decay=math.exp(-.1*3*(2*math.pi/n)**2*steps)
