@@ -1,6 +1,7 @@
 #pragma once
 #include "third_party/nlohmann/json.hpp"
 #include "storage.hpp"
+#include "solver_options.hpp"
 #include <array>
 #include <filesystem>
 #include <string>
@@ -45,8 +46,9 @@ struct Config {
     fs::path path;
     std::string name;
     bool si = false;
+    SolverOptions model;
     DdfStorage storage = DdfStorage::Float16Scaled;
-    unsigned device_cell_bytes() const { return 19 * ddf_storage_bytes(storage) + host_cell_bytes; }
+    unsigned device_cell_bytes() const { return model.q * ddf_storage_bytes(storage) + host_cell_bytes; }
     std::array<unsigned, 3> cells{};
     Vec origin{};
     double dx = 1, dt = 1, reference_density = 1, nu = 0, rho = 1;
@@ -71,5 +73,6 @@ void save_json(const fs::path &path, const Json &value);
 std::string sha256(const fs::path &path);
 Config read_config(const fs::path &path);
 Json capabilities();
+Json solver_description(const Config &c);
 int entry(int argc, char *argv[]);
 } // namespace fxconfig

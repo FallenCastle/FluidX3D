@@ -26,11 +26,11 @@ bin/FluidX3D: temp/config.o temp/config_runner.o temp/graphics.o temp/info.o tem
 	@mkdir -p bin
 	$(CC) temp/*.o -o bin/FluidX3D $(CFLAGS) $(LDFLAGS_OPENCL) $(LDLIBS_OPENCL) $(LDFLAGS_X11) $(LDLIBS_X11)
 
-temp/graphics.o: src/graphics.cpp src/defines.hpp src/storage.hpp src/graphics.hpp src/lodepng.hpp src/utilities.hpp make.sh
+temp/graphics.o: src/graphics.cpp src/defines.hpp src/storage.hpp src/solver_options.hpp src/graphics.hpp src/lodepng.hpp src/utilities.hpp make.sh
 	@mkdir -p temp
 	$(CC) -c src/graphics.cpp -o temp/graphics.o $(CFLAGS) $(LDFLAGS_X11)
 
-temp/info.o: src/info.cpp src/defines.hpp src/storage.hpp src/graphics.hpp src/info.hpp src/lbm.hpp src/lodepng.hpp src/opencl.hpp src/units.hpp src/utilities.hpp make.sh
+temp/info.o: src/info.cpp src/defines.hpp src/storage.hpp src/solver_options.hpp src/graphics.hpp src/info.hpp src/lbm.hpp src/lodepng.hpp src/opencl.hpp src/units.hpp src/utilities.hpp make.sh
 	@mkdir -p temp
 	$(CC) -c src/info.cpp -o temp/info.o $(CFLAGS) $(LDFLAGS_OPENCL)
 
@@ -38,7 +38,7 @@ temp/kernel.o: src/kernel.cpp src/kernel.hpp src/lodepng.hpp src/utilities.hpp
 	@mkdir -p temp
 	$(CC) -c src/kernel.cpp -o temp/kernel.o $(CFLAGS)
 
-temp/lbm.o: src/lbm.cpp src/defines.hpp src/storage.hpp src/graphics.hpp src/info.hpp src/lbm.hpp src/lodepng.hpp src/opencl.hpp src/units.hpp src/utilities.hpp make.sh
+temp/lbm.o: src/lbm.cpp src/defines.hpp src/storage.hpp src/solver_options.hpp src/graphics.hpp src/info.hpp src/lbm.hpp src/lodepng.hpp src/opencl.hpp src/units.hpp src/utilities.hpp make.sh
 	@mkdir -p temp
 	$(CC) -c src/lbm.cpp -o temp/lbm.o $(CFLAGS) $(LDFLAGS_OPENCL)
 
@@ -46,11 +46,11 @@ temp/lodepng.o: src/lodepng.cpp src/lodepng.hpp
 	@mkdir -p temp
 	$(CC) -c src/lodepng.cpp -o temp/lodepng.o $(CFLAGS)
 
-temp/main.o: src/main.cpp src/defines.hpp src/storage.hpp src/graphics.hpp src/info.hpp src/lbm.hpp src/lodepng.hpp src/opencl.hpp src/setup.hpp src/shapes.hpp src/units.hpp src/utilities.hpp make.sh
+temp/main.o: src/main.cpp src/defines.hpp src/storage.hpp src/solver_options.hpp src/graphics.hpp src/info.hpp src/lbm.hpp src/lodepng.hpp src/opencl.hpp src/setup.hpp src/shapes.hpp src/units.hpp src/utilities.hpp make.sh
 	@mkdir -p temp
 	$(CC) -c src/main.cpp -o temp/main.o $(CFLAGS) $(LDFLAGS_OPENCL)
 
-temp/setup.o: src/setup.cpp src/defines.hpp src/storage.hpp src/graphics.hpp src/info.hpp src/lbm.hpp src/lodepng.hpp src/opencl.hpp src/setup.hpp src/shapes.hpp src/units.hpp src/utilities.hpp make.sh
+temp/setup.o: src/setup.cpp src/defines.hpp src/storage.hpp src/solver_options.hpp src/graphics.hpp src/info.hpp src/lbm.hpp src/lodepng.hpp src/opencl.hpp src/setup.hpp src/shapes.hpp src/units.hpp src/utilities.hpp make.sh
 	@mkdir -p temp
 	$(CC) -c src/setup.cpp -o temp/setup.o $(CFLAGS) $(LDFLAGS_OPENCL)
 
@@ -62,10 +62,10 @@ temp/shapes.o: src/shapes.cpp src/shapes.hpp src/utilities.hpp make.sh
 clean:
 	@rm -rf temp bin/FluidX3D
 
-temp/config.o: src/config.cpp src/config.hpp src/storage.hpp src/third_party/nlohmann/json.hpp
+temp/config.o: src/config.cpp src/config.hpp src/storage.hpp src/solver_options.hpp src/third_party/nlohmann/json.hpp
 	@mkdir -p temp
 	$(CC) -c src/config.cpp -o temp/config.o $(CFLAGS)
 
-temp/config_runner.o: src/config_runner.cpp src/config.hpp src/config_analysis.hpp src/lbm.hpp src/defines.hpp src/storage.hpp
+temp/config_runner.o: src/config_runner.cpp src/config.hpp src/config_analysis.hpp src/lbm.hpp src/defines.hpp src/storage.hpp src/solver_options.hpp
 	@mkdir -p temp
 	$(CC) -c src/config_runner.cpp -o temp/config_runner.o $(CFLAGS) $(LDFLAGS_OPENCL)

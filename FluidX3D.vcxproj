@@ -71,6 +71,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\storage.hpp" />
+    <ClInclude Include="src\solver_options.hpp" />
     <ClInclude Include="src\config.hpp" />
     <ClInclude Include="src\config_analysis.hpp" />
     <ClInclude Include="src\defines.hpp" />

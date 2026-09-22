@@ -21,10 +21,16 @@
       "type": "object",
       "properties": {
         "lattice": {
-          "const": "D3Q19"
+          "enum": [
+            "D3Q19",
+            "D3Q27"
+          ]
         },
         "collision": {
-          "const": "SRT"
+          "enum": [
+            "SRT",
+            "TRT"
+          ]
         },
         "storage": {
           "enum": [
@@ -33,11 +39,57 @@
           ]
         },
         "turbulence": {
-          "const": "smagorinsky"
+          "enum": [
+            "none",
+            "smagorinsky"
+          ]
+        },
+        "smagorinsky_constant": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "trt_magic_parameter": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
         }
       },
       "required": [],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "smagorinsky_constant"
+            ]
+          },
+          "then": {
+            "properties": {
+              "turbulence": {
+                "const": "smagorinsky"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "trt_magic_parameter"
+            ]
+          },
+          "then": {
+            "properties": {
+              "collision": {
+                "const": "TRT"
+              }
+            },
+            "required": [
+              "collision"
+            ]
+          }
+        }
+      ]
     },
     "units": {
       "type": "object",

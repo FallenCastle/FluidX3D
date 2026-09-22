@@ -49,12 +49,9 @@ void Info::print_logo() const {
 void Info::print_initialize(LBM* lbm) {
 	info.allow_printing.lock(); // disable print_update() until print_initialize() has finished
 	this->lbm = lbm;
-#if defined(SRT)
-	collision = "SRT";
-#elif defined(TRT)
-	collision = "TRT";
-#endif // TRT
+	collision = lbm->get_model().collision_name();
 	collision += " (FP32/"+string(ddf_storage_name(lbm->get_storage()))+")";
+	print_info("Turbulence = "+string(lbm->get_model().turbulence_name()));
 	bool all_domains_use_ram = true; // reset cpu/gpu_mem_required to get valid values for consecutive simulations
 	for(uint d=0u; d<lbm->get_D(); d++) {
 		all_domains_use_ram = all_domains_use_ram&&lbm->lbm_domain[d]->get_device().info.uses_ram;
@@ -101,7 +98,7 @@ void Info::print_update() const {
 	info.allow_printing.lock();
 	reprint(
 		"|"+alignr(8, to_uint((double)lbm->get_N()*1E-6/runtime_lbm_timestep_smooth))+" |"+ // MLUPs
-		alignr(7, to_uint((double)lbm->get_N()*(double)bandwidth_bytes_per_cell_device(lbm->get_storage())*1E-9/runtime_lbm_timestep_smooth))+" GB/s |"+ // memory bandwidth
+		alignr(7, to_uint((double)lbm->get_N()*(double)bandwidth_bytes_per_cell_device(lbm->get_storage(), lbm->get_model())*1E-9/runtime_lbm_timestep_smooth))+" GB/s |"+ // memory bandwidth
 		alignr(10, to_uint(1.0/runtime_lbm_timestep_smooth))+" | "+ // steps/s
 		(steps==max_ulong ? alignr(17, lbm->get_t()) : alignr(12, lbm->get_t())+" "+print_percentage((float)(lbm->get_t()-steps_last)/(float)steps))+" | "+ // current step
 		alignr(19, print_time(time()))+" |" // either elapsed time or remaining time

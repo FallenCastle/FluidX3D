@@ -102,7 +102,7 @@ def main():
         invoke("validate", lattice, options=("--validate",))
         invalid = copy.deepcopy(lattice); invalid["typo"] = 1
         invoke("unknown", invalid, success=False, expected_error="unknown field")
-        invalid = copy.deepcopy(lattice); invalid["solver"] = {"collision": "TRT"}
+        invalid = copy.deepcopy(lattice); invalid["solver"] = {"collision": "MRT"}
         invoke("unsupported", invalid, success=False, expected_error="Unsupported solver")
         invalid = copy.deepcopy(lattice); invalid["fluid"]["nu"] = -1
         invoke("negative-nu", invalid, success=False, expected_error="positive")

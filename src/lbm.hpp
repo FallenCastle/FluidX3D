@@ -2,14 +2,15 @@
 
 #include "defines.hpp"
 #include "storage.hpp"
+#include "solver_options.hpp"
 #include "opencl.hpp"
 #include "graphics.hpp"
 #include "units.hpp"
 #include "info.hpp"
 
 uint bytes_per_cell_host(); // returns the number of Bytes per cell allocated in host memory
-uint bytes_per_cell_device(const DdfStorage storage=DdfStorage::Float16Scaled); // returns the number of Bytes per cell allocated in device memory
-uint bandwidth_bytes_per_cell_device(const DdfStorage storage=DdfStorage::Float16Scaled); // returns the bandwidth in Bytes per cell per time step from/to device memory
+uint bytes_per_cell_device(const DdfStorage storage=DdfStorage::Float16Scaled, const SolverOptions& model=SolverOptions{}); // returns the number of Bytes per cell allocated in device memory
+uint bandwidth_bytes_per_cell_device(const DdfStorage storage=DdfStorage::Float16Scaled, const SolverOptions& model=SolverOptions{}); // returns the bandwidth in Bytes per cell per time step from/to device memory
 uint3 resolution(const float3 box_aspect_ratio, const uint memory); // input: simulation box aspect ratio and VRAM occupation in MB, output: grid resolution
 
 string default_filename(const string& path, const string& name, const string& extension, const ulong t); // generate a default filename with timestamp
@@ -20,7 +21,9 @@ enum enum_transfer_field { fi, rho_u_flags, flags, F, phi_massex_flags, gi, T, e
 
 class LBM_Domain {
 private:
+	const uint velocity_set, dimensions=3u, transfers;
 	const DdfStorage storage;
+	const SolverOptions model;
 	uint Nx=1u, Ny=1u, Nz=1u; // (local) lattice dimensions
 	uint Dx=1u, Dy=1u, Dz=1u; // lattice domains
 	int Ox=0, Oy=0, Oz=0; // lattice domain offset
@@ -94,7 +97,7 @@ public:
 	void enqueue_transfer_extract_field(Kernel& kernel_transfer_extract_field, const uint direction, const uint bytes_per_cell);
 	void enqueue_transfer_insert_field(Kernel& kernel_transfer_insert_field, const uint direction, const uint bytes_per_cell);
 
-	LBM_Domain(const Device_Info& device_info, const uint Nx, const uint Ny, const uint Nz, const uint Dx, const uint Dy, const uint Dz, const int Ox, const int Oy, const int Oz, const float nu, const float fx, const float fy, const float fz, const float sigma, const float alpha, const float beta, const uint particles_N, const float particles_rho, const DdfStorage storage); // compiles OpenCL C code and allocates memory
+	LBM_Domain(const Device_Info& device_info, const uint Nx, const uint Ny, const uint Nz, const uint Dx, const uint Dy, const uint Dz, const int Ox, const int Oy, const int Oz, const float nu, const float fx, const float fy, const float fz, const float sigma, const float alpha, const float beta, const uint particles_N, const float particles_rho, const DdfStorage storage, const SolverOptions& model); // compiles OpenCL C code and allocates memory
 
 	void enqueue_initialize(); // write all data fields to device and call kernel_initialize
 	void enqueue_stream_collide(); // call kernel_stream_collide to perform one LBM time step
@@ -124,6 +127,7 @@ public:
 	void finish_queue();
 
 	DdfStorage get_storage() const { return storage; }
+	const SolverOptions& get_model() const { return model; }
 	uint get_ddf_bytes() const { return ddf_storage_bytes(storage); }
 	ulong get_distribution_capacity() const { return fi.capacity(); }
 	const Device& get_device() const { return device; }
@@ -215,6 +219,7 @@ public:
 class LBM {
 private:
 	const DdfStorage storage;
+	const SolverOptions model;
 	uint Nx=1u, Ny=1u, Nz=1u; // (global) lattice dimensions
 	uint Dx=1u, Dy=1u, Dz=1u; // lattice domains
 	bool initialized = false; // becomes true after LBM::initialize() has been called
@@ -433,7 +438,7 @@ public:
 	Memory<float>* particles; // particle positions
 #endif // PARTICLES
 
-	LBM(const uint Nx, const uint Ny, const uint Nz, const uint Dx, const uint Dy, const uint Dz, const float nu, const float fx=0.0f, const float fy=0.0f, const float fz=0.0f, const float sigma=0.0f, const float alpha=0.0f, const float beta=0.0f, const uint particles_N=0u, const float particles_rho=0.0f, const DdfStorage storage=DdfStorage::Float16Scaled); // compiles OpenCL C code and allocates memory
+	LBM(const uint Nx, const uint Ny, const uint Nz, const uint Dx, const uint Dy, const uint Dz, const float nu, const float fx=0.0f, const float fy=0.0f, const float fz=0.0f, const float sigma=0.0f, const float alpha=0.0f, const float beta=0.0f, const uint particles_N=0u, const float particles_rho=0.0f, const DdfStorage storage=DdfStorage::Float16Scaled, const SolverOptions& model=SolverOptions{}); // compiles OpenCL C code and allocates memory
 	LBM(const uint Nx, const uint Ny, const uint Nz, const float nu, const float fx=0.0f, const float fy=0.0f, const float fz=0.0f, const float sigma=0.0f, const float alpha=0.0f, const float beta=0.0f, const uint particles_N=0u, const float particles_rho=1.0f); // compiles OpenCL C code and allocates memory
 	LBM(const uint Nx, const uint Ny, const uint Nz, const float nu, const uint particles_N, const float particles_rho=1.0f); // compiles OpenCL C code and allocates memory
 	LBM(const uint Nx, const uint Ny, const uint Nz, const float nu, const float fx, const float fy, const float fz, const uint particles_N, const float particles_rho=1.0f); // compiles OpenCL C code and allocates memory
@@ -441,7 +446,7 @@ public:
 	LBM(const uint3 N, const float nu, const float fx=0.0f, const float fy=0.0f, const float fz=0.0f, const float sigma=0.0f, const float alpha=0.0f, const float beta=0.0f, const uint particles_N=0u, const float particles_rho=1.0f); // compiles OpenCL C code and allocates memory
 	LBM(const uint3 N, const float nu, const uint particles_N, const float particles_rho=1.0f); // compiles OpenCL C code and allocates memory
 	LBM(const uint3 N, const float nu, const float fx, const float fy, const float fz, const uint particles_N, const float particles_rho=1.0f); // compiles OpenCL C code and allocates memory
-	LBM(const uint Nx, const uint Ny, const uint Nz, const float nu, const DdfStorage storage, const float fx=0.0f, const float fy=0.0f, const float fz=0.0f); // runtime-storage single-device entry
+	LBM(const uint Nx, const uint Ny, const uint Nz, const float nu, const DdfStorage storage, const float fx=0.0f, const float fy=0.0f, const float fz=0.0f, const SolverOptions& model=SolverOptions{}); // runtime-storage single-device entry
 	~LBM();
 
 	void run(const ulong steps=max_ulong, const ulong total_steps=max_ulong); // initializes the LBM simulation (copies data to device and runs initialize kernel), then runs LBM
@@ -461,6 +466,7 @@ public:
 #endif // PARTICLES&&!FORCE_FIELD
 
 	DdfStorage get_storage() const { return storage; }
+	const SolverOptions& get_model() const { return model; }
 	uint get_ddf_bytes() const { return ddf_storage_bytes(storage); }
 	uint get_Nx() const { return Nx; } // get (global) lattice dimensions in x-direction
 	uint get_Ny() const { return Ny; } // get (global) lattice dimensions in y-direction

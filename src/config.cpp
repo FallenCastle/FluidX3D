@@ -111,12 +111,12 @@ std::string sha256(const fs::path &path) {
 }
 Json capabilities() {
     return {{"schema_version", 1},
-            {"lattice", "D3Q19"},
-            {"collision", "SRT"},
+            {"lattice", {"D3Q19", "D3Q27"}},
+            {"collision", {"SRT", "TRT"}},
             {"storage", {"FP16S", "FP32"}},
             {"default_storage", "FP16S"},
             {"arithmetic", "FP32"},
-            {"turbulence", "smagorinsky"},
+            {"turbulence", {"none", "smagorinsky"}},
             {"units", {"lattice", "si"}},
             {"boundaries", {"no_slip", "moving_wall", "equilibrium", "periodic"}},
             {"geometry", "binary STL static union"},
@@ -124,8 +124,43 @@ Json capabilities() {
             {"body_force", "constant force density"},
             {"analysis", {"probes", "temporal statistics", "gauge force on solids"}},
             {"device_bytes_per_cell", {{"FP16S", 67}, {"FP32", 105}}},
+            {"defaults",
+             {{"lattice", "D3Q19"},
+              {"collision", "SRT"},
+              {"storage", "FP16S"},
+              {"turbulence", "smagorinsky"},
+              {"smagorinsky_constant", SolverOptions::default_cs},
+              {"trt_magic_parameter", 0.1875}}},
+            {"model_device_bytes_per_cell",
+             {{"D3Q19", {{"FP16S", 67}, {"FP32", 105}}}, {"D3Q27", {{"FP16S", 83}, {"FP32", 137}}}}},
+            {"parameters",
+             {{"smagorinsky_constant", {{"exclusive_minimum", 0}, {"maximum", 1}, {"requires", "smagorinsky"}}},
+              {"trt_magic_parameter", {{"exclusive_minimum", 0}, {"maximum", 1}, {"requires", "TRT"}}}}},
             {"graphics", false},
             {"devices_per_run", 1}};
+}
+Json solver_description(const Config &c) {
+    float even_rate = 1.0f / (3.0f * static_cast<float>(c.nu) + 0.5f);
+    Json result = {{"lattice", c.model.lattice_name()},
+                   {"collision", c.model.collision_name()},
+                   {"storage", ddf_storage_name(c.storage)},
+                   {"turbulence", c.model.turbulence_name()},
+                   {"base_even_relaxation_rate", even_rate}};
+    if (c.model.subgrid) {
+        result["smagorinsky_constant"] = c.model.smagorinsky_constant;
+        result["smagorinsky_coefficient_fp32"] = c.model.smagorinsky_coefficient();
+    }
+    if (c.model.collision == CollisionModel::TwoRelaxation) {
+        float lambda = static_cast<float>(c.model.trt_magic_parameter);
+        float odd_rate = 1.0f / (lambda / (1.0f / even_rate - 0.5f) + 0.5f);
+        require(std::isfinite(even_rate) && even_rate > 0 && even_rate < 2 && std::isfinite(odd_rate) && odd_rate > 0 &&
+                    odd_rate < 2,
+                "solver.trt_magic_parameter and viscosity produce unrepresentable relaxation rates");
+        result["trt_magic_parameter"] = c.model.trt_magic_parameter;
+        result["trt_magic_parameter_fp32"] = lambda;
+        result["base_odd_relaxation_rate"] = odd_rate;
+    }
+    return result;
 }
 Config read_config(const fs::path &path) {
     Config c;
@@ -155,15 +190,35 @@ Config read_config(const fs::path &path) {
     c.name = string_value(field(ca, "name"), "case.name");
     require(!c.name.empty(), "Empty case name");
     if (j.contains("solver")) {
-        keys(j["solver"], {"lattice", "collision", "storage", "turbulence"}, "solver");
-        auto cap = capabilities();
-        for (auto it = j["solver"].begin(); it != j["solver"].end(); ++it) {
-            if (it.key() == "storage") {
-                auto name = string_value(it.value(), "solver.storage");
-                require(name == "FP16S" || name == "FP32", "Unsupported solver.storage; use --capabilities");
-                c.storage = name == "FP32" ? DdfStorage::Float32 : DdfStorage::Float16Scaled;
-            } else
-                require(it.value() == cap[it.key()], "Unsupported solver." + it.key() + "; use --capabilities");
+        const auto &solver = j["solver"];
+        keys(solver, {"lattice", "collision", "storage", "turbulence", "smagorinsky_constant", "trt_magic_parameter"},
+             "solver");
+        auto choice = [&](const char *key, const char *fallback, const char *a, const char *b) {
+            auto value =
+                solver.contains(key) ? string_value(solver[key], std::string("solver.") + key) : std::string(fallback);
+            require(value == a || value == b, std::string("Unsupported solver.") + key + "; use --capabilities");
+            return value;
+        };
+        c.model.q = choice("lattice", "D3Q19", "D3Q19", "D3Q27") == "D3Q27" ? 27u : 19u;
+        c.model.collision = choice("collision", "SRT", "SRT", "TRT") == "TRT" ? CollisionModel::TwoRelaxation
+                                                                              : CollisionModel::SingleRelaxation;
+        c.storage =
+            choice("storage", "FP16S", "FP16S", "FP32") == "FP32" ? DdfStorage::Float32 : DdfStorage::Float16Scaled;
+        c.model.subgrid = choice("turbulence", "smagorinsky", "none", "smagorinsky") == "smagorinsky";
+        if (solver.contains("smagorinsky_constant")) {
+            require(c.model.subgrid, "solver.smagorinsky_constant requires turbulence=smagorinsky");
+            c.model.smagorinsky_constant = number(solver["smagorinsky_constant"], "solver.smagorinsky_constant");
+            require(c.model.smagorinsky_constant > 0 && c.model.smagorinsky_constant <= 1,
+                    "solver.smagorinsky_constant must be in (0,1]");
+            require(std::isfinite(c.model.smagorinsky_coefficient()) && c.model.smagorinsky_coefficient() > 0,
+                    "solver.smagorinsky_constant coefficient is not representable in FP32");
+        }
+        if (solver.contains("trt_magic_parameter")) {
+            require(c.model.collision == CollisionModel::TwoRelaxation,
+                    "solver.trt_magic_parameter requires collision=TRT");
+            c.model.trt_magic_parameter = number(solver["trt_magic_parameter"], "solver.trt_magic_parameter");
+            require(c.model.trt_magic_parameter > 0 && c.model.trt_magic_parameter <= 1,
+                    "solver.trt_magic_parameter must be in (0,1]");
         }
     }
     const auto &u = field(j, "units");
@@ -517,8 +572,10 @@ Config read_config(const fs::path &path) {
                   {"case", c.name},
                   {"capabilities", capabilities()},
                   {"storage", ddf_storage_name(c.storage)},
+                  {"solver", solver_description(c)},
+                  {"velocity_set", c.model.q},
                   {"distribution_bytes_per_value", ddf_storage_bytes(c.storage)},
-                  {"distribution_buffer_bytes", count * 19 * ddf_storage_bytes(c.storage)},
+                  {"distribution_buffer_bytes", count * c.model.q * ddf_storage_bytes(c.storage)},
                   {"cells", c.cells},
                   {"dx", c.dx},
                   {"dt", c.dt},

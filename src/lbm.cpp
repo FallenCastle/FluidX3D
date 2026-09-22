@@ -4,23 +4,6 @@
 
 Units units; // for unit conversion
 
-#if defined(D2Q9)
-const uint velocity_set = 9u;
-const uint dimensions = 2u;
-const uint transfers = 3u;
-#elif defined(D3Q15)
-const uint velocity_set = 15u;
-const uint dimensions = 3u;
-const uint transfers = 5u;
-#elif defined(D3Q19)
-const uint velocity_set = 19u;
-const uint dimensions = 3u;
-const uint transfers = 5u;
-#elif defined(D3Q27)
-const uint velocity_set = 27u;
-const uint dimensions = 3u;
-const uint transfers = 9u;
-#endif // D3Q27
 
 uint bytes_per_cell_host() { // returns the number of Bytes per cell allocated in host memory
 	uint bytes_per_cell = 17u; // rho, u, flags
@@ -35,7 +18,8 @@ uint bytes_per_cell_host() { // returns the number of Bytes per cell allocated i
 #endif // TEMPERATURE
 	return bytes_per_cell;
 }
-uint bytes_per_cell_device(const DdfStorage storage) { // returns the number of Bytes per cell allocated in device memory
+uint bytes_per_cell_device(const DdfStorage storage, const SolverOptions& model) { // returns the number of Bytes per cell allocated in device memory
+	const uint velocity_set = model.q;
 	uint bytes_per_cell = velocity_set*ddf_storage_bytes(storage)+17u; // fi, rho, u, flags
 #ifdef FORCE_FIELD
 	bytes_per_cell += 12u; // F
@@ -48,7 +32,8 @@ uint bytes_per_cell_device(const DdfStorage storage) { // returns the number of 
 #endif // TEMPERATURE
 	return bytes_per_cell;
 }
-uint bandwidth_bytes_per_cell_device(const DdfStorage storage) { // returns the bandwidth in Bytes per cell per time step from/to device memory
+uint bandwidth_bytes_per_cell_device(const DdfStorage storage, const SolverOptions& model) { // returns the bandwidth in Bytes per cell per time step from/to device memory
+	const uint velocity_set = model.q;
 	uint bandwidth_bytes_per_cell = velocity_set*2u*ddf_storage_bytes(storage)+1u; // lattice.set()*2*fi, flags
 #ifdef UPDATE_FIELDS
 	bandwidth_bytes_per_cell += 16u; // rho, u
@@ -93,7 +78,7 @@ string default_filename(const string& name, const string& extension, const ulong
 
 
 
-LBM_Domain::LBM_Domain(const Device_Info& device_info, const uint Nx, const uint Ny, const uint Nz, const uint Dx, const uint Dy, const uint Dz, const int Ox, const int Oy, const int Oz, const float nu, const float fx, const float fy, const float fz, const float sigma, const float alpha, const float beta, const uint particles_N, const float particles_rho, const DdfStorage storage) : storage(storage) { // constructor with manual device selection and domain offset
+LBM_Domain::LBM_Domain(const Device_Info& device_info, const uint Nx, const uint Ny, const uint Nz, const uint Dx, const uint Dy, const uint Dz, const int Ox, const int Oy, const int Oz, const float nu, const float fx, const float fy, const float fz, const float sigma, const float alpha, const float beta, const uint particles_N, const float particles_rho, const DdfStorage storage, const SolverOptions& model) : velocity_set(model.q), transfers(model.transfers()), storage(storage), model(model) { // constructor with manual device selection and domain offset
 	this->Nx = Nx; this->Ny = Ny; this->Nz = Nz;
 	this->Dx = Dx; this->Dy = Dy; this->Dz = Dz;
 	this->Ox = Ox; this->Oy = Oy; this->Oz = Oz;
@@ -370,30 +355,20 @@ string LBM_Domain::device_defines(const Device_Info& device_info) const { return
 
 	"\n	#define def_c 0.57735027f" // lattice speed of sound c = 1/sqrt(3)*dt
 	"\n	#define def_w " +to_string(1.0f/get_tau())+"f" // relaxation rate w = dt/tau = dt/(nu/c^2+dt/2) = 1/(3*nu+1/2)
-#if defined(D2Q9)
-	"\n	#define def_w0 (1.0f/2.25f)" // center (0)
-	"\n	#define def_ws (1.0f/9.0f)" // straight (1-4)
-	"\n	#define def_we (1.0f/36.0f)" // edge (5-8)
-#elif defined(D3Q15)
-	"\n	#define def_w0 (1.0f/4.5f)" // center (0)
-	"\n	#define def_ws (1.0f/9.0f)" // straight (1-6)
-	"\n	#define def_wc (1.0f/72.0f)" // corner (7-14)
-#elif defined(D3Q19)
-	"\n	#define def_w0 (1.0f/3.0f)" // center (0)
-	"\n	#define def_ws (1.0f/18.0f)" // straight (1-6)
-	"\n	#define def_we (1.0f/36.0f)" // edge (7-18)
-#elif defined(D3Q27)
-	"\n	#define def_w0 (1.0f/3.375f)" // center (0)
-	"\n	#define def_ws (1.0f/13.5f)" // straight (1-6)
-	"\n	#define def_we (1.0f/54.0f)" // edge (7-18)
-	"\n	#define def_wc (1.0f/216.0f)" // corner (19-26)
-#endif // D3Q27
+ +(model.q==19u ? string(
+    "\n\t#define def_w0 (1.0f/3.0f)"
+    "\n\t#define def_ws (1.0f/18.0f)"
+    "\n\t#define def_we (1.0f/36.0f)"
+ ) : string(
+    "\n\t#define def_w0 (1.0f/3.375f)"
+    "\n\t#define def_ws (1.0f/13.5f)"
+    "\n\t#define def_we (1.0f/54.0f)"
+    "\n\t#define def_wc (1.0f/216.0f)"
+ ))+
+    "\n\t#define "+string(model.collision_name())+
+    "\n\t#define def_trt_magic "+to_string(static_cast<float>(model.trt_magic_parameter))+"f"
+    "\n\t#define def_smagorinsky "+to_string(model.smagorinsky_coefficient())+"f"
 
-#if defined(SRT)
-	"\n	#define SRT"
-#elif defined(TRT)
-	"\n	#define TRT"
-#endif // TRT
 
 	"\n	#define TYPE_S 0x01" // 0b00000001 // (stationary or moving) solid boundary
 	"\n	#define TYPE_E 0x02" // 0b00000010 // equilibrium boundary (inflow/outflow)
@@ -457,9 +432,7 @@ string LBM_Domain::device_defines(const Device_Info& device_info) const { return
 	"\n	#define def_T_avg "+to_string(T_avg)+"f" // average temperature
 #endif // TEMPERATURE
 
-#ifdef SUBGRID
-	"\n	#define SUBGRID"
-#endif // SUBGRID
++(model.subgrid ? string("\n\t#define SUBGRID") : string(""))+ ""
 
 #ifdef PARTICLES
 	"\n	#define PARTICLES"
@@ -719,7 +692,10 @@ LBM::LBM(const uint3 N, const float nu, const uint particles_N, const float part
 LBM::LBM(const uint3 N, const float nu, const float fx, const float fy, const float fz, const uint particles_N, const float particles_rho)
 	:LBM(N.x, N.y, N.z, 1u, 1u, 1u, nu, fx, fy, fz, 0.0f, 0.0f, 0.0f, particles_N, particles_rho) { // delegating constructor
 }
-LBM::LBM(const uint Nx, const uint Ny, const uint Nz, const uint Dx, const uint Dy, const uint Dz, const float nu, const float fx, const float fy, const float fz, const float sigma, const float alpha, const float beta, const uint particles_N, const float particles_rho, const DdfStorage storage) : storage(storage) { // multiple devices
+LBM::LBM(const uint Nx, const uint Ny, const uint Nz, const uint Dx, const uint Dy, const uint Dz, const float nu, const float fx, const float fy, const float fz, const float sigma, const float alpha, const float beta, const uint particles_N, const float particles_rho, const DdfStorage storage, const SolverOptions& model) : storage(storage), model(model) { // multiple devices
+    if(model.q!=19u && model.q!=27u) print_error("Unsupported runtime lattice");
+    if(model.collision!=CollisionModel::SingleRelaxation && model.collision!=CollisionModel::TwoRelaxation) print_error("Unsupported runtime collision");
+    if(Dx!=1u || Dy!=1u || Dz!=1u) print_error("Runtime models currently require one device");
     if(storage!=DdfStorage::Float16Scaled && storage!=DdfStorage::Float32) print_error("Unsupported DDF storage");
     if(storage==DdfStorage::Float32 && (Dx!=1u||Dy!=1u||Dz!=1u)) print_error("Runtime FP32 currently requires one device");
 #if defined(TEMPERATURE)||defined(SURFACE)||defined(PARTICLES)||defined(GRAPHICS)||defined(FP16C)
@@ -737,7 +713,7 @@ LBM::LBM(const uint Nx, const uint Ny, const uint Nz, const uint Dx, const uint 
 	lbm_domain = new LBM_Domain*[D];
 	for(uint d=0u; d<D; d++) { // parallel_for((ulong)D, D, [&](ulong d) {
 		const uint x=((uint)d%(Dx*Dy))%Dx, y=((uint)d%(Dx*Dy))/Dx, z=(uint)d/(Dx*Dy); // d = x+(y+z*Dy)*Dx
-		lbm_domain[d] = new LBM_Domain(device_infos[d], this->Nx/Dx+2u*Hx, this->Ny/Dy+2u*Hy, this->Nz/Dz+2u*Hz, Dx, Dy, Dz, (int)(x*this->Nx/Dx)-(int)Hx, (int)(y*this->Ny/Dy)-(int)Hy, (int)(z*this->Nz/Dz)-(int)Hz, nu, fx, fy, fz, sigma, alpha, beta, particles_N, particles_rho, storage);
+		lbm_domain[d] = new LBM_Domain(device_infos[d], this->Nx/Dx+2u*Hx, this->Ny/Dy+2u*Hy, this->Nz/Dz+2u*Hz, Dx, Dy, Dz, (int)(x*this->Nx/Dx)-(int)Hx, (int)(y*this->Ny/Dy)-(int)Hy, (int)(z*this->Nz/Dz)-(int)Hz, nu, fx, fy, fz, sigma, alpha, beta, particles_N, particles_rho, storage, model);
 	} // });
 	{
 		Memory<float>** buffers_rho = new Memory<float>*[D];
@@ -778,8 +754,8 @@ LBM::LBM(const uint Nx, const uint Ny, const uint Nz, const uint Dx, const uint 
 	graphics = Graphics(this);
 #endif // GRAPHICS
 }
-LBM::LBM(const uint Nx, const uint Ny, const uint Nz, const float nu, const DdfStorage storage, const float fx, const float fy, const float fz)
-    :LBM(Nx, Ny, Nz, 1u, 1u, 1u, nu, fx, fy, fz, 0.0f, 0.0f, 0.0f, 0u, 1.0f, storage) {
+LBM::LBM(const uint Nx, const uint Ny, const uint Nz, const float nu, const DdfStorage storage, const float fx, const float fy, const float fz, const SolverOptions& model)
+    :LBM(Nx, Ny, Nz, 1u, 1u, 1u, nu, fx, fy, fz, 0.0f, 0.0f, 0.0f, 0u, 1.0f, storage, model) {
 }
 LBM::~LBM() {
 #ifdef GRAPHICS
@@ -796,7 +772,7 @@ void LBM::sanity_checks_constructor(const vector<Device_Info>& device_infos, con
 	const uint local_Nx=Nx/Dx+2u*(Dx>1u), local_Ny=Ny/Dy+2u*(Dy>1u), local_Nz=Nz/Dz+2u*(Dz>1u);
 	uint memory_available = max_uint; // in MB
 	for(Device_Info device_info : device_infos) memory_available = min(memory_available, device_info.memory);
-	uint memory_required = (uint)((ulong)Nx*(ulong)Ny*(ulong)Nz/((ulong)(Dx*Dy*Dz))*(ulong)bytes_per_cell_device(storage)/1048576ull); // in MB
+	uint memory_required = (uint)((ulong)Nx*(ulong)Ny*(ulong)Nz/((ulong)(Dx*Dy*Dz))*(ulong)bytes_per_cell_device(storage, model)/1048576ull); // in MB
 	if(memory_required>memory_available) {
 		float factor = cbrt((float)memory_available/(float)memory_required);
 		const uint maxNx=(uint)(factor*(float)Nx), maxNy=(uint)(factor*(float)Ny), maxNz=(uint)(factor*(float)Nz);
@@ -1388,7 +1364,7 @@ void LBM::communicate_field(const enum_transfer_field field, const uint bytes_pe
 }
 
 void LBM::communicate_fi() {
-	communicate_field(enum_transfer_field::fi, transfers*get_ddf_bytes());
+	communicate_field(enum_transfer_field::fi, model.transfers()*get_ddf_bytes());
 }
 void LBM::communicate_rho_u_flags() {
 	communicate_field(enum_transfer_field::rho_u_flags, 17u);
