@@ -1,0 +1,2836 @@
+{
+  "date": "2026-09-22",
+  "status": "succeeded with documented FP16 accuracy limitations",
+  "branch": "codex/config-runner-p3",
+  "production": {
+    "gitCommit": "98cdd1cffdbc8d9105a9f51b677c1a8507f8d1df",
+    "sourceTree": "0009ff4afdf02903881d7b44467dcbc34f6d0307",
+    "executablePath": "F:\\01-Project\\Opensource\\01-FluidX3D\\bin\\config-runner-p3\\FluidX3D.exe",
+    "executableSha256": "e324f859774827970098d70954ccc5a8e8c60e52aed067ef66bc312158bceeb4",
+    "vcToolsVersion": "14.29.30133",
+    "windowsSdkVersion": "10.0.22621.0"
+  },
+  "capabilities": {
+    "analysis": [
+      "probes",
+      "temporal statistics",
+      "gauge force on solids"
+    ],
+    "arithmetic": "FP32",
+    "body_force": "constant force density",
+    "boundaries": [
+      "no_slip",
+      "moving_wall",
+      "equilibrium",
+      "periodic"
+    ],
+    "collision": [
+      "SRT",
+      "TRT"
+    ],
+    "default_storage": "FP16S",
+    "defaults": {
+      "collision": "SRT",
+      "lattice": "D3Q19",
+      "smagorinsky_constant": 0.17326595533835415,
+      "storage": "FP16S",
+      "trt_magic_parameter": 0.1875,
+      "turbulence": "smagorinsky"
+    },
+    "device_bytes_per_cell": {
+      "FP16S": 67,
+      "FP32": 105
+    },
+    "devices_per_run": 1,
+    "geometry": "binary STL static union",
+    "graphics": false,
+    "lattice": [
+      "D3Q19",
+      "D3Q27"
+    ],
+    "model_device_bytes_per_cell": {
+      "D3Q19": {
+        "FP16S": 67,
+        "FP32": 105
+      },
+      "D3Q27": {
+        "FP16S": 83,
+        "FP32": 137
+      }
+    },
+    "outputs": [
+      "VTK",
+      "CSV",
+      "JSON"
+    ],
+    "parameters": {
+      "smagorinsky_constant": {
+        "exclusive_minimum": 0,
+        "maximum": 1,
+        "requires": "smagorinsky"
+      },
+      "trt_magic_parameter": {
+        "exclusive_minimum": 0,
+        "maximum": 1,
+        "requires": "TRT"
+      }
+    },
+    "schema_version": 1,
+    "storage": [
+      "FP16S",
+      "FP32"
+    ],
+    "turbulence": [
+      "none",
+      "smagorinsky"
+    ],
+    "units": [
+      "lattice",
+      "si"
+    ]
+  },
+  "matrix": [
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "turbulence": "none",
+        "storage": "FP16S"
+      },
+      "status": "succeeded"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "turbulence": "none",
+        "storage": "FP32"
+      },
+      "status": "succeeded"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP16S"
+      },
+      "status": "succeeded"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP32"
+      },
+      "status": "succeeded"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "turbulence": "none",
+        "storage": "FP16S"
+      },
+      "status": "succeeded"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "turbulence": "none",
+        "storage": "FP32"
+      },
+      "status": "succeeded"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP16S"
+      },
+      "status": "succeeded"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP32"
+      },
+      "status": "succeeded"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "turbulence": "none",
+        "storage": "FP16S"
+      },
+      "status": "succeeded"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "turbulence": "none",
+        "storage": "FP32"
+      },
+      "status": "succeeded"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP16S"
+      },
+      "status": "succeeded"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP32"
+      },
+      "status": "succeeded"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "turbulence": "none",
+        "storage": "FP16S"
+      },
+      "status": "succeeded"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "turbulence": "none",
+        "storage": "FP32"
+      },
+      "status": "succeeded"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP16S"
+      },
+      "status": "succeeded"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP32"
+      },
+      "status": "succeeded"
+    }
+  ],
+  "p1": {
+    "status": "succeeded",
+    "invocations": 29,
+    "boeing_arrays": [
+      {
+        "file": "flags-000000000.vtk",
+        "payload_exact": true
+      },
+      {
+        "file": "rho-000000000.vtk",
+        "payload_exact": true
+      },
+      {
+        "file": "u-000000000.vtk",
+        "payload_exact": true
+      },
+      {
+        "file": "flags-000001000.vtk",
+        "payload_exact": true
+      },
+      {
+        "file": "rho-000001000.vtk",
+        "payload_exact": true
+      },
+      {
+        "file": "u-000001000.vtk",
+        "payload_exact": true
+      }
+    ]
+  },
+  "p2": {
+    "status": "succeeded",
+    "invocations": 25,
+    "profiles": [
+      {
+        "case": "poiseuille",
+        "H": 8,
+        "nu": 0.1,
+        "reference_speed": 0.05,
+        "Re": 4.0,
+        "steps": 1024,
+        "l2_relative": 0.0161197345764768,
+        "linf_over_U": 0.012967184185981862,
+        "force_measured": [
+          0.1599990725517273,
+          0.159999281167984
+        ],
+        "force_expected": [
+          0.16000000000000003,
+          0.16000000000000003
+        ],
+        "force_relative_error": 5.7965517046010265e-06,
+        "u": [
+          0.0112439701333642,
+          0.029885929077863693,
+          0.04233571141958237,
+          0.04857039079070091,
+          0.048570405691862106,
+          0.04233574867248535,
+          0.029885968193411827,
+          0.011243985034525394
+        ],
+        "analytical_u": [
+          0.01171875,
+          0.030468750000000003,
+          0.04296875,
+          0.049218750000000006,
+          0.04921875,
+          0.04296875,
+          0.030468750000000003,
+          0.01171875
+        ],
+        "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p2-validation\\20260922T013730178226Z\\poiseuille-8\\results"
+      },
+      {
+        "case": "poiseuille",
+        "H": 16,
+        "nu": 0.1,
+        "reference_speed": 0.025,
+        "Re": 4.0,
+        "steps": 4096,
+        "l2_relative": 0.004091149298120884,
+        "linf_over_U": 0.0032868236303330856,
+        "force_measured": [
+          0.039999574422836304,
+          0.039999544620513916
+        ],
+        "force_expected": [
+          0.04000000000000001,
+          0.04000000000000001
+        ],
+        "force_relative_error": 1.1384487152293897e-05,
+        "u": [
+          0.002971475478261709,
+          0.008431153371930122,
+          0.013111962005496025,
+          0.017013531178236008,
+          0.02013549953699112,
+          0.02247750386595726,
+          0.02403918281197548,
+          0.024820176884531975,
+          0.024820173159241676,
+          0.024039162322878838,
+          0.022477474063634872,
+          0.02013547345995903,
+          0.017013516277074814,
+          0.013111951760947704,
+          0.008431147783994675,
+          0.0029714731499552727
+        ],
+        "analytical_u": [
+          0.00302734375,
+          0.008496093750000001,
+          0.01318359375,
+          0.01708984375,
+          0.02021484375,
+          0.02255859375,
+          0.02412109375,
+          0.02490234375,
+          0.024902343750000003,
+          0.024121093750000003,
+          0.02255859375,
+          0.020214843750000003,
+          0.01708984375,
+          0.01318359375,
+          0.008496093750000001,
+          0.00302734375
+        ],
+        "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p2-validation\\20260922T013730178226Z\\poiseuille-16\\results"
+      },
+      {
+        "case": "poiseuille",
+        "H": 32,
+        "nu": 0.1,
+        "reference_speed": 0.0125,
+        "Re": 4.0,
+        "steps": 16384,
+        "l2_relative": 0.00110141382954324,
+        "linf_over_U": 0.0009062588214875378,
+        "force_measured": [
+          0.009999338537454605,
+          0.009999379826088747
+        ],
+        "force_expected": [
+          0.010000000000000002,
+          0.010000000000000002
+        ],
+        "force_relative_error": 6.614625453968402e-05,
+        "u": [
+          0.0007623025448992848,
+          0.002226398093625903,
+          0.0035929204896092415,
+          0.004861865658313036,
+          0.00603322871029377,
+          0.007107005920261145,
+          0.008083190768957138,
+          0.008961777202785015,
+          0.00974276289343834,
+          0.010426145046949387,
+          0.011011919006705284,
+          0.01150007825344801,
+          0.011890619061887264,
+          0.0121835358440876,
+          0.012378821149468422,
+          0.012476464733481407,
+          0.012476464733481407,
+          0.012378823012113571,
+          0.012183542363345623,
+          0.011890638619661331,
+          0.011500108055770397,
+          0.01101195439696312,
+          0.010426182299852371,
+          0.00974279921501875,
+          0.008961814455688,
+          0.008083226159214973,
+          0.007107038516551256,
+          0.006033255718648434,
+          0.004861887078732252,
+          0.0035929367877542973,
+          0.0022264081053435802,
+          0.0007623059209436178
+        ],
+        "analytical_u": [
+          0.0007690429687500001,
+          0.0022338867187500005,
+          0.00360107421875,
+          0.004870605468750001,
+          0.00604248046875,
+          0.0071166992187500005,
+          0.00809326171875,
+          0.00897216796875,
+          0.00975341796875,
+          0.01043701171875,
+          0.01102294921875,
+          0.011511230468750001,
+          0.01190185546875,
+          0.01219482421875,
+          0.012390136718750002,
+          0.01248779296875,
+          0.012487792968750001,
+          0.01239013671875,
+          0.01219482421875,
+          0.011901855468750002,
+          0.011511230468750001,
+          0.01102294921875,
+          0.01043701171875,
+          0.00975341796875,
+          0.00897216796875,
+          0.008093261718750001,
+          0.007116699218750001,
+          0.00604248046875,
+          0.00487060546875,
+          0.00360107421875,
+          0.00223388671875,
+          0.0007690429687500001
+        ],
+        "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p2-validation\\20260922T013730178226Z\\poiseuille-32\\results"
+      },
+      {
+        "case": "couette",
+        "H": 8,
+        "nu": 0.1,
+        "reference_speed": 0.05,
+        "Re": 4.0,
+        "steps": 1024,
+        "l2_relative": 3.396315061532415e-06,
+        "linf_over_U": 2.7343630790849227e-06,
+        "force_measured": [
+          0.04007479548454285,
+          -0.04007557034492493
+        ],
+        "force_expected": [
+          0.04000000000000001,
+          -0.04000000000000001
+        ],
+        "force_relative_error": 0.0018892586231229742,
+        "u": [
+          0.0031249793246388435,
+          0.009374937042593956,
+          0.015624897554516792,
+          0.021874872967600822,
+          0.028124863281846046,
+          0.034374870359897614,
+          0.04062490537762642,
+          0.046874966472387314
+        ],
+        "analytical_u": [
+          0.003125,
+          0.009375000000000001,
+          0.015625,
+          0.021875000000000002,
+          0.028125,
+          0.034375,
+          0.040625,
+          0.046875
+        ],
+        "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p2-validation\\20260922T013730178226Z\\couette-8\\results"
+      },
+      {
+        "case": "couette",
+        "H": 16,
+        "nu": 0.1,
+        "reference_speed": 0.025,
+        "Re": 4.0,
+        "steps": 4096,
+        "l2_relative": 1.2218488142602175e-05,
+        "linf_over_U": 9.693205356639534e-06,
+        "force_measured": [
+          0.010004431009292603,
+          -0.010005146265029907
+        ],
+        "force_expected": [
+          0.010000000000000002,
+          -0.010000000000000002
+        ],
+        "force_relative_error": 0.0005146265029905283,
+        "u": [
+          0.0007812295225448906,
+          0.0023436888586729765,
+          0.0039061494171619415,
+          0.005468613468110561,
+          0.007031081710010767,
+          0.008593554608523846,
+          0.010156034491956234,
+          0.01171851996332407,
+          0.013281009159982204,
+          0.014843507669866085,
+          0.016406012699007988,
+          0.01796852797269821,
+          0.01953105255961418,
+          0.021093590185046196,
+          0.022656148299574852,
+          0.024218715727329254
+        ],
+        "analytical_u": [
+          0.00078125,
+          0.0023437500000000003,
+          0.00390625,
+          0.0054687500000000005,
+          0.00703125,
+          0.00859375,
+          0.01015625,
+          0.01171875,
+          0.013281250000000001,
+          0.014843750000000001,
+          0.01640625,
+          0.017968750000000002,
+          0.01953125,
+          0.02109375,
+          0.022656250000000003,
+          0.02421875
+        ],
+        "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p2-validation\\20260922T013730178226Z\\couette-16\\results"
+      },
+      {
+        "case": "couette",
+        "H": 32,
+        "nu": 0.1,
+        "reference_speed": 0.0125,
+        "Re": 4.0,
+        "steps": 16384,
+        "l2_relative": 6.644852144529482e-05,
+        "linf_over_U": 5.386024713519011e-05,
+        "force_measured": [
+          0.0024999591211477914,
+          -0.0025009016195933023
+        ],
+        "force_expected": [
+          0.0025000000000000005,
+          -0.0025000000000000005
+        ],
+        "force_relative_error": 0.0003606478373207114,
+        "u": [
+          0.00019528638222254813,
+          0.000585859059356153,
+          0.0009764318820089102,
+          0.0013670054031535983,
+          0.0017575797392055392,
+          0.0021481558214873075,
+          0.002538733882829547,
+          0.00292931473813951,
+          0.0033198974560946226,
+          0.003710482968017459,
+          0.004101070575416088,
+          0.004491659812629223,
+          0.004882249981164932,
+          0.005272842012345791,
+          0.005663442425429821,
+          0.006054048426449299,
+          0.0064446586184203625,
+          0.006835270673036575,
+          0.0072258892469108105,
+          0.0076165152713656425,
+          0.00800714548677206,
+          0.008397783152759075,
+          0.00878843106329441,
+          0.009179088287055492,
+          0.009569751098752022,
+          0.009960420429706573,
+          0.010351099073886871,
+          0.01074178796261549,
+          0.01113248523324728,
+          0.011523192748427391,
+          0.011913914233446121,
+          0.01230463944375515
+        ],
+        "analytical_u": [
+          0.0001953125,
+          0.0005859375000000001,
+          0.0009765625,
+          0.0013671875000000001,
+          0.0017578125,
+          0.0021484375,
+          0.0025390625,
+          0.0029296875,
+          0.0033203125000000003,
+          0.0037109375000000003,
+          0.0041015625,
+          0.0044921875000000005,
+          0.0048828125,
+          0.0052734375,
+          0.005664062500000001,
+          0.0060546875,
+          0.0064453125000000005,
+          0.0068359375,
+          0.0072265625,
+          0.007617187500000001,
+          0.008007812500000001,
+          0.0083984375,
+          0.0087890625,
+          0.0091796875,
+          0.0095703125,
+          0.009960937500000001,
+          0.010351562500000001,
+          0.0107421875,
+          0.0111328125,
+          0.0115234375,
+          0.011914062500000001,
+          0.012304687500000001
+        ],
+        "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p2-validation\\20260922T013730178226Z\\couette-32\\results"
+      }
+    ]
+  },
+  "storage": {
+    "status": "succeeded",
+    "invocations": 14,
+    "comparisons": [
+      {
+        "name": "default equals explicit16",
+        "vtk_arrays_byte_identical": 20,
+        "statistics_identical": true,
+        "left": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\storage-validation\\20260922T014624590941Z\\default\\results",
+        "right": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\storage-validation\\20260922T014624590941Z\\explicit16\\results"
+      },
+      {
+        "name": "16 unchanged after 32",
+        "vtk_arrays_byte_identical": 20,
+        "statistics_identical": true,
+        "left": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\storage-validation\\20260922T014624590941Z\\explicit16\\results",
+        "right": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\storage-validation\\20260922T014624590941Z\\repeat16\\results"
+      },
+      {
+        "name": "fixed FP16 geometry baseline",
+        "vtk_arrays_byte_identical": 20,
+        "statistics_identical": true,
+        "left": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p2-validation\\20260921T163819477191Z\\geometry-force\\results",
+        "right": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\storage-validation\\20260922T014624590941Z\\fixed16-geometry-replay\\results"
+      },
+      {
+        "name": "runtime32 equals independently compiled32",
+        "vtk_arrays_byte_identical": 28,
+        "statistics_identical": true,
+        "left": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\storage-validation\\20260922T014624590941Z\\fixed32-combined\\results",
+        "right": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\storage-validation\\20260922T014624590941Z\\runtime32-combined\\results"
+      },
+      {
+        "name": "FP32 snapshot replay",
+        "vtk_arrays_byte_identical": 28,
+        "statistics_identical": true,
+        "left": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\storage-validation\\20260922T014624590941Z\\runtime32-combined\\results",
+        "right": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\storage-validation\\20260922T014624590941Z\\snapshot32-replay\\results"
+      }
+    ]
+  },
+  "first_p3_run": {
+    "status": "failed",
+    "invocations": 209,
+    "matrix_invocations": 176,
+    "error": "AssertionError(0.03010778781719759)",
+    "matrix_passed": 16,
+    "fp32_profiles_passed": 48
+  },
+  "followup": {
+    "status": "succeeded",
+    "invocations": 38,
+    "batch_combinations": 16,
+    "matrix_reference": {
+      "path": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\report.json",
+      "sha256": "57d180c9ca54995827f4a8ce2303758288d05b1c7cd518812fca2da4d7155278",
+      "original_status": "failed",
+      "original_error": "AssertionError(0.03010778781719759)"
+    },
+    "comparisons": [
+      {
+        "name": "P2 compatibility FP16S",
+        "exact_vtk_arrays": 28,
+        "statistics_equal": true
+      },
+      {
+        "name": "explicit default Cs FP16S",
+        "exact_vtk_arrays": 28,
+        "statistics_equal": true
+      },
+      {
+        "name": "P2 compatibility FP32",
+        "exact_vtk_arrays": 28,
+        "statistics_equal": true
+      },
+      {
+        "name": "explicit default Cs FP32",
+        "exact_vtk_arrays": 28,
+        "statistics_equal": true
+      },
+      {
+        "name": "smagorinsky_constant changes field",
+        "max_velocity_difference": 0.00020970404148101807
+      },
+      {
+        "name": "trt_magic_parameter changes field",
+        "max_velocity_difference": 0.0004562616813927889
+      },
+      {
+        "name": "SRT/TRT degeneration rho",
+        "max_difference": 1.1920928955078125e-07
+      },
+      {
+        "name": "SRT/TRT degeneration u",
+        "max_difference": 2.9802322387695312e-08
+      },
+      {
+        "name": "model SI snapshot",
+        "exact_vtk_arrays": 28,
+        "statistics_equal": true
+      }
+    ],
+    "shear_wave": [
+      {
+        "N": 16,
+        "steps": 14,
+        "amplitude": 0.0015,
+        "l2_relative": 0.06647673584028914,
+        "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T015005051696Z\\three-dimensional-shear-wave-16\\results"
+      },
+      {
+        "N": 24,
+        "steps": 32,
+        "amplitude": 0.001,
+        "l2_relative": 0.03010778781719759,
+        "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T015005051696Z\\three-dimensional-shear-wave-24\\results"
+      },
+      {
+        "N": 32,
+        "steps": 57,
+        "amplitude": 0.00075,
+        "l2_relative": 0.017049008042484125,
+        "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T015005051696Z\\three-dimensional-shear-wave-32\\results"
+      }
+    ]
+  },
+  "profiles": [
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "turbulence": "none",
+        "storage": "FP16S"
+      },
+      "case": "poiseuille",
+      "H": 8,
+      "nu": 0.1,
+      "U": 0.05,
+      "steps": 1024,
+      "l2_relative": 0.017622338621133816,
+      "linf_over_U": 0.015194386243820301,
+      "force_relative_error": 0.005126953125000193,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-8-D3Q19-SRT-none-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "turbulence": "none",
+        "storage": "FP16S"
+      },
+      "case": "poiseuille",
+      "H": 16,
+      "nu": 0.1,
+      "U": 0.025,
+      "steps": 4096,
+      "l2_relative": 0.036117738893515654,
+      "linf_over_U": 0.036810114979744096,
+      "force_relative_error": 0.02648925781250019,
+      "within_fp32_thresholds": false,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-16-D3Q19-SRT-none-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "turbulence": "none",
+        "storage": "FP16S"
+      },
+      "case": "poiseuille",
+      "H": 32,
+      "nu": 0.1,
+      "U": 0.0125,
+      "steps": 16384,
+      "l2_relative": 0.07472569333951457,
+      "linf_over_U": 0.07783544063568126,
+      "force_relative_error": 0.05891418457031268,
+      "within_fp32_thresholds": false,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-32-D3Q19-SRT-none-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "turbulence": "none",
+        "storage": "FP16S"
+      },
+      "case": "couette",
+      "H": 8,
+      "nu": 0.1,
+      "U": 0.05,
+      "steps": 1024,
+      "l2_relative": 0.004624784169355797,
+      "linf_over_U": 0.003868393599987044,
+      "force_relative_error": 0.025798916816711228,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-8-D3Q19-SRT-none-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "turbulence": "none",
+        "storage": "FP16S"
+      },
+      "case": "couette",
+      "H": 16,
+      "nu": 0.1,
+      "U": 0.025,
+      "steps": 4096,
+      "l2_relative": 0.018612994567601134,
+      "linf_over_U": 0.015007242560386713,
+      "force_relative_error": 0.08724236488342264,
+      "within_fp32_thresholds": false,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-16-D3Q19-SRT-none-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "turbulence": "none",
+        "storage": "FP16S"
+      },
+      "case": "couette",
+      "H": 32,
+      "nu": 0.1,
+      "U": 0.0125,
+      "steps": 16384,
+      "l2_relative": 0.06846385532670506,
+      "linf_over_U": 0.05610893666744235,
+      "force_relative_error": 0.27930243810017885,
+      "within_fp32_thresholds": false,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-32-D3Q19-SRT-none-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "turbulence": "none",
+        "storage": "FP32"
+      },
+      "case": "poiseuille",
+      "H": 8,
+      "nu": 0.1,
+      "U": 0.05,
+      "steps": 1024,
+      "l2_relative": 0.011130784087905968,
+      "linf_over_U": 0.008132129907608143,
+      "force_relative_error": 5.610287189677931e-06,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-8-D3Q19-SRT-none-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "turbulence": "none",
+        "storage": "FP32"
+      },
+      "case": "poiseuille",
+      "H": 16,
+      "nu": 0.1,
+      "U": 0.025,
+      "steps": 4096,
+      "l2_relative": 0.002798510815479755,
+      "linf_over_U": 0.002051219344139099,
+      "force_relative_error": 1.5885879596326532e-05,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-16-D3Q19-SRT-none-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "turbulence": "none",
+        "storage": "FP32"
+      },
+      "case": "poiseuille",
+      "H": 32,
+      "nu": 0.1,
+      "U": 0.0125,
+      "steps": 16384,
+      "l2_relative": 0.000774401042423394,
+      "linf_over_U": 0.0006000399589538297,
+      "force_relative_error": 6.592894593888259e-05,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-32-D3Q19-SRT-none-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "turbulence": "none",
+        "storage": "FP32"
+      },
+      "case": "couette",
+      "H": 8,
+      "nu": 0.1,
+      "U": 0.05,
+      "steps": 1024,
+      "l2_relative": 4.468125231477684e-06,
+      "linf_over_U": 3.591179847731163e-06,
+      "force_relative_error": 1.6927719116016645e-05,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-8-D3Q19-SRT-none-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "turbulence": "none",
+        "storage": "FP32"
+      },
+      "case": "couette",
+      "H": 16,
+      "nu": 0.1,
+      "U": 0.025,
+      "steps": 4096,
+      "l2_relative": 1.828898703844386e-05,
+      "linf_over_U": 1.461058855060926e-05,
+      "force_relative_error": 6.759166717509867e-05,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-16-D3Q19-SRT-none-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "turbulence": "none",
+        "storage": "FP32"
+      },
+      "case": "couette",
+      "H": 32,
+      "nu": 0.1,
+      "U": 0.0125,
+      "steps": 16384,
+      "l2_relative": 6.920081457313352e-05,
+      "linf_over_U": 5.479156970980559e-05,
+      "force_relative_error": 0.0003030300140378916,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-32-D3Q19-SRT-none-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP16S"
+      },
+      "case": "poiseuille",
+      "H": 8,
+      "nu": 0.1,
+      "U": 0.05,
+      "steps": 1024,
+      "l2_relative": 0.02384220241693075,
+      "linf_over_U": 0.020952269434929005,
+      "force_relative_error": 0.006652832031250193,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-8-D3Q19-SRT-smagorinsky-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP16S"
+      },
+      "case": "poiseuille",
+      "H": 16,
+      "nu": 0.1,
+      "U": 0.025,
+      "steps": 4096,
+      "l2_relative": 0.03694364311012281,
+      "linf_over_U": 0.03756880760192885,
+      "force_relative_error": 0.025853474934896082,
+      "within_fp32_thresholds": false,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-16-D3Q19-SRT-smagorinsky-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP16S"
+      },
+      "case": "poiseuille",
+      "H": 32,
+      "nu": 0.1,
+      "U": 0.0125,
+      "steps": 16384,
+      "l2_relative": 0.1058813797825488,
+      "linf_over_U": 0.10829319059848797,
+      "force_relative_error": 0.08676147460937518,
+      "within_fp32_thresholds": false,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-32-D3Q19-SRT-smagorinsky-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP16S"
+      },
+      "case": "couette",
+      "H": 8,
+      "nu": 0.1,
+      "U": 0.05,
+      "steps": 1024,
+      "l2_relative": 0.004933853146332225,
+      "linf_over_U": 0.0041370242834091325,
+      "force_relative_error": 0.02172990640004462,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-8-D3Q19-SRT-smagorinsky-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP16S"
+      },
+      "case": "couette",
+      "H": 16,
+      "nu": 0.1,
+      "U": 0.025,
+      "steps": 4096,
+      "l2_relative": 0.021673059613830006,
+      "linf_over_U": 0.017787858843803447,
+      "force_relative_error": 0.09538038571675603,
+      "within_fp32_thresholds": false,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-16-D3Q19-SRT-smagorinsky-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP16S"
+      },
+      "case": "couette",
+      "H": 32,
+      "nu": 0.1,
+      "U": 0.0125,
+      "steps": 16384,
+      "l2_relative": 0.06153700784975558,
+      "linf_over_U": 0.05040045082569125,
+      "force_relative_error": 0.24675035476684545,
+      "within_fp32_thresholds": false,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-32-D3Q19-SRT-smagorinsky-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP32"
+      },
+      "case": "poiseuille",
+      "H": 8,
+      "nu": 0.1,
+      "U": 0.05,
+      "steps": 1024,
+      "l2_relative": 0.0161197345764768,
+      "linf_over_U": 0.012967184185981862,
+      "force_relative_error": 5.7965517046010265e-06,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-8-D3Q19-SRT-smagorinsky-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP32"
+      },
+      "case": "poiseuille",
+      "H": 16,
+      "nu": 0.1,
+      "U": 0.025,
+      "steps": 4096,
+      "l2_relative": 0.004091149298120884,
+      "linf_over_U": 0.0032868236303330856,
+      "force_relative_error": 1.1384487152293897e-05,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-16-D3Q19-SRT-smagorinsky-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP32"
+      },
+      "case": "poiseuille",
+      "H": 32,
+      "nu": 0.1,
+      "U": 0.0125,
+      "steps": 16384,
+      "l2_relative": 0.00110141382954324,
+      "linf_over_U": 0.0009062588214875378,
+      "force_relative_error": 6.614625453968402e-05,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-32-D3Q19-SRT-smagorinsky-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP32"
+      },
+      "case": "couette",
+      "H": 8,
+      "nu": 0.1,
+      "U": 0.05,
+      "steps": 1024,
+      "l2_relative": 3.396315061532415e-06,
+      "linf_over_U": 2.7343630790849227e-06,
+      "force_relative_error": 0.0018892586231229742,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-8-D3Q19-SRT-smagorinsky-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP32"
+      },
+      "case": "couette",
+      "H": 16,
+      "nu": 0.1,
+      "U": 0.025,
+      "steps": 4096,
+      "l2_relative": 1.2218488142602175e-05,
+      "linf_over_U": 9.693205356639534e-06,
+      "force_relative_error": 0.0005146265029905283,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-16-D3Q19-SRT-smagorinsky-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP32"
+      },
+      "case": "couette",
+      "H": 32,
+      "nu": 0.1,
+      "U": 0.0125,
+      "steps": 16384,
+      "l2_relative": 6.644852144529482e-05,
+      "linf_over_U": 5.386024713519011e-05,
+      "force_relative_error": 0.0003606478373207114,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-32-D3Q19-SRT-smagorinsky-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "turbulence": "none",
+        "storage": "FP16S"
+      },
+      "case": "poiseuille",
+      "H": 8,
+      "nu": 0.1,
+      "U": 0.05,
+      "steps": 1024,
+      "l2_relative": 0.009681937951685487,
+      "linf_over_U": 0.009542673826217762,
+      "force_relative_error": 0.007924397786458584,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-8-D3Q19-TRT-none-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "turbulence": "none",
+        "storage": "FP16S"
+      },
+      "case": "poiseuille",
+      "H": 16,
+      "nu": 0.1,
+      "U": 0.025,
+      "steps": 4096,
+      "l2_relative": 0.03658427070591332,
+      "linf_over_U": 0.03826707601547255,
+      "force_relative_error": 0.02890523274739608,
+      "within_fp32_thresholds": false,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-16-D3Q19-TRT-none-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "turbulence": "none",
+        "storage": "FP16S"
+      },
+      "case": "poiseuille",
+      "H": 32,
+      "nu": 0.1,
+      "U": 0.0125,
+      "steps": 16384,
+      "l2_relative": 0.10770703044535296,
+      "linf_over_U": 0.11035566031932842,
+      "force_relative_error": 0.08854166666666678,
+      "within_fp32_thresholds": false,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-32-D3Q19-TRT-none-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "turbulence": "none",
+        "storage": "FP16S"
+      },
+      "case": "couette",
+      "H": 8,
+      "nu": 0.1,
+      "U": 0.05,
+      "steps": 1024,
+      "l2_relative": 0.00550389653637577,
+      "linf_over_U": 0.004540361464023604,
+      "force_relative_error": 0.019695401191711228,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-8-D3Q19-TRT-none-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "turbulence": "none",
+        "storage": "FP16S"
+      },
+      "case": "couette",
+      "H": 16,
+      "nu": 0.1,
+      "U": 0.025,
+      "steps": 4096,
+      "l2_relative": 0.025412110412408595,
+      "linf_over_U": 0.02091430872678761,
+      "force_relative_error": 0.08724236488342264,
+      "within_fp32_thresholds": false,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-16-D3Q19-TRT-none-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "turbulence": "none",
+        "storage": "FP16S"
+      },
+      "case": "couette",
+      "H": 32,
+      "nu": 0.1,
+      "U": 0.0125,
+      "steps": 16384,
+      "l2_relative": 0.08964242508882928,
+      "linf_over_U": 0.07284815609455111,
+      "force_relative_error": 0.36068264643351206,
+      "within_fp32_thresholds": false,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-32-D3Q19-TRT-none-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "turbulence": "none",
+        "storage": "FP32"
+      },
+      "case": "poiseuille",
+      "H": 8,
+      "nu": 0.1,
+      "U": 0.05,
+      "steps": 1024,
+      "l2_relative": 6.273157659024381e-06,
+      "linf_over_U": 6.4522027970470575e-06,
+      "force_relative_error": 5.051493644908644e-06,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-8-D3Q19-TRT-none-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "turbulence": "none",
+        "storage": "FP32"
+      },
+      "case": "poiseuille",
+      "H": 16,
+      "nu": 0.1,
+      "U": 0.025,
+      "steps": 4096,
+      "l2_relative": 7.414537269275799e-06,
+      "linf_over_U": 7.748603820939559e-06,
+      "force_relative_error": 6.665786107633296e-06,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-16-D3Q19-TRT-none-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "turbulence": "none",
+        "storage": "FP32"
+      },
+      "case": "poiseuille",
+      "H": 32,
+      "nu": 0.1,
+      "U": 0.0125,
+      "steps": 16384,
+      "l2_relative": 6.490556646979978e-05,
+      "linf_over_U": 6.653368473052979e-05,
+      "force_relative_error": 5.273520946522113e-05,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-32-D3Q19-TRT-none-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "turbulence": "none",
+        "storage": "FP32"
+      },
+      "case": "couette",
+      "H": 8,
+      "nu": 0.1,
+      "U": 0.05,
+      "steps": 1024,
+      "l2_relative": 2.406820763075557e-06,
+      "linf_over_U": 2.063810825361778e-06,
+      "force_relative_error": 1.0470549265291505e-05,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-8-D3Q19-TRT-none-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "turbulence": "none",
+        "storage": "FP32"
+      },
+      "case": "couette",
+      "H": 16,
+      "nu": 0.1,
+      "U": 0.025,
+      "steps": 4096,
+      "l2_relative": 1.158065512406311e-05,
+      "linf_over_U": 9.372830390985687e-06,
+      "force_relative_error": 4.6730041503711954e-05,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-16-D3Q19-TRT-none-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "turbulence": "none",
+        "storage": "FP32"
+      },
+      "case": "couette",
+      "H": 32,
+      "nu": 0.1,
+      "U": 0.0125,
+      "steps": 16384,
+      "l2_relative": 4.5145312903848294e-05,
+      "linf_over_U": 3.530830144884978e-05,
+      "force_relative_error": 0.00019375483194961765,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-32-D3Q19-TRT-none-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP16S"
+      },
+      "case": "poiseuille",
+      "H": 8,
+      "nu": 0.1,
+      "U": 0.05,
+      "steps": 1024,
+      "l2_relative": 0.01466386401436425,
+      "linf_over_U": 0.014538958668708912,
+      "force_relative_error": 0.0074157714843751926,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-8-D3Q19-TRT-smagorinsky-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP16S"
+      },
+      "case": "poiseuille",
+      "H": 16,
+      "nu": 0.1,
+      "U": 0.025,
+      "steps": 4096,
+      "l2_relative": 0.036034742918937115,
+      "linf_over_U": 0.03726661205291762,
+      "force_relative_error": 0.02776082356770858,
+      "within_fp32_thresholds": false,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-16-D3Q19-TRT-smagorinsky-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP16S"
+      },
+      "case": "poiseuille",
+      "H": 32,
+      "nu": 0.1,
+      "U": 0.0125,
+      "steps": 16384,
+      "l2_relative": 0.09983855800088458,
+      "linf_over_U": 0.10281999409198772,
+      "force_relative_error": 0.08231099446614606,
+      "within_fp32_thresholds": false,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-32-D3Q19-TRT-smagorinsky-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP16S"
+      },
+      "case": "couette",
+      "H": 8,
+      "nu": 0.1,
+      "U": 0.05,
+      "steps": 1024,
+      "l2_relative": 0.0056601890730251705,
+      "linf_over_U": 0.004578769207000746,
+      "force_relative_error": 0.019695401191711228,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-8-D3Q19-TRT-smagorinsky-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP16S"
+      },
+      "case": "couette",
+      "H": 16,
+      "nu": 0.1,
+      "U": 0.025,
+      "steps": 4096,
+      "l2_relative": 0.018676045502322908,
+      "linf_over_U": 0.01503662019968037,
+      "force_relative_error": 0.08724236488342264,
+      "within_fp32_thresholds": false,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-16-D3Q19-TRT-smagorinsky-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP16S"
+      },
+      "case": "couette",
+      "H": 32,
+      "nu": 0.1,
+      "U": 0.0125,
+      "steps": 16384,
+      "l2_relative": 0.08509543028424374,
+      "linf_over_U": 0.06971060484647754,
+      "force_relative_error": 0.3444066047668454,
+      "within_fp32_thresholds": false,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-32-D3Q19-TRT-smagorinsky-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP32"
+      },
+      "case": "poiseuille",
+      "H": 8,
+      "nu": 0.1,
+      "U": 0.05,
+      "steps": 1024,
+      "l2_relative": 0.0053187624853684775,
+      "linf_over_U": 0.004863411188125721,
+      "force_relative_error": 4.4927001001393565e-06,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-8-D3Q19-TRT-smagorinsky-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP32"
+      },
+      "case": "poiseuille",
+      "H": 16,
+      "nu": 0.1,
+      "U": 0.025,
+      "steps": 4096,
+      "l2_relative": 0.0013708659624313488,
+      "linf_over_U": 0.001252070069313188,
+      "force_relative_error": 7.907549540338286e-06,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-16-D3Q19-TRT-smagorinsky-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP32"
+      },
+      "case": "poiseuille",
+      "H": 32,
+      "nu": 0.1,
+      "U": 0.0125,
+      "steps": 16384,
+      "l2_relative": 0.000408030547588926,
+      "linf_over_U": 0.0003801733255387463,
+      "force_relative_error": 5.292147398014423e-05,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-32-D3Q19-TRT-smagorinsky-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP32"
+      },
+      "case": "couette",
+      "H": 8,
+      "nu": 0.1,
+      "U": 0.05,
+      "steps": 1024,
+      "l2_relative": 3.5269888881415593e-06,
+      "linf_over_U": 2.9578804969926376e-06,
+      "force_relative_error": 0.0018929839134214361,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-8-D3Q19-TRT-smagorinsky-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP32"
+      },
+      "case": "couette",
+      "H": 16,
+      "nu": 0.1,
+      "U": 0.025,
+      "steps": 4096,
+      "l2_relative": 1.291809978189553e-05,
+      "linf_over_U": 1.0326504707378059e-05,
+      "force_relative_error": 0.0005225737889606382,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-16-D3Q19-TRT-smagorinsky-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP32"
+      },
+      "case": "couette",
+      "H": 32,
+      "nu": 0.1,
+      "U": 0.0125,
+      "steps": 16384,
+      "l2_relative": 5.536825931383992e-05,
+      "linf_over_U": 4.387646913531218e-05,
+      "force_relative_error": 0.0003844896952308676,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-32-D3Q19-TRT-smagorinsky-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "turbulence": "none",
+        "storage": "FP16S"
+      },
+      "case": "poiseuille",
+      "H": 8,
+      "nu": 0.1,
+      "U": 0.05,
+      "steps": 1024,
+      "l2_relative": 0.017762190648579066,
+      "linf_over_U": 0.015342727303505055,
+      "force_relative_error": 0.005222320556640818,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-8-D3Q27-SRT-none-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "turbulence": "none",
+        "storage": "FP16S"
+      },
+      "case": "poiseuille",
+      "H": 16,
+      "nu": 0.1,
+      "U": 0.025,
+      "steps": 4096,
+      "l2_relative": 0.03385148543234146,
+      "linf_over_U": 0.03516279160976424,
+      "force_relative_error": 0.02343750000000019,
+      "within_fp32_thresholds": false,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-16-D3Q27-SRT-none-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "turbulence": "none",
+        "storage": "FP16S"
+      },
+      "case": "poiseuille",
+      "H": 32,
+      "nu": 0.1,
+      "U": 0.0125,
+      "steps": 16384,
+      "l2_relative": 0.10229446493247395,
+      "linf_over_U": 0.1048070639371873,
+      "force_relative_error": 0.0807533264160158,
+      "within_fp32_thresholds": false,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-32-D3Q27-SRT-none-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "turbulence": "none",
+        "storage": "FP16S"
+      },
+      "case": "couette",
+      "H": 8,
+      "nu": 0.1,
+      "U": 0.05,
+      "steps": 1024,
+      "l2_relative": 0.005772941667821258,
+      "linf_over_U": 0.004663631319999709,
+      "force_relative_error": 0.016642898321151536,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-8-D3Q27-SRT-none-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "turbulence": "none",
+        "storage": "FP16S"
+      },
+      "case": "couette",
+      "H": 16,
+      "nu": 0.1,
+      "U": 0.025,
+      "steps": 4096,
+      "l2_relative": 0.024606133865004026,
+      "linf_over_U": 0.019927926361560863,
+      "force_relative_error": 0.09334439039230326,
+      "within_fp32_thresholds": false,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-16-D3Q27-SRT-none-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "turbulence": "none",
+        "storage": "FP16S"
+      },
+      "case": "couette",
+      "H": 32,
+      "nu": 0.1,
+      "U": 0.0125,
+      "steps": 16384,
+      "l2_relative": 0.0748336905109888,
+      "linf_over_U": 0.06025503575801852,
+      "force_relative_error": 0.2711614370346067,
+      "within_fp32_thresholds": false,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-32-D3Q27-SRT-none-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "turbulence": "none",
+        "storage": "FP32"
+      },
+      "case": "poiseuille",
+      "H": 8,
+      "nu": 0.1,
+      "U": 0.05,
+      "steps": 1024,
+      "l2_relative": 0.011133583508066194,
+      "linf_over_U": 0.008135631680488697,
+      "force_relative_error": 7.503976424787227e-06,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-8-D3Q27-SRT-none-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "turbulence": "none",
+        "storage": "FP32"
+      },
+      "case": "poiseuille",
+      "H": 16,
+      "nu": 0.1,
+      "U": 0.025,
+      "steps": 4096,
+      "l2_relative": 0.002815079968285679,
+      "linf_over_U": 0.0020697712898254395,
+      "force_relative_error": 3.0755996704295845e-05,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-16-D3Q27-SRT-none-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "turbulence": "none",
+        "storage": "FP32"
+      },
+      "case": "poiseuille",
+      "H": 32,
+      "nu": 0.1,
+      "U": 0.0125,
+      "steps": 16384,
+      "l2_relative": 0.0008334700309848137,
+      "linf_over_U": 0.0006625503301620206,
+      "force_relative_error": 0.00012305006384868975,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-32-D3Q27-SRT-none-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "turbulence": "none",
+        "storage": "FP32"
+      },
+      "case": "couette",
+      "H": 8,
+      "nu": 0.1,
+      "U": 0.05,
+      "steps": 1024,
+      "l2_relative": 6.0156366569915305e-06,
+      "linf_over_U": 4.976987838800628e-06,
+      "force_relative_error": 1.2084841728016158e-05,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-8-D3Q27-SRT-none-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "turbulence": "none",
+        "storage": "FP32"
+      },
+      "case": "couette",
+      "H": 16,
+      "nu": 0.1,
+      "U": 0.025,
+      "steps": 4096,
+      "l2_relative": 2.831507551071877e-05,
+      "linf_over_U": 2.270936965947934e-05,
+      "force_relative_error": 0.00010186433792094828,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-16-D3Q27-SRT-none-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "turbulence": "none",
+        "storage": "FP32"
+      },
+      "case": "couette",
+      "H": 32,
+      "nu": 0.1,
+      "U": 0.0125,
+      "steps": 16384,
+      "l2_relative": 0.00011995218435664759,
+      "linf_over_U": 9.498745203020964e-05,
+      "force_relative_error": 0.0005176067352292978,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-32-D3Q27-SRT-none-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP16S"
+      },
+      "case": "poiseuille",
+      "H": 8,
+      "nu": 0.1,
+      "U": 0.05,
+      "steps": 1024,
+      "l2_relative": 0.023471845053264898,
+      "linf_over_U": 0.020862117409706227,
+      "force_relative_error": 0.006366729736328318,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-8-D3Q27-SRT-smagorinsky-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP16S"
+      },
+      "case": "poiseuille",
+      "H": 16,
+      "nu": 0.1,
+      "U": 0.025,
+      "steps": 4096,
+      "l2_relative": 0.04007183080537431,
+      "linf_over_U": 0.04137568175792708,
+      "force_relative_error": 0.026966094970703312,
+      "within_fp32_thresholds": false,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-16-D3Q27-SRT-smagorinsky-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP16S"
+      },
+      "case": "poiseuille",
+      "H": 32,
+      "nu": 0.1,
+      "U": 0.0125,
+      "steps": 16384,
+      "l2_relative": 0.1000815919247198,
+      "linf_over_U": 0.10235626995563518,
+      "force_relative_error": 0.07989501953125018,
+      "within_fp32_thresholds": false,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-32-D3Q27-SRT-smagorinsky-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP16S"
+      },
+      "case": "couette",
+      "H": 8,
+      "nu": 0.1,
+      "U": 0.05,
+      "steps": 1024,
+      "l2_relative": 0.005729627872473219,
+      "linf_over_U": 0.004720628261566176,
+      "force_relative_error": 0.022746413946151536,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-8-D3Q27-SRT-smagorinsky-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP16S"
+      },
+      "case": "couette",
+      "H": 16,
+      "nu": 0.1,
+      "U": 0.025,
+      "steps": 4096,
+      "l2_relative": 0.024693550612546765,
+      "linf_over_U": 0.019956178963184412,
+      "force_relative_error": 0.07503384351730326,
+      "within_fp32_thresholds": false,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-16-D3Q27-SRT-smagorinsky-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP16S"
+      },
+      "case": "couette",
+      "H": 32,
+      "nu": 0.1,
+      "U": 0.0125,
+      "steps": 16384,
+      "l2_relative": 0.07725012408736943,
+      "linf_over_U": 0.06187427043914798,
+      "force_relative_error": 0.34440362453460666,
+      "within_fp32_thresholds": false,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-32-D3Q27-SRT-smagorinsky-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP32"
+      },
+      "case": "poiseuille",
+      "H": 8,
+      "nu": 0.1,
+      "U": 0.05,
+      "steps": 1024,
+      "l2_relative": 0.016128103934772826,
+      "linf_over_U": 0.012976720929145924,
+      "force_relative_error": 1.1446575323877104e-05,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-8-D3Q27-SRT-smagorinsky-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP32"
+      },
+      "case": "poiseuille",
+      "H": 16,
+      "nu": 0.1,
+      "U": 0.025,
+      "steps": 4096,
+      "l2_relative": 0.004107122830178067,
+      "linf_over_U": 0.003303438425064087,
+      "force_relative_error": 2.665817737598774e-05,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-16-D3Q27-SRT-smagorinsky-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP32"
+      },
+      "case": "poiseuille",
+      "H": 32,
+      "nu": 0.1,
+      "U": 0.0125,
+      "steps": 16384,
+      "l2_relative": 0.0011685609318202637,
+      "linf_over_U": 0.0009759217500687756,
+      "force_relative_error": 0.00012568881114349143,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-32-D3Q27-SRT-smagorinsky-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP32"
+      },
+      "case": "couette",
+      "H": 8,
+      "nu": 0.1,
+      "U": 0.05,
+      "steps": 1024,
+      "l2_relative": 6.2593575276013675e-06,
+      "linf_over_U": 4.8503279686390455e-06,
+      "force_relative_error": 0.0019011795520780523,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-8-D3Q27-SRT-smagorinsky-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP32"
+      },
+      "case": "couette",
+      "H": 16,
+      "nu": 0.1,
+      "U": 0.025,
+      "steps": 4096,
+      "l2_relative": 2.3727889615031555e-05,
+      "linf_over_U": 1.9267201423686653e-05,
+      "force_relative_error": 0.0005556046962736093,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-16-D3Q27-SRT-smagorinsky-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP32"
+      },
+      "case": "couette",
+      "H": 32,
+      "nu": 0.1,
+      "U": 0.0125,
+      "steps": 16384,
+      "l2_relative": 0.00010413111677305348,
+      "linf_over_U": 8.384138345723935e-05,
+      "force_relative_error": 0.000535488128661915,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-32-D3Q27-SRT-smagorinsky-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "turbulence": "none",
+        "storage": "FP16S"
+      },
+      "case": "poiseuille",
+      "H": 8,
+      "nu": 0.1,
+      "U": 0.05,
+      "steps": 1024,
+      "l2_relative": 0.010025757387734152,
+      "linf_over_U": 0.010340407490730397,
+      "force_relative_error": 0.0075111389160158176,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-8-D3Q27-TRT-none-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "turbulence": "none",
+        "storage": "FP16S"
+      },
+      "case": "poiseuille",
+      "H": 16,
+      "nu": 0.1,
+      "U": 0.025,
+      "steps": 4096,
+      "l2_relative": 0.04277006209876898,
+      "linf_over_U": 0.044303610920906206,
+      "force_relative_error": 0.03268814086914081,
+      "within_fp32_thresholds": false,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-16-D3Q27-TRT-none-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "turbulence": "none",
+        "storage": "FP16S"
+      },
+      "case": "poiseuille",
+      "H": 32,
+      "nu": 0.1,
+      "U": 0.0125,
+      "steps": 16384,
+      "l2_relative": 0.14259128384869307,
+      "linf_over_U": 0.1482110917568208,
+      "force_relative_error": 0.11165237426757829,
+      "within_fp32_thresholds": false,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-32-D3Q27-TRT-none-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "turbulence": "none",
+        "storage": "FP16S"
+      },
+      "case": "couette",
+      "H": 8,
+      "nu": 0.1,
+      "U": 0.05,
+      "steps": 1024,
+      "l2_relative": 0.006833453287557098,
+      "linf_over_U": 0.005538962781429305,
+      "force_relative_error": 0.025798171758651536,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-8-D3Q27-TRT-none-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "turbulence": "none",
+        "storage": "FP16S"
+      },
+      "case": "couette",
+      "H": 16,
+      "nu": 0.1,
+      "U": 0.025,
+      "steps": 4096,
+      "l2_relative": 0.02779303304007162,
+      "linf_over_U": 0.022183701395988506,
+      "force_relative_error": 0.09334439039230326,
+      "within_fp32_thresholds": false,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-16-D3Q27-TRT-none-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "turbulence": "none",
+        "storage": "FP16S"
+      },
+      "case": "couette",
+      "H": 32,
+      "nu": 0.1,
+      "U": 0.0125,
+      "steps": 16384,
+      "l2_relative": 0.09431493011179151,
+      "linf_over_U": 0.07518782466650012,
+      "force_relative_error": 0.45426690578460666,
+      "within_fp32_thresholds": false,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-32-D3Q27-TRT-none-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "turbulence": "none",
+        "storage": "FP32"
+      },
+      "case": "poiseuille",
+      "H": 8,
+      "nu": 0.1,
+      "U": 0.05,
+      "steps": 1024,
+      "l2_relative": 9.11488675539007e-06,
+      "linf_over_U": 9.506940841785827e-06,
+      "force_relative_error": 6.88309470826126e-06,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-8-D3Q27-TRT-none-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "turbulence": "none",
+        "storage": "FP32"
+      },
+      "case": "poiseuille",
+      "H": 16,
+      "nu": 0.1,
+      "U": 0.025,
+      "steps": 4096,
+      "l2_relative": 1.5220603365413692e-05,
+      "linf_over_U": 1.5765428543063065e-05,
+      "force_relative_error": 1.7158687114909862e-05,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-16-D3Q27-TRT-none-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "turbulence": "none",
+        "storage": "FP32"
+      },
+      "case": "poiseuille",
+      "H": 32,
+      "nu": 0.1,
+      "U": 0.0125,
+      "steps": 16384,
+      "l2_relative": 0.00013297830586343258,
+      "linf_over_U": 0.00013855099678050653,
+      "force_relative_error": 0.00010498240590114946,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-32-D3Q27-TRT-none-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "turbulence": "none",
+        "storage": "FP32"
+      },
+      "case": "couette",
+      "H": 8,
+      "nu": 0.1,
+      "U": 0.05,
+      "steps": 1024,
+      "l2_relative": 2.975731373838362e-06,
+      "linf_over_U": 2.4363398552079696e-06,
+      "force_relative_error": 1.543760299663188e-05,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-8-D3Q27-TRT-none-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "turbulence": "none",
+        "storage": "FP32"
+      },
+      "case": "couette",
+      "H": 16,
+      "nu": 0.1,
+      "U": 0.025,
+      "steps": 4096,
+      "l2_relative": 2.8747830440378902e-05,
+      "linf_over_U": 2.3275613784817795e-05,
+      "force_relative_error": 0.00010186433792094828,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-16-D3Q27-TRT-none-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "turbulence": "none",
+        "storage": "FP32"
+      },
+      "case": "couette",
+      "H": 32,
+      "nu": 0.1,
+      "U": 0.0125,
+      "steps": 16384,
+      "l2_relative": 8.854246229621947e-05,
+      "linf_over_U": 7.113814353948422e-05,
+      "force_relative_error": 0.00033134222030620214,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-32-D3Q27-TRT-none-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP16S"
+      },
+      "case": "poiseuille",
+      "H": 8,
+      "nu": 0.1,
+      "U": 0.05,
+      "steps": 1024,
+      "l2_relative": 0.015463069717401237,
+      "linf_over_U": 0.01545470952987682,
+      "force_relative_error": 0.0077018737792970676,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-8-D3Q27-TRT-smagorinsky-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP16S"
+      },
+      "case": "poiseuille",
+      "H": 16,
+      "nu": 0.1,
+      "U": 0.025,
+      "steps": 4096,
+      "l2_relative": 0.041712775072325396,
+      "linf_over_U": 0.04324585199356093,
+      "force_relative_error": 0.030876159667968937,
+      "within_fp32_thresholds": false,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-16-D3Q27-TRT-smagorinsky-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP16S"
+      },
+      "case": "poiseuille",
+      "H": 32,
+      "nu": 0.1,
+      "U": 0.0125,
+      "steps": 16384,
+      "l2_relative": 0.12382939814928375,
+      "linf_over_U": 0.12863819301128399,
+      "force_relative_error": 0.0948677062988283,
+      "within_fp32_thresholds": false,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-32-D3Q27-TRT-smagorinsky-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP16S"
+      },
+      "case": "couette",
+      "H": 8,
+      "nu": 0.1,
+      "U": 0.05,
+      "steps": 1024,
+      "l2_relative": 0.007272037257232703,
+      "linf_over_U": 0.005826070904731764,
+      "force_relative_error": 0.03190168738365153,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-8-D3Q27-TRT-smagorinsky-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP16S"
+      },
+      "case": "couette",
+      "H": 16,
+      "nu": 0.1,
+      "U": 0.025,
+      "steps": 4096,
+      "l2_relative": 0.028457404838501395,
+      "linf_over_U": 0.022885993123054546,
+      "force_relative_error": 0.11165493726730324,
+      "within_fp32_thresholds": false,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-16-D3Q27-TRT-smagorinsky-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP16S"
+      },
+      "case": "couette",
+      "H": 32,
+      "nu": 0.1,
+      "U": 0.0125,
+      "steps": 16384,
+      "l2_relative": 0.08991621484439785,
+      "linf_over_U": 0.07180500030517581,
+      "force_relative_error": 0.38102471828460666,
+      "within_fp32_thresholds": false,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-32-D3Q27-TRT-smagorinsky-FP16S\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP32"
+      },
+      "case": "poiseuille",
+      "H": 8,
+      "nu": 0.1,
+      "U": 0.05,
+      "steps": 1024,
+      "l2_relative": 0.005319292003168067,
+      "linf_over_U": 0.004864007234573475,
+      "force_relative_error": 5.610287189677931e-06,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-8-D3Q27-TRT-smagorinsky-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP32"
+      },
+      "case": "poiseuille",
+      "H": 16,
+      "nu": 0.1,
+      "U": 0.025,
+      "steps": 4096,
+      "l2_relative": 0.0013854243412665921,
+      "linf_over_U": 0.0012665241956710815,
+      "force_relative_error": 1.9145508607480707e-05,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-16-D3Q27-TRT-smagorinsky-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP32"
+      },
+      "case": "poiseuille",
+      "H": 32,
+      "nu": 0.1,
+      "U": 0.0125,
+      "steps": 16384,
+      "l2_relative": 0.00046951941767233254,
+      "linf_over_U": 0.00044730305671702997,
+      "force_relative_error": 9.892880916614887e-05,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\poiseuille-32-D3Q27-TRT-smagorinsky-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP32"
+      },
+      "case": "couette",
+      "H": 8,
+      "nu": 0.1,
+      "U": 0.05,
+      "steps": 1024,
+      "l2_relative": 4.0808840662357434e-06,
+      "linf_over_U": 3.2857060432850416e-06,
+      "force_relative_error": 0.0019000619649885138,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-8-D3Q27-TRT-smagorinsky-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP32"
+      },
+      "case": "couette",
+      "H": 16,
+      "nu": 0.1,
+      "U": 0.025,
+      "steps": 4096,
+      "l2_relative": 2.5142210804902493e-05,
+      "linf_over_U": 1.9937753677409797e-05,
+      "force_relative_error": 0.0005876421928403818,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-16-D3Q27-TRT-smagorinsky-FP32\\results"
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP32"
+      },
+      "case": "couette",
+      "H": 32,
+      "nu": 0.1,
+      "U": 0.0125,
+      "steps": 16384,
+      "l2_relative": 8.710080597364319e-05,
+      "linf_over_U": 6.99907541275302e-05,
+      "force_relative_error": 0.0004788637161252939,
+      "within_fp32_thresholds": true,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260922T014248610040Z\\couette-32-D3Q27-TRT-smagorinsky-FP32\\results"
+    }
+  ],
+  "fp16_profiles_outside_fp32_thresholds": 32,
+  "performance": [
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "turbulence": "none",
+        "storage": "FP16S"
+      },
+      "cells": [
+        64,
+        32,
+        64
+      ],
+      "steps": 500,
+      "process_seconds": [
+        1.2849220999050885,
+        0.745422099949792
+      ],
+      "warm_seconds": 0.745422099949792,
+      "device_field_bytes": 8781824
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "turbulence": "none",
+        "storage": "FP32"
+      },
+      "cells": [
+        64,
+        32,
+        64
+      ],
+      "steps": 500,
+      "process_seconds": [
+        1.3191800999920815,
+        0.6874013999477029
+      ],
+      "warm_seconds": 0.6874013999477029,
+      "device_field_bytes": 13762560
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP16S"
+      },
+      "cells": [
+        64,
+        32,
+        64
+      ],
+      "steps": 500,
+      "process_seconds": [
+        1.298840600065887,
+        0.70548089989461
+      ],
+      "warm_seconds": 0.70548089989461,
+      "device_field_bytes": 8781824
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP32"
+      },
+      "cells": [
+        64,
+        32,
+        64
+      ],
+      "steps": 500,
+      "process_seconds": [
+        1.2392701000208035,
+        0.6536179999820888
+      ],
+      "warm_seconds": 0.6536179999820888,
+      "device_field_bytes": 13762560
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "turbulence": "none",
+        "storage": "FP16S"
+      },
+      "cells": [
+        64,
+        32,
+        64
+      ],
+      "steps": 500,
+      "process_seconds": [
+        1.2597797999624163,
+        0.7022152999415994
+      ],
+      "warm_seconds": 0.7022152999415994,
+      "device_field_bytes": 8781824
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "turbulence": "none",
+        "storage": "FP32"
+      },
+      "cells": [
+        64,
+        32,
+        64
+      ],
+      "steps": 500,
+      "process_seconds": [
+        1.3037304000463337,
+        0.7075686999596655
+      ],
+      "warm_seconds": 0.7075686999596655,
+      "device_field_bytes": 13762560
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP16S"
+      },
+      "cells": [
+        64,
+        32,
+        64
+      ],
+      "steps": 500,
+      "process_seconds": [
+        1.2951753999805078,
+        0.6909726000158116
+      ],
+      "warm_seconds": 0.6909726000158116,
+      "device_field_bytes": 8781824
+    },
+    {
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP32"
+      },
+      "cells": [
+        64,
+        32,
+        64
+      ],
+      "steps": 500,
+      "process_seconds": [
+        1.3089026999659836,
+        0.7021004999987781
+      ],
+      "warm_seconds": 0.7021004999987781,
+      "device_field_bytes": 13762560
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "turbulence": "none",
+        "storage": "FP16S"
+      },
+      "cells": [
+        64,
+        32,
+        64
+      ],
+      "steps": 500,
+      "process_seconds": [
+        1.5083198000211269,
+        0.6951167000224814
+      ],
+      "warm_seconds": 0.6951167000224814,
+      "device_field_bytes": 10878976
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "turbulence": "none",
+        "storage": "FP32"
+      },
+      "cells": [
+        64,
+        32,
+        64
+      ],
+      "steps": 500,
+      "process_seconds": [
+        1.4809146999614313,
+        0.6774969000834972
+      ],
+      "warm_seconds": 0.6774969000834972,
+      "device_field_bytes": 17956864
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP16S"
+      },
+      "cells": [
+        64,
+        32,
+        64
+      ],
+      "steps": 500,
+      "process_seconds": [
+        1.5249651999911293,
+        0.6900721999118105
+      ],
+      "warm_seconds": 0.6900721999118105,
+      "device_field_bytes": 10878976
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP32"
+      },
+      "cells": [
+        64,
+        32,
+        64
+      ],
+      "steps": 500,
+      "process_seconds": [
+        1.5773490999126807,
+        0.7117547000525519
+      ],
+      "warm_seconds": 0.7117547000525519,
+      "device_field_bytes": 17956864
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "turbulence": "none",
+        "storage": "FP16S"
+      },
+      "cells": [
+        64,
+        32,
+        64
+      ],
+      "steps": 500,
+      "process_seconds": [
+        1.4955829000100493,
+        0.6680837000021711
+      ],
+      "warm_seconds": 0.6680837000021711,
+      "device_field_bytes": 10878976
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "turbulence": "none",
+        "storage": "FP32"
+      },
+      "cells": [
+        64,
+        32,
+        64
+      ],
+      "steps": 500,
+      "process_seconds": [
+        1.5272294000023976,
+        0.6905948999337852
+      ],
+      "warm_seconds": 0.6905948999337852,
+      "device_field_bytes": 17956864
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP16S"
+      },
+      "cells": [
+        64,
+        32,
+        64
+      ],
+      "steps": 500,
+      "process_seconds": [
+        1.5268219999270514,
+        0.6871387999271974
+      ],
+      "warm_seconds": 0.6871387999271974,
+      "device_field_bytes": 10878976
+    },
+    {
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "turbulence": "smagorinsky",
+        "storage": "FP32"
+      },
+      "cells": [
+        64,
+        32,
+        64
+      ],
+      "steps": 500,
+      "process_seconds": [
+        1.5524748000316322,
+        0.7225701999850571
+      ],
+      "warm_seconds": 0.7225701999850571,
+      "device_field_bytes": 17956864
+    }
+  ],
+  "remote_reports": {
+    "p1": "config-validation/20260922T013751Z/report.json",
+    "p2": "p2-validation/20260922T013730178226Z/report.json",
+    "storage": "storage-validation/20260922T014624590941Z/report.json",
+    "first": "p3-validation/20260922T014248610040Z/report.json",
+    "final": "p3-validation/20260922T015005051696Z/report.json"
+  },
+  "raw_sha256": {
+    "p1.json": "09c038b673c81971062d7480494ac74465f5aae07a997046d2a47fdb117eacb7",
+    "matrix-first-failed.json": "57d180c9ca54995827f4a8ce2303758288d05b1c7cd518812fca2da4d7155278",
+    "final.json": "b7943006daff3835e0bfc4d52578c928d5b9aac0e03b6974c765d4903d60a762",
+    "p1-baseline.json": "0d09d22a2a78b65c5dea01fcdaa11f13900d56f5e400b5f1bf437bebc7e66e0a",
+    "p2.json": "33453de61a09115dc2452a9788fcd2e05bcea67df1ccd58bd85b464118c1b29a",
+    "storage.json": "2ccc8a221a2b872624a731bd2f0df562b7c0fc9218b3c43de78a74b0537f02f9"
+  }
+}
