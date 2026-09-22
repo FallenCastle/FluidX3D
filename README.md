@@ -1,5 +1,7 @@
 # FluidX3D
 
+本 fork 的配置驱动命令行版本请先阅读 **[中文使用手册（P3）](docs/user-manual-zh.md)**：编译、全部 JSON 字段及默认值、STL、运行命令、参数扫描和输出说明。下文保留上游项目介绍。
+
 The fastest and most memory efficient lattice Boltzmann CFD software, running on all GPUs and CPUs via [OpenCL](https://github.com/ProjectPhysX/OpenCL-Wrapper "OpenCL-Wrapper"). Free for non-commercial use.
 
 <a href="https://youtu.be/-MkRBeQkLk8"><img src="https://img.youtube.com/vi/o3TPN142HxM/maxresdefault.jpg" width="50%"></img></a><a href="https://youtu.be/1z5-ddsmAag"><img src="https://img.youtube.com/vi/1z5-ddsmAag/maxresdefault.jpg" width="50%"></img></a><br>
