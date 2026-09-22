@@ -1,5 +1,7 @@
 # 配置驱动的命令行算例
 
+P3 已扩展运行时数值模型选择，当前入口见 [P3 模型手册](config-runner-p3.md)。下文保留原阶段功能说明。
+
 本分支提供一个固定能力的 `FluidX3D.exe`，通过 JSON 和二进制 STL 切换静态单相流算例。支持格子单位和 SI；固定 D3Q19/SRT/SUBGRID，P2 支持通过 `solver.storage` 选择 FP16S（默认）或 FP32；两者算术均为 FP32。无 GRAPHICS、PNG 或交互窗口，使用 VTK 检查几何和流场。
 
 设计契约见 [config-runner-design.md](config-runner-design.md)，格式定义见 [case.schema.json](../schemas/case.schema.json)。C++ 执行器还会检查 schema 无法表达的周期配对、边界冲突、单位转换、几何范围和设备资源。OpenCL 内核仍在程序启动时根据网格编译，无须重新构建 C++ 可执行文件。
