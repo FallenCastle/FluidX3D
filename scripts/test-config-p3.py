@@ -26,6 +26,7 @@ def main():
     parser.add_argument('--workspace-root', required=True, type=Path)
     parser.add_argument('--build-name', default='config-runner-p3')
     parser.add_argument('--device', default='0')
+    parser.add_argument('--matrix-reference', type=Path, help='Reuse a complete matrix report with the exact same EXE hash')
     args = parser.parse_args()
     if os.name != 'nt':
         parser.error('Run on Windows NUC only')
@@ -107,7 +108,16 @@ def main():
         combined['analysis'].update(start_step=0,every=7)
         combined['analysis']['forces'].append({'id':'cube','target':'geometry:cube'})
         combinations=list(itertools.product(['D3Q19','D3Q27'],['SRT','TRT'],['none','smagorinsky'],['FP16S','FP32']))
-        for lattice,collision,turbulence,storage in combinations:
+        if args.matrix_reference:
+            reference=read(args.matrix_reference)
+            assert reference['executable_sha256']==report['executable_sha256']
+            assert len(reference['matrix'])==16 and all(x['status']=='succeeded' for x in reference['matrix'])
+            assert len(reference['profiles'])==96 and len(reference['performance'])==16
+            for key in ['matrix','profiles','performance']:
+                report[key]=reference[key]
+            report['matrix_reference']={'path':str(args.matrix_reference),'sha256':sha(args.matrix_reference),
+                                        'original_status':reference['status'], 'original_error':reference.get('error')}
+        for lattice,collision,turbulence,storage in ([] if args.matrix_reference else combinations):
             model=dict(lattice=lattice,collision=collision,turbulence=turbulence,storage=storage)
             tag='-'.join([lattice,collision,turbulence,storage])
             c=copy.deepcopy(periodic); c['solver']=model
@@ -195,22 +205,25 @@ def main():
             difference=max(abs(a-b) for a,b in zip(vtk(srt/f'{field}-000000037.vtk')['values'],vtk(trt/f'{field}-000000037.vtk')['values']))
             assert difference<3e-6,(field,difference)
             report['comparisons'].append({'name':'SRT/TRT degeneration '+field,'max_difference':difference})
-        # A shear wave with wave vector (1,1,1), transverse velocity (1,-1,0).
-        c=copy.deepcopy(periodic);c.pop('analysis');n=24;steps=32;amplitude=.001
-        c['domain']['cells']=[n]*3;c['fluid']['nu']=.1
-        c['solver']={'lattice':'D3Q27','collision':'TRT','turbulence':'none','storage':'FP32'}
-        c['run']={'steps':steps,'monitor_every':steps};c['output']['vtk_every']=0
-        regions=[];initial=[]
-        for z,y,x in itertools.product(range(n),repeat=3):
-            v=amplitude*math.sin(2*math.pi*(x+y+z+1.5)/n);initial.extend([v,-v,0])
-            regions.append({'box_min':[x,y,z],'box_max':[x+1,y+1,z+1],'rho':1,'velocity':[v,-v,0]})
-        c['initial']={'velocity':[0,0,0],'regions':regions}
-        r,_=invoke('three-dimensional-shear-wave',c)
-        decay=math.exp(-.1*3*(2*math.pi/n)**2*steps)
-        actual=vtk(r/f'u-{steps:09d}.vtk')['values'];theory=[v*decay for v in initial]
-        error=math.sqrt(sum((a-b)**2 for a,b in zip(actual,theory))/sum(v*v for v in theory))
-        assert error<.03,error
-        report['shear_wave']={'N':n,'steps':steps,'l2_relative':error,'threshold':.03}
+        # Fixed-physical-time diffusive refinement of a transverse (1,1,1) shear wave.
+        report['shear_wave']=[]
+        for n in [16,24,32]:
+            c=copy.deepcopy(periodic);c.pop('analysis');steps=round(32*(n/24)**2);amplitude=.001*24/n
+            c['domain']['cells']=[n]*3;c['fluid']['nu']=.1
+            c['solver']={'lattice':'D3Q27','collision':'TRT','turbulence':'none','storage':'FP32'}
+            c['run']={'steps':steps,'monitor_every':steps};c['output']['vtk_every']=0
+            regions=[];initial=[]
+            for z,y,x in itertools.product(range(n),repeat=3):
+                v=amplitude*math.sin(2*math.pi*(x+y+z+1.5)/n);initial.extend([v,-v,0])
+                regions.append({'box_min':[x,y,z],'box_max':[x+1,y+1,z+1],'rho':1,'velocity':[v,-v,0]})
+            c['initial']={'velocity':[0,0,0],'regions':regions}
+            r,_=invoke('three-dimensional-shear-wave-'+str(n),c)
+            decay=math.exp(-.1*3*(2*math.pi/n)**2*steps)
+            actual=vtk(r/f'u-{steps:09d}.vtk')['values'];theory=[v*decay for v in initial]
+            error=math.sqrt(sum((a-b)**2 for a,b in zip(actual,theory))/sum(v*v for v in theory))
+            report['shear_wave'].append({'N':n,'steps':steps,'amplitude':amplitude,'l2_relative':error,'results':str(r)})
+        errors=[x['l2_relative'] for x in report['shear_wave']]
+        assert errors[0]>errors[1]>errors[2] and errors[-1]<.03,errors
         # SI equivalence includes voxelization, moving wall, body force and group forces.
         c=copy.deepcopy(combined);c['solver']={'lattice':'D3Q27','collision':'TRT','turbulence':'none','storage':'FP32'}
         lattice,_=invoke('si-reference',c)
