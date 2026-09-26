@@ -1684,7 +1684,8 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
                 update_dynamic_geometry(lbm, c, dynamic_bodies, static_cast<double>(lbm.get_t()),
                                         dynamic_mass_target, dynamic_energy_target);
             } else {
-                project_closed_surface_mass(lbm, dynamic_mass_target, "Closed-domain");
+                if (c.model.free_surface && std::isfinite(dynamic_mass_target))
+                    project_closed_surface_mass(lbm, dynamic_mass_target, "Closed-domain");
                 if (std::isfinite(dynamic_energy_target)) {
                     dynamic_energy_target += dynamic_energy_source_per_step;
                     project_closed_sensible_energy(lbm, c, dynamic_energy_target, "Closed-domain");
