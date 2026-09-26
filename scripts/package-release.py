@@ -114,19 +114,27 @@ def examples(repo, workspace, root):
             target = root / 'cases' / 'models' / parts[0] / Path(*parts[2:])
             if sha(target) != item['sha256']:
                 raise ValueError(f'External model differs from recorded source: {item["path"]}')
+    copy_tree(repo / 'configs' / 'assets', root / 'cases' / 'configs' / 'assets')
+    copy_tree(repo / 'configs' / 'reference', root / 'cases' / 'configs' / 'reference')
     rewritten = []
     for source in sorted((repo / 'configs').glob('*.json')):
         target = root / 'cases' / 'configs' / source.name
         config = read(source)
         for geometry in config.get('geometry', []):
             original = (source.parent / geometry['file']).resolve()
-            relative = original.relative_to(workspace / 'workingdir')
-            if len(relative.parts) < 3 or relative.parts[1] != 'assets':
-                raise ValueError(f'Unmapped example geometry: {original}')
-            model = root / 'cases' / 'models' / relative.parts[0] / Path(*relative.parts[2:])
-            if sha(model) != sha(original):
-                raise ValueError(f'Example model hash mismatch: {original}')
-            geometry['file'] = Path(os.path.relpath(model, target.parent)).as_posix()
+            if original.is_relative_to((repo / 'configs').resolve()):
+                tracked = original.relative_to((repo / 'configs').resolve())
+                model = root / 'cases' / 'configs' / tracked
+                if sha(model) != sha(original):
+                    raise ValueError(f'Example asset hash mismatch: {original}')
+            else:
+                relative = original.relative_to(workspace / 'workingdir')
+                if len(relative.parts) < 3 or relative.parts[1] != 'assets':
+                    raise ValueError(f'Unmapped example geometry: {original}')
+                model = root / 'cases' / 'models' / relative.parts[0] / Path(*relative.parts[2:])
+                if sha(model) != sha(original):
+                    raise ValueError(f'Example model hash mismatch: {original}')
+                geometry['file'] = Path(os.path.relpath(model, target.parent)).as_posix()
             rewritten.append({'config': source.name, 'original_path': str(original),
                               'package_path': geometry['file'], 'sha256': sha(model)})
         write(target, config)

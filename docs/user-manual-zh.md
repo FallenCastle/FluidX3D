@@ -1,10 +1,10 @@
-# Solver-IBM V1.0.0 使用手册
+# Solver-IBM V2.0.0 使用手册
 
-本手册面向基于 FluidX3D 开发的 **Solver-IBM V1.0.0**，覆盖编译、JSON 配置、STL、命令行运行和结果检查。修改配置中的模型、参数、网格、边界或 STL 后，可直接复用同一个 EXE；OpenCL 内核仍会在运行时由设备驱动编译或从驱动缓存加载。
+本手册面向基于 FluidX3D 开发的 **Solver-IBM V2.0.0**，覆盖流固共轭传热、自由液面、规定运动 STL、编译、JSON 配置、命令行运行和结果检查。三项新增能力可分别、两两或同时启用；修改配置中的模型、参数、网格、边界、运动或 STL 后，可直接复用同一个 EXE。OpenCL 内核仍会在运行时由设备驱动编译或从驱动缓存加载。
 
-正式版本由 Git 标签 `v1.0.0` 固定；产品版本的唯一代码来源为 `src/version.hpp`。发布包的 `manifest.json` 和构建记录 `build.json` 保存具体提交、源码树和可执行文件 SHA256。`Solver-IBM.exe --version` 查询程序版本；`schema_version: 1` 仍表示 JSON 配置格式版本，与产品版本号分开管理。项目仓库和 NUC 工作目录仍沿用现有 `FluidX3D` 路径。
+正式版本由 Git 标签 `v2.0.0` 固定；产品版本的唯一代码来源为 `src/version.hpp`。发布包的 `manifest.json` 和构建记录 `build.json` 保存具体提交、源码树和可执行文件 SHA256。`Solver-IBM.exe --version` 查询程序版本；`schema_version: 1` 仍表示 JSON 配置格式版本，与产品版本号分开管理。项目仓库和 NUC 工作目录仍沿用现有 `FluidX3D` 路径。
 
-当前支持：单 GPU、三维单相流、静态 STL 并集、常量体积力、固定位置的运动壁面、探针及受力统计；模型组合为 D3Q19/D3Q27 × SRT/TRT × Smagorinsky 开/关 × FP16S/FP32，共 16 种。图形模式、运动 STL、自由液面、热模型、多 GPU、断点续算未作为本配置接口开放。
+当前支持单 GPU 三维流动、静态与规定运动的多个刚体 STL、流固共轭传热、Boussinesq 自然对流、单液相自由液面、表面张力、固定静态接触角以及液体注入/排出。新增物理功能使用 FP32，可选 D3Q19/D3Q27 × SRT/TRT × Smagorinsky 开/关，共 8 种组合；未启用新增功能的旧配置继续支持 FP16S/FP32 共 16 种组合。气体按固定环境压强处理；本版不求解气相运动、相变、变形、碰撞或流固受力驱动的自由运动。
 
 ## 目录
 
@@ -34,7 +34,7 @@ Mac 用于编辑代码、配置和文档，并通过 Git 提交、推送。**Sol
 | 正式 EXE 和构建记录 | `bin/<BuildName>/Solver-IBM.exe`、`build.json` |
 | 算例运行记录 | `workingdir/<CaseName>/<RunId>/` |
 | 每次运行的 EXE 快照 | `bin/_runs/<CaseName>/<RunId>/` |
-| V1.0.0 正式发布归档 | `package/V1.0.0/`，发布后不在其中写入新结果 |
+| V2.0.0 正式发布归档 | `package/V2.0.0/`，发布后不在其中写入新结果 |
 
 后文 PowerShell 示例均在 **NUC 的 64 位 Windows PowerShell** 中执行。若 SSH 登录后进入 `cmd.exe`，先输入 `powershell.exe -NoProfile`。PowerShell 中行尾反引号 `` ` `` 表示续行，其后不能再有空格。
 
@@ -75,7 +75,7 @@ Set-Location "$root\src"
 git status --short --branch
 git remote -v
 git branch --show-current
-# 开发仓库拉取当前工作分支；精确复现正式发布请使用 v1.0.0 标签或第 2.5 节的 bundle。
+# 开发仓库拉取当前工作分支；精确复现正式发布请使用 v2.0.0 标签或第 2.5 节的 bundle。
 git pull --ff-only
 if ($LASTEXITCODE -ne 0) { throw 'Git pull failed.' }
 git rev-parse HEAD
@@ -89,19 +89,19 @@ git rev-parse HEAD
 $root = 'F:\01-Project\Opensource\01-FluidX3D'
 Set-Location "$root\src"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-nuc.ps1 `
-  -WorkspaceRoot $root -BuildName solver-ibm-v1.0.0 -PlatformToolset v142
+  -WorkspaceRoot $root -BuildName solver-ibm-v2.0.0 -PlatformToolset v142
 if ($LASTEXITCODE -ne 0) { throw 'Build failed; inspect the build log.' }
 
-$build = Get-Content "$root\bin\solver-ibm-v1.0.0\build.json" -Raw | ConvertFrom-Json
+$build = Get-Content "$root\bin\solver-ibm-v2.0.0\build.json" -Raw | ConvertFrom-Json
 $build | Select-Object status, gitCommit, sourceTree, executablePath, executableSha256
 ```
 
-构建脚本执行 `Release|x64` 的 `Rebuild`，检查工具链和输出路径，将 EXE 发布到 `bin/solver-ibm-v1.0.0/`。详细日志位于 `workingdir/_builds/<BuildId>/msbuild.log`。成功应同时满足脚本正常退出、`build.json.status = succeeded`、EXE 哈希与记录一致，不能仅凭 EXE 存在判断。
+构建脚本执行 `Release|x64` 的 `Rebuild`，检查工具链和输出路径，将 EXE 发布到 `bin/solver-ibm-v2.0.0/`。详细日志位于 `workingdir/_builds/<BuildId>/msbuild.log`。成功应同时满足脚本正常退出、`build.json.status = succeeded`、EXE 哈希与记录一致，不能仅凭 EXE 存在判断。
 
 | `build-nuc.ps1` 参数 | 可用值 / 约束 | 缺省值 |
 |---|---|---|
 | `-WorkspaceRoot` | Windows 工作根目录，输出写入其 `bin`、`workingdir` | 脚本所在源码仓库的父目录 |
-| `-BuildName` | 以字母或数字开头，后续为字母、数字、`.`、`_`、`-`；为兼容运行脚本，使用不超过 64 字符的非 Windows 保留名且不以点结尾 | `solver-ibm-v1.0.0`；建议仍显式填写 |
+| `-BuildName` | 以字母或数字开头，后续为字母、数字、`.`、`_`、`-`；为兼容运行脚本，使用不超过 64 字符的非 Windows 保留名且不以点结尾 | `solver-ibm-v2.0.0`；建议仍显式填写 |
 | `-PlatformToolset` | `v` 加数字，且必须实际安装，如 `v142`、`v143` | `v142` |
 
 同一 `BuildName` 重建会替换该名称的正式产物，历史构建日志和历史运行快照保留。比较工具集或代码版本时使用不同 `BuildName`。仅改变 JSON/STL 无需重建；改变 C++ 或构建选项后需要重建。
@@ -109,7 +109,7 @@ $build | Select-Object status, gitCommit, sourceTree, executablePath, executable
 ### 2.3 查询能力与设备
 
 ```powershell
-$exe = "$root\bin\solver-ibm-v1.0.0\Solver-IBM.exe"
+$exe = "$root\bin\solver-ibm-v2.0.0\Solver-IBM.exe"
 & $exe --version
 & $exe --help
 & $exe --capabilities
@@ -123,7 +123,7 @@ if ($gpu.Count -ne 1) { throw 'Inspect the device list and select the intended O
 $deviceId = [int]$gpu[0].id
 ```
 
-`--device` 使用 **OpenCL 设备编号**，不能用 `nvidia-smi` 编号代替。上例按本 NUC 的 RTX 3060 名称选择；更换硬件时按实际列表修改筛选条件。`--version` 输出 `Solver-IBM 1.0.0`。`--capabilities` 返回 JSON，其中 `product`、`version` 标识产品，`upstream` 保留来源，`defaults` 是模型默认值，`parameters` 是条件参数范围，`model_device_bytes_per_cell` 是各模型的字段内存估算。
+`--device` 使用 **OpenCL 设备编号**，不能用 `nvidia-smi` 编号代替。上例按本 NUC 的 RTX 3060 名称选择；更换硬件时按实际列表修改筛选条件。`--version` 输出 `Solver-IBM 2.0.0`。`--capabilities` 返回 JSON，其中 `product`、`version` 标识产品，`upstream` 保留来源，`defaults` 是模型默认值，`parameters` 是条件参数范围，`model_device_bytes_per_cell` 是各模型的字段内存估算。
 
 ### 2.4 校验并运行第一个算例
 
@@ -134,7 +134,7 @@ $deviceId = [int]$gpu[0].id
 if ($LASTEXITCODE -ne 0) { throw 'Configuration validation failed.' }
 
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-nuc.ps1 `
-  -WorkspaceRoot $root -BuildName solver-ibm-v1.0.0 -CaseName periodic-demo `
+  -WorkspaceRoot $root -BuildName solver-ibm-v2.0.0 -CaseName periodic-demo `
   -ConfigPath "$root\src\configs\periodic-lattice.json" -DeviceId $deviceId `
   -TimeoutSeconds 900
 if ($LASTEXITCODE -ne 0) { throw 'Run failed; inspect run.json and logs.' }
@@ -144,13 +144,13 @@ if ($LASTEXITCODE -ne 0) { throw 'Run failed; inspect run.json and logs.' }
 
 ### 2.5 使用正式发布包
 
-V1.0.0 完整归档位于 `F:\01-Project\Opensource\01-FluidX3D\package\V1.0.0`。已有可执行文件，无需重新编译。包内 `cases/configs/` 保存可移植配置，`cases/models/` 保存全部已有模型输入；模型目录还包含未完成几何准备的素材，不表示每个模型都已通过计算验收。完整内容及限制见 [V1.0.0 发布说明](releases/V1.0.0.md)。
+V2.0.0 完整归档位于 `F:\01-Project\Opensource\01-FluidX3D\package\V2.0.0`。已有可执行文件，无需重新编译。包内 `cases/configs/` 保存可移植配置，`cases/models/` 保存全部已有模型输入；模型目录还包含未完成几何准备的素材，不表示每个模型都已通过计算验收。完整内容及限制见 [V2.0.0 发布说明](releases/V2.0.0.md)。
 
 在 NUC 上运行包内配置：
 
 ```powershell
 $root = 'F:\01-Project\Opensource\01-FluidX3D'
-$package = "$root\package\V1.0.0"
+$package = "$root\package\V2.0.0"
 $exe = "$package\bin\Solver-IBM.exe"
 & $exe --version
 & $exe --list-devices
@@ -172,16 +172,16 @@ if ($LASTEXITCODE -ne 0) { throw 'Packaged run failed; inspect the run record.' 
 
 ```powershell
 $root = 'F:\01-Project\Opensource\01-FluidX3D'
-$package = "$root\package\V1.0.0"
-$rebuild = "$root\workingdir\rebuild-v1.0.0-" + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')
+$package = "$root\package\V2.0.0"
+$rebuild = "$root\workingdir\rebuild-v2.0.0-" + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')
 New-Item -ItemType Directory -Path $rebuild | Out-Null
 git clone "$package\source.git.bundle" "$rebuild\src"
 if ($LASTEXITCODE -ne 0) { throw 'Bundle clone failed.' }
-git -C "$rebuild\src" checkout --detach v1.0.0
+git -C "$rebuild\src" checkout --detach v2.0.0
 if ($LASTEXITCODE -ne 0) { throw 'Release tag checkout failed.' }
 powershell.exe -NoProfile -ExecutionPolicy Bypass `
   -File "$rebuild\src\scripts\build-nuc.ps1" `
-  -WorkspaceRoot $rebuild -BuildName solver-ibm-v1.0.0 -PlatformToolset v142
+  -WorkspaceRoot $rebuild -BuildName solver-ibm-v2.0.0 -PlatformToolset v142
 if ($LASTEXITCODE -ne 0) { throw 'Release rebuild failed.' }
 ```
 
@@ -221,7 +221,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Release rebuild failed.' }
 | `solver` | 模型选择对象，见 4.2 | 省略等同 `{}`，启用全部模型默认值 |
 | `units` | 单位对象，见 4.3 | 必填，无默认值 |
 | `domain` | 计算域对象，见 4.4 | 必填，无默认值 |
-| `fluid` | 流体和体积力对象，见 4.5 | 必填，无默认值 |
+| `fluid` | 流体密度、黏度和旧式常量体积力对象，见 4.5 | 必填，无默认值 |
+| `physics` | 重力、共轭传热和自由液面对象，见 4.12 | 无新增物理时可省略 |
 | `initial` | 初始条件对象，见 4.6 | 必填，无默认值 |
 | `geometry` | STL 对象数组，见 4.7 | 必填；无 STL 时写 `[]` |
 | `boundaries` | 边界对象数组，见 4.8 | 必填，必须声明全部六面 |
@@ -242,7 +243,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Release rebuild failed.' }
 
 Cs、Λ 无量纲，不随 SI 换算。关闭 Smagorinsky 时写 `"turbulence":"none"` 并省略 `smagorinsky_constant`，不能用 `Cs=0` 关闭。SRT 时省略 `trt_magic_parameter`。默认 Cs 保留原内核系数 `0.76421222f`；自定义值使用 `18*sqrt(2)*Cs²`，该系数必须能表示为正的有限 FP32。TRT 基础偶、奇松弛率还必须满足有限且严格处于 `(0,2)`，因此仅满足 Λ 范围并不保证任意黏度组合都被接受。
 
-**省略 `solver` 会开启 Smagorinsky，并使用 FP16S。** 如需关闭亚格子模型，应明确写 `none`。P3 验收已发现 FP16S 在弱体积力、较细通道网格上的量化误差；需做精度比较时可显式选 FP32，具体结果见 [P3 验收记录](validation/config-runner-p3-2026-09-22.md)。
+**省略 `solver` 会开启 Smagorinsky，并使用 FP16S。** 如需关闭亚格子模型，应明确写 `none`。启用 `physics.thermal`、`physics.free_surface` 或任意 `geometry[].motion` 时必须显式写 `"storage":"FP32"`；这三类功能不接受 FP16S。P3 验收已发现 FP16S 在弱体积力、较细通道网格上的量化误差；需做精度比较时可显式选 FP32，具体结果见 [P3 验收记录](validation/config-runner-p3-2026-09-22.md)。
 
 ### 4.3 `units`：格子单位与 SI
 
@@ -323,6 +324,8 @@ origin + ([i,j,k] + [0.5,0.5,0.5]) * dx
 
 `body_force` 是**单位体积上的力**，不是加速度；已知加速度 `a` 时，按目标物理定义填写 `f = rho*a`。当前字段是固定三元常量，不能提供随时间、坐标变化的表达式或数组场。
 
+重力应写在 `physics.gravity`，其输入是加速度，程序会按流体密度转换为基础体积力，并在热模型中同时用作 Boussinesq 浮力方向。`fluid.body_force` 适合额外的压降驱动力；两者存在时相加。
+
 ### 4.6 `initial`：初始场与局部覆盖
 
 | 字段 | 可用值 / 范围 | 缺省值 |
@@ -334,10 +337,15 @@ origin + ([i,j,k] + [0.5,0.5,0.5]) * dx
 | `initial.regions[].box_max` | 三元向量，每方向不得小于对应 `box_min` | 每个区域必填 |
 | `initial.regions[].rho` | 正数，格子密度或 kg/m³ | 每个区域必填，不继承全域值 |
 | `initial.regions[].velocity` | 三元向量，格子速度或 m/s | 每个区域必填，不继承全域值 |
+| `initial.temperature` | 正数，格子温标或 K | 启用热模型时可覆盖 `physics.thermal.initial_temperature` |
+| `initial.regions[].temperature` | 正数，格子温标或 K | 可选；仅热模型允许 |
+| `initial.liquid_regions` | 初始液体区域数组 | 自由液面必需，除非存在 `liquid_inlet` |
+| `initial.liquid_regions[].shape` | `"box"`、`"sphere"`、`"stl"` | 省略为 `box` |
+| `initial.liquid_regions[].fill` | `0 < fill <= 1` | `1`；与几何子格填充率相乘 |
 
-盒子坐标使用当前单位，按格点中心落入**闭区间**判断。多个区域重叠时，数组中后面的区域覆盖前面的区域。它们只定义初始场，边界和固体赋值随后生效。输入区域可以不命中格点，解析器不保证每个区域实际覆盖非零格点。
+盒子坐标使用当前单位，按格点中心落入**闭区间**判断。多个区域重叠时，数组中后面的区域覆盖前面的区域。它们只定义初始场，边界和固体赋值随后生效。输入区域可以不命中格点，解析器不保证每个区域实际覆盖非零格点。`liquid_regions` 的盒子使用 `box_min/box_max`，球使用 `center/radius`，封闭体使用二进制 STL 的 `file/transform`；多个液体区域取最大填充率。STL 液体掩膜的变换语义与 4.7 相同。
 
-### 4.7 `geometry`：静态二进制 STL
+### 4.7 `geometry`：静态与规定运动二进制 STL
 
 | 字段 | 可用值 / 范围 | 缺省值与条件 |
 |---|---|---|
@@ -352,6 +360,10 @@ origin + ([i,j,k] + [0.5,0.5,0.5]) * dx
 | `geometry[].transform.translation` | 三元向量，目标坐标中的平移量 | `scale` 必填，即使为 `[0,0,0]`；`fit` 禁止 |
 | `geometry[].transform.axis` | 非零三元向量，有限非零模长；程序归一化 | `[1,0,0]` |
 | `geometry[].transform.degrees` | 任意有限数，旋转角度，度；按右手方向 | `0` |
+| `geometry[].material` | `physics.thermal.materials[].id` | 热模型下每个 STL 必填；否则禁止 |
+| `geometry[].thermal_regions` | 物体局部坐标中的 `box_min/box_max/temperature` 数组 | `[]`；随物体一起运动 |
+| `geometry[].contact_angle` | `0 < θ < 180`，度 | `90`；仅自由液面允许 |
+| `geometry[].motion` | 规定运动对象，见 4.14 | 省略表示静止 |
 
 STL 本身不携带长度单位。`fit` 先旋转，再把旋转后包围盒的最长边等比例缩放到 `size`，最后把包围盒中心放到 `center`。这不是分别拉伸 x/y/z 三个方向。
 
@@ -363,7 +375,7 @@ p_target = translation + R(axis,degrees) * (factor * (p_STL - pivot))
 
 `pivot` 是变换前要减去的参考点，变换后该点位于 `translation`；公式没有额外的 `+pivot`。例如源 STL 使用 mm、目标为 SI m，保持原点时可用 `factor=0.001`、`pivot=[0,0,0]`、`translation=[0,0,0]`。
 
-格式必须是非空二进制 STL，长度严格等于 `84 + 50*三角形数` bytes，顶点有限，包围盒不能完全退化。ASCII STL 不支持。变换后须位于计算域内，程序不自动裁剪。正式运行/预处理还会检查每个 STL 至少体素化出一个固体格点。多个 STL 取固体并集；几何不会随时间平移或旋转。
+格式必须是非空二进制 STL，长度严格等于 `84 + 50*三角形数` bytes，顶点有限，包围盒不能完全退化。ASCII STL 不支持。变换后须位于计算域内，程序不自动裁剪。正式运行/预处理还会检查每个 STL 至少体素化出一个固体格点。静态 STL 继续按固体并集处理。带 `motion` 的 STL 保留独立对象 ID，并在每一步重新体素化；多个动态对象不得互相重叠、碰撞、穿越域边界或接触另一个固体。固体温度按材料坐标随物体移动，不在旧位置遗留热量。
 
 STL 不能与最终生效的 `equilibrium` 或 `moving_wall` 边界相交；静态 `no_slip` 可以合并，但单物体受力统计另有归属约束，见 4.11。
 
@@ -373,13 +385,15 @@ STL 不能与最终生效的 `equilibrium` 或 `moving_wall` 边界相交；静�
 |---|---|---|
 | `boundaries[].id` | 非空字符串，在 `boundaries` 内唯一 | 必填 |
 | `boundaries[].faces` | 非空、无重复字符串数组；元素为 `xmin`、`xmax`、`ymin`、`ymax`、`zmin`、`zmax` | 必填 |
-| `boundaries[].type` | `"periodic"`、`"no_slip"`、`"equilibrium"`、`"moving_wall"` | 必填 |
+| `boundaries[].type` | `"periodic"`、`"no_slip"`、`"equilibrium"`、`"moving_wall"`、`"liquid_inlet"`、`"open_outlet"` | 必填 |
 | `boundaries[].priority` | 整数 `-1000000..1000000`，越大越优先 | `0` |
 | `boundaries[].region` | 含 `min`、`max` 的对象，限定面内范围 | 省略表示整面；`periodic` 禁止 |
 | `boundaries[].region.min` | 两个有限数，面内最小坐标 | 提供 `region` 时必填 |
 | `boundaries[].region.max` | 两个有限数，每项不小于对应 `min` | 提供 `region` 时必填 |
 | `boundaries[].rho` | 正数，格子密度或 kg/m³ | 仅 `equilibrium` 必填；其他类型禁止 |
-| `boundaries[].velocity` | 三元向量，格子速度或 m/s | `equilibrium`、`moving_wall` 必填；其他类型禁止 |
+| `boundaries[].velocity` | 三元向量，格子速度或 m/s | `equilibrium`、`liquid_inlet`、`open_outlet`、`moving_wall` 必填 |
+| `boundaries[].contact_angle` | `0 < θ < 180`，度 | 固壁默认为 `90`；仅自由液面固壁允许 |
+| `boundaries[].thermal` | 热边界对象，见 4.12 | 未给出时绝热 |
 
 各边界类型的行为：
 
@@ -389,6 +403,8 @@ STL 不能与最终生效的 `equilibrium` 或 `moving_wall` 边界相交；静�
 | `no_slip` | 固定零速度固壁 | 不填写 `rho` 或 `velocity` |
 | `equilibrium` | 固定密度和速度的平衡分布边界（`TYPE_E`） | 同时指定 `rho`、`velocity`；不能只给压力或只给速度 |
 | `moving_wall` | 位置固定、速度恒定的切向运动壁面 | 每个指定面法向速度分量严格为零；不接受 `rho` |
+| `liquid_inlet` | 自由液面液体储库入口 | 指定 `rho`、`velocity`；入口单元保持充满液体 |
+| `open_outlet` | 自由液面开口出口 | 指定 `rho`、`velocity`；离散质量及焓流写入收支 |
 
 `equilibrium` 可用于当前接口的指定入口/出口条件，但不等同于通用压力出口、零梯度出口或其他未实现的边界算法。`moving_wall` 改变壁面速度，不改变壁面位置，也不驱动 STL 移动。
 
@@ -420,13 +436,13 @@ STL 不能与最终生效的 `equilibrium` 或 `moving_wall` 边界相交；静�
 
 | 字段 | 可用值 / 范围 | 缺省值 |
 |---|---|---|
-| `output.vtk_fields` | 非空、无重复数组，元素仅 `"u"`、`"rho"`、`"flags"`、`"p"` | `["u","rho","flags"]` |
+| `output.vtk_fields` | 非空、无重复数组：`"u"`、`"rho"`、`"flags"`、`"p"`、`"T"`、`"material"`、`"object"`、`"phi"` | `["u","rho","flags"]`；后四项要求对应物理功能 |
 | `output.vtk_every` | 非负整数 `0..Imax`，步数间隔 | `0`，不输出中间周期帧 |
 | `output.initial` | 布尔值 | `true`，输出第 0 步 |
 
 正常计算**总会输出最终步**，与 `vtk_every` 是否整除终止步无关。`vtk_every=0` 表示“最终帧，加上可选初始帧”，不表示关闭所有 VTK。`vtk_fields=[]` 不允许。`--prepare-only` 总会输出第 0 步所选字段，并保证输出 `flags`，即使 `initial=false` 或字段列表不含 `flags`。
 
-`u` 为速度三分量，`rho` 为密度，`flags` 为格点位标记，`p` 为相对 `fluid.rho` 的表压。SI 配置的 VTK 坐标、间距、速度、密度、压强均转换为 SI；文件名按步数至少补齐九位，例如 `u-000000023.vtk`。
+`u` 为速度三分量，`rho` 为密度，`flags` 为格点位标记，`p` 为相对 `fluid.rho` 的表压；`T` 为温度，`material` 为热材料 ID，`object` 为动态对象 ID，`phi` 为液体填充率。SI 配置的 VTK 坐标、间距、速度、密度、压强均转换为 SI；文件名按步数至少补齐九位，例如 `u-000000023.vtk`。
 
 ### 4.11 `analysis`：采样、探针与固体受力
 
@@ -438,6 +454,9 @@ STL 不能与最终生效的 `equilibrium` 或 `moving_wall` 边界相交；静�
 | `analysis.probes` | 探针对象数组 | `[]` |
 | `analysis.probes[].id` | 非空字符串，在探针列表内唯一 | 每个探针必填 |
 | `analysis.probes[].position` | 三元向量，当前长度单位；每方向在 `[origin,origin+cells*dx)` 内 | 每个探针必填 |
+| `analysis.surface_levels` | 液位探针数组 | `[]`；仅自由液面允许 |
+| `analysis.surface_levels[].id` | 非空唯一字符串 | 每个液位探针必填 |
+| `analysis.surface_levels[].position` | `[x,y]` 两个坐标 | 每个液位探针必填；沿 z 柱积分液体高度 |
 | `analysis.forces` | 固体受力组数组 | `[]` |
 | `analysis.forces[].id` | 非空字符串，在受力组列表内唯一 | 每个受力组必填 |
 | `analysis.forces[].target` | `"all_solids"`、`"geometry:<id>"`、`"boundary:<id>"` | 每个受力组必填；ID 必须存在，boundary 只能是固壁类型 |
@@ -463,6 +482,87 @@ F = F_L * rho_ref * dx^4 / dt^2
 ```
 
 即使 `initial.rho` 覆盖了初始密度，压强零点仍来自 `fluid.rho`。全域统计排除固体，包含非固体的平衡边界格点；平均速度等为格点算术平均，质量和动能按格点体积积分。时间统计用 double 精度在线累积，`std_population` 是除以样本数 N 的总体标准差；一个样本时为 0，零样本时均值/标准差为 `null`。这不是逐格点的时均 VTK 场。
+
+### 4.12 `physics.thermal`：流固共轭传热
+
+热模型采用显式守恒有限体积温度输运。流体中包含对流和导热，固体中只求解导热；流固面使用调和平均导热系数表达理想热接触。不同材料均采用常数密度、比热和导热系数。自然对流使用 Boussinesq 近似，浮力项由 `physics.gravity`、`reference_temperature` 和 `thermal_expansion` 共同确定。
+
+| 字段 | 类型 / 单位 | 缺省值与条件 |
+|---|---|---|
+| `physics.gravity` | 三元加速度；格子模式为 cell/step²，SI 为 m/s² | `[0,0,0]`；同时作用于基础流动和 Boussinesq 浮力 |
+| `physics.thermal.reference_temperature` | 正数，SI 为 K | 必填；温度无量纲化尺度和 Boussinesq 参考温度 |
+| `physics.thermal.initial_temperature` | 正数，SI 为 K | 必填；全域初温 |
+| `physics.thermal.specific_heat` | 正数，SI 为 J/(kg·K) | 必填；流体定压比热 |
+| `physics.thermal.conductivity` | 正数，SI 为 W/(m·K) | 必填；流体导热系数 |
+| `physics.thermal.thermal_expansion` | 非负数，SI 为 1/K | `0`；为零时没有温差浮力 |
+| `physics.thermal.turbulent_prandtl` | 正数 | `0.9`；Smagorinsky 模式下控制涡热扩散率 |
+| `physics.thermal.materials` | 固体材料数组，ID 唯一，最多 254 个 | `[]`；存在热 STL 时须定义并引用 |
+| `materials[].density` | 正数，SI 为 kg/m³ | 必填 |
+| `materials[].specific_heat` | 正数，SI 为 J/(kg·K) | 必填 |
+| `materials[].conductivity` | 正数，SI 为 W/(m·K) | 必填 |
+| `materials[].heat_source` | 有限数，SI 为 W/m³ | `0`；正值加热，负值冷却 |
+| `materials[].initial_temperature` | 正数，SI 为 K | 流体全域初温 |
+
+格子模式也按 `alpha = conductivity/(density*specific_heat)` 解释输入；热扩散率必须落在稳定范围内。程序根据流体和所有固体的最大扩散率自动选择偶数个热子步，超过 1024 个子步的材料对比会被拒绝。热源、边界热量和开口焓流计入 `conservation-budget.csv`；这是显热收支，不包含黏性耗散、运动物体做功或完整机械能。
+
+每个非周期边界可设置 `thermal`：
+
+| `thermal.type` | 必要字段 | 行为 |
+|---|---|---|
+| `adiabatic` | 无 | 零法向热流；省略 `thermal` 时也是绝热 |
+| `fixed_temperature` | `temperature` | 固定壁面或开口温度 |
+| `heat_flux` | `heat_flux` | 仅固壁；指定进入计算域的面热流密度 |
+| `convection` | `ambient_temperature`、`heat_transfer_coefficient` | 仅固壁；环境对流换热 |
+
+热模型下每个 STL 必须用 `geometry[].material` 引用一种材料。`geometry[].thermal_regions` 的盒子坐标以物体初始枢轴为原点；它只覆盖初始固体温度并随物体移动。浸没固体持续发热应使用材料 `heat_source`，不要依赖反复重置初温。
+
+### 4.13 `physics.free_surface`：单液相自由液面
+
+本版只推进液体；气体不占用另一套流场，按固定环境压强处理。没有蒸发、沸腾、凝固、气相惯性或密闭气体压缩模型。
+
+| 字段 | 类型 / 单位 | 缺省值与条件 |
+|---|---|---|
+| `physics.free_surface.surface_tension` | 非负数；SI 为 N/m | 必填；格子值不得超过 0.1 |
+| `physics.free_surface.environment_pressure` | 非负表压；SI 为 Pa | `0` |
+| `initial.liquid_regions` | 盒、球或封闭二进制 STL 区域 | 无 `liquid_inlet` 时至少一个 |
+| `geometry[].contact_angle` | `(0,180)` 度 | `90`，每个固体独立设置 |
+| `boundaries[].contact_angle` | `(0,180)` 度 | `90`，仅 `no_slip`/`moving_wall` |
+
+接触角是固定静态角，不含前进/后退角滞后或动态接触角。开口边界记录每个监控时刻的离散质量流和显热焓流；程序按逐步累计目标修正界面质量，并在热自由液面中按热源、边界热量和焓流闭合显热收支。`equilibrium` 保留旧单相语义，不能替代 `liquid_inlet` 或 `open_outlet`。
+
+`analysis.surface_levels` 为每个 `[x,y]` 位置生成 `surface-levels.csv`，列出沿 z 柱积分得到的 `liquid_height` 及最高充液格点顶面 `top_elevation`。强破碎液面可能同一柱存在多个液段，此时积分液高比“最上方界面”更稳定。
+
+### 4.14 `geometry[].motion`：规定刚体运动
+
+多个 STL 可使用不同的平移、旋转或轨迹。平移与旋转规律可以组合；时间表轨迹与这两类规律互斥。SI 配置中的位移、速度、时间使用 m、m/s、s，角度使用度，角速度使用度/s；格子配置使用 cell、cell/step、step、度、度/step。
+
+| 字段 | 内容 |
+|---|---|
+| `motion.pivot` | 世界坐标中的旋转枢轴；省略时使用初始 STL 几何中心 |
+| `motion.translation.type` | `constant_velocity` 或 `sinusoidal` |
+| 匀速平移 | `velocity`，可选 `start_time`、`stop_time`；停后保持最终位移 |
+| 正弦平移 | `amplitude`、`period`，可选 `phase_degrees`、`start_time`、`stop_time` |
+| `motion.rotation.type` | `constant_angular_velocity` 或 `sinusoidal`，均须提供非零 `axis` |
+| 匀速旋转 | `angular_velocity_degrees`，可选 `start_time`、`stop_time` |
+| 正弦旋转 | `amplitude_degrees`、`period`，可选 `phase_degrees`、`start_time`、`stop_time` |
+| `motion.trajectory_axis` | 时间表角度使用的旋转轴，默认 `[1,0,0]` |
+| `motion.trajectory` | 至少两个 `{time,translation,degrees}` 关键帧；首帧时间为 0，时间严格递增，区间内线性插值，末帧后保持 |
+
+程序限制规定运动物体表面最大格子速度不超过 0.05 cell/step，并要求体素单元数在运动中保持不变。当前不计算碰撞、接触、变形或六自由度响应；`object-motion.csv` 中的力和力矩是诊断量，不反过来改变规定轨迹。
+
+### 4.15 新增输出与守恒文件
+
+启用相应模型后，结果目录增加：
+
+| 文件 | 主要内容 |
+|---|---|
+| `free-surface.csv` | 液体质量、体积、质心、液面范围、固体干湿面积 |
+| `surface-levels.csv` | 用户指定位置的积分液高和顶部高程 |
+| `boundary-flux.csv` | `liquid_inlet`/`open_outlet` 的向外质量流；热模型还含显热焓流 |
+| `conservation-budget.csv` | 初始/当前液体质量、累计开口流、质量残差；初始/当前显热、累计焓流、热源、边界热量及显热残差 |
+| `object-motion.csv` | 每个动态 STL 的单元数、平移、中心、轴角、线/角速度、力、力矩和固体温度范围/显热 |
+
+质量正方向按流出域定义，因此入口通常为负值。显热残差按“当前 − 初始 + 流出焓 − 热源输入 − 边界热输入”定义。`resolved-config.json` 记录实际格子物性、热子步、材料换算、自由液面环境密度、对象及守恒投影是否启用；验收或问题复现应与 `completion.json`、EXE SHA256 一起保留。
 
 ## 5. 完整示例与常见修改
 
@@ -601,11 +701,11 @@ my-case/
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-nuc.ps1 `
-  -WorkspaceRoot $root -BuildName solver-ibm-v1.0.0 -CaseName poiseuille `
+  -WorkspaceRoot $root -BuildName solver-ibm-v2.0.0 -CaseName poiseuille `
   -ConfigPath "$root\src\configs\poiseuille.json" -DeviceId $deviceId -TimeoutSeconds 900
 
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-nuc.ps1 `
-  -WorkspaceRoot $root -BuildName solver-ibm-v1.0.0 -CaseName couette `
+  -WorkspaceRoot $root -BuildName solver-ibm-v2.0.0 -CaseName couette `
   -ConfigPath "$root\src\configs\couette.json" -DeviceId $deviceId -TimeoutSeconds 900
 ```
 
@@ -658,7 +758,7 @@ Solver-IBM.exe --list-devices
 正常完成返回退出码 0，配置入口捕获错误返回 1；外部运行脚本还会检查完成记录及日志，不只依赖退出码。调用示例：
 
 ```powershell
-$exe = "$root\bin\solver-ibm-v1.0.0\Solver-IBM.exe"
+$exe = "$root\bin\solver-ibm-v2.0.0\Solver-IBM.exe"
 & $exe --config 'F:\cases\my-case\case.json' --validate
 
 $stamp = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')
@@ -673,7 +773,7 @@ $stamp = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')
 | 参数 | 可用值 / 范围 | 缺省值与条件 |
 |---|---|---|
 | `-WorkspaceRoot` | Windows 工作根目录 | 脚本所在源码仓库的父目录；建议显式填写 |
-| `-BuildName` | 选择 `bin/<BuildName>` 下已成功构建的 EXE | `solver-ibm-v1.0.0` |
+| `-BuildName` | 选择 `bin/<BuildName>` 下已成功构建的 EXE | `solver-ibm-v2.0.0` |
 | `-ExecutablePath` | 显式指定迁移后的 `Solver-IBM.exe`，同目录必须有对应 `build.json`；用于发布包和测试入口 | 无；省略时按 BuildName 定位 |
 | `-CaseName` | 结果归档目录名，不改变物理算例 | `benchmark`；建议填写本次算例名 |
 | `-DeviceId` | 整数 `0..2147483647`，实际 OpenCL ID | 不提供时由求解器自动选择 |
@@ -688,7 +788,7 @@ $stamp = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-nuc.ps1 `
-  -WorkspaceRoot $root -BuildName solver-ibm-v1.0.0 -CaseName ahmed-prepare `
+  -WorkspaceRoot $root -BuildName solver-ibm-v2.0.0 -CaseName ahmed-prepare `
   -ConfigPath "$root\src\configs\ahmed-smoke.json" -DeviceId $deviceId `
   -PrepareOnly -TimeoutSeconds 900
 ```
@@ -715,7 +815,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-nuc.ps1 `
 
 ```powershell
 $root = 'F:\01-Project\Opensource\01-FluidX3D'
-$package = "$root\package\V1.0.0"
+$package = "$root\package\V2.0.0"
 python "$package\source\scripts\test-package.py" `
   --package-root $package --workspace-root $root --device $deviceId
 if ($LASTEXITCODE -ne 0) { throw 'Package acceptance failed; inspect the printed report.' }
@@ -772,7 +872,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Study generation failed.' }
 
 # $deviceId 由第 2.3 节的设备探针选定。
 python .\scripts\parameter-study.py run --study $study `
-  --workspace-root $root --build-name solver-ibm-v1.0.0 --device $deviceId --timeout 900
+  --workspace-root $root --build-name solver-ibm-v2.0.0 --device $deviceId --timeout 900
 if ($LASTEXITCODE -ne 0) { throw 'Some study cases failed; inspect summary.json.' }
 ```
 
@@ -782,7 +882,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Some study cases failed; inspect summary.json.
 | `generate --output` | 新目录或已有空目录，存放整个扫描快照 | 必填 |
 | `run --study` | 包含生成的 `study.json` 的**目录**，不是文件路径 | 必填 |
 | `run --workspace-root` | NUC 工作根目录 | 必填 |
-| `run --build-name` | 成功构建名称；遵循运行脚本名称规则 | `solver-ibm-v1.0.0` |
+| `run --build-name` | 成功构建名称；遵循运行脚本名称规则 | `solver-ibm-v2.0.0` |
 | `run --executable` | 显式指定已迁移的 `Solver-IBM.exe`，旁边保留其 `build.json`；用于包内 EXE | 无；默认按 workspace 和 build-name 定位 |
 | `run --device` | 整数；下游运行脚本要求 `0..2147483647` 且设备存在 | `0`，建议查询后显式传入 |
 | `run --timeout` | 每个算例的秒数；下游脚本要求 `1..86400` | `900` |
@@ -893,6 +993,10 @@ Import-Csv "$runDir\results\monitor.csv" | Select-Object -Last 5
 | 扫描快照哈希不一致 | 保留原快照；更改基础算例或规格后生成到新的目录，再重新执行 |
 | `timed_out` | 查看日志判断耗时位置，调整网格/步数或 `TimeoutSeconds`；不要把超时输出当完整计算结果 |
 | FP16S 弱强迫通道误差明显 | 与同模型 FP32 对比，并参考已记录的存储量化误差；切换存储无需重新编译 |
+| `features require solver.storage=FP32` | 热、自由液面和动态 STL 均须显式选择 FP32 |
+| `Dynamic STL surface velocity exceeds...` | 降低平移速度、转速或振幅/频率，使最大表面速度不超过 0.05 cell/step |
+| `Prescribed STL objects overlap` / `crosses the domain` | 修正运动范围、枢轴和多物体间距；本版没有碰撞或自动裁剪 |
+| 自由液面质量/显热残差超限 | 检查 `conservation-budget.csv` 与 `boundary-flux.csv`，确认入口/出口方向、温度和监控时段；不要只看进程退出码 |
 
 ## 10. 依据与维护
 
@@ -901,7 +1005,7 @@ Import-Csv "$runDir\results\monitor.csv" | Select-Object -Last 5
 本手册是当前配置驱动接口的统一使用入口。阶段设计和验收记录保留历史信息：
 
 - [NUC 构建、运行目录约定](nuc-workflow.md)
-- [V1.0.0 发布说明](releases/V1.0.0.md)、[版本交接文档](handoff-v1.0.0.md)
+- [V2.0.0 发布说明](releases/V2.0.0.md)、[版本交接文档](handoff-v2.0.0.md)
 - [P0/P1 说明](config-runner.md)、[P2 说明](config-runner-p2.md)、[P3 模型说明](config-runner-p3.md)
 - [P3 验收记录及精度边界](validation/config-runner-p3-2026-09-22.md)
 

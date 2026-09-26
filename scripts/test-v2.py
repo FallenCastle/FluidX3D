@@ -57,6 +57,7 @@ def main():
     parser.add_argument("--workspace-root", required=True, type=Path)
     parser.add_argument("--build-name", default="solver-ibm-v1.1.0-dev")
     parser.add_argument("--repository-root", type=Path)
+    parser.add_argument("--configs-root", type=Path)
     parser.add_argument("--executable", type=Path)
     parser.add_argument("--device", default="0")
     parser.add_argument("--steps", type=int, default=8)
@@ -66,7 +67,7 @@ def main():
     assert args.steps > 0
     workspace = args.workspace_root.resolve()
     repository = (args.repository_root or workspace / "src").resolve()
-    configs_root = repository / "configs"
+    configs_root = (args.configs_root or repository / "configs").resolve()
     executable = (args.executable or workspace / "bin" / args.build_name / "Solver-IBM.exe").resolve()
     stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     root = workspace / "workingdir" / "v2-validation" / stamp

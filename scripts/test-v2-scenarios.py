@@ -69,6 +69,7 @@ def main():
     parser.add_argument("--workspace-root", required=True, type=Path)
     parser.add_argument("--build-name", required=True)
     parser.add_argument("--repository-root", type=Path)
+    parser.add_argument("--configs-root", type=Path)
     parser.add_argument("--executable", type=Path)
     parser.add_argument("--device", default="0")
     args = parser.parse_args()
@@ -76,7 +77,7 @@ def main():
         parser.error("Run on the Windows NUC only")
     workspace = args.workspace_root.resolve()
     repository = (args.repository_root or workspace / "src").resolve()
-    configs = repository / "configs"
+    configs = (args.configs_root or repository / "configs").resolve()
     executable = (args.executable or workspace / "bin" / args.build_name / "Solver-IBM.exe").resolve()
     stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     root = workspace / "workingdir" / "v2-scenarios" / stamp
