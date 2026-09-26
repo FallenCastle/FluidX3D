@@ -72,6 +72,10 @@ struct LiquidRegion {
     std::string shape = "box";
     Vec lower{}, upper{}, center{};
     double radius = 0, fill = 1;
+    fs::path file;
+    std::string mode;
+    double size = 1, factor = 1, degrees = 0;
+    Vec pivot{}, translation{}, axis{1, 0, 0};
 };
 struct Probe {
     std::string id;

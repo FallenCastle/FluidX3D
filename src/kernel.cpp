@@ -1353,6 +1353,32 @@ string opencl_c_container() { return R( // ########################## begin of O
 	j7[3] = x0+yp+z0; j7[4] = x0+ym+z0; // 0+0 0-0
 	j7[5] = x0+y0+zp; j7[6] = x0+y0+zm; // 00+ 00-
 }
+)+R(float effective_thermal_conductivity(const uxx n, const global float* u, const global uchar* flags,
+		const global float* capacity, const global float* conductivity, const global uchar* material) {
+	const float base = conductivity[n];
+)+"#ifdef SUBGRID"+R(
+	if(material[n]!=0u||(flags[n]&TYPE_SU)==TYPE_G) return base;
+	uxx j[7];
+	neighbors_temperature(n, j);
+	const float du_dx = 0.5f*(u[                 j[1]]-u[                 j[2]]);
+	const float du_dy = 0.5f*(u[                 j[3]]-u[                 j[4]]);
+	const float du_dz = 0.5f*(u[                 j[5]]-u[                 j[6]]);
+	const float dv_dx = 0.5f*(u[    def_N+(ulong)j[1]]-u[    def_N+(ulong)j[2]]);
+	const float dv_dy = 0.5f*(u[    def_N+(ulong)j[3]]-u[    def_N+(ulong)j[4]]);
+	const float dv_dz = 0.5f*(u[    def_N+(ulong)j[5]]-u[    def_N+(ulong)j[6]]);
+	const float dw_dx = 0.5f*(u[2ul*def_N+(ulong)j[1]]-u[2ul*def_N+(ulong)j[2]]);
+	const float dw_dy = 0.5f*(u[2ul*def_N+(ulong)j[3]]-u[2ul*def_N+(ulong)j[4]]);
+	const float dw_dz = 0.5f*(u[2ul*def_N+(ulong)j[5]]-u[2ul*def_N+(ulong)j[6]]);
+	const float sxy = 0.5f*(du_dy+dv_dx), sxz = 0.5f*(du_dz+dw_dx), syz = 0.5f*(dv_dz+dw_dy);
+	const float strain = sqrt(2.0f*(sq(du_dx)+sq(dv_dy)+sq(dw_dz)+
+			2.0f*(sq(sxy)+sq(sxz)+sq(syz))));
+	const float turbulent_diffusivity = def_smagorinsky_length_squared*strain/def_turbulent_prandtl;
+	const float explicit_limit = capacity[n]/(6.006f*def_thermal_dt);
+	return fmin(base+capacity[n]*turbulent_diffusivity, explicit_limit);
+)+"#else"+R(
+	return base;
+)+"#endif"+R(
+}
 )+R(void calculate_g_eq(const float T, const float ux, const float uy, const float uz, float* geq) { // calculate g_equilibrium from density and velocity field (perturbation method / DDF-shifting)
 	const float wsT4=0.5f*T, wsTm1=0.125f*(T-1.0f); // 0.125f*T*4.0f (straight directions in D3Q7), wsTm1 is arithmetic optimization to minimize digit extinction, lattice speed of sound is 1/2 for D3Q7 and not 1/sqrt(3)
 	geq[0] = fma(0.25f, T, -0.25f); // 000
@@ -1901,7 +1927,7 @@ string opencl_c_container() { return R( // ########################## begin of O
 	const uchar fn = flags[n];
 	if(mn==255u||(fn&TYPE_SU)==TYPE_G) { T_dst[n] = T_src[n]; return; }
 	if((fn&TYPE_T)||boundary_type[n]==1u) { T_dst[n] = boundary_value[n]; return; }
-	const float Cn = capacity[n], kn = conductivity[n], Tn = T_src[n];
+	const float Cn = capacity[n], kn = effective_thermal_conductivity(n, u, flags, capacity, conductivity, material), Tn = T_src[n];
 	if(!(Cn>0.0f)||!(kn>=0.0f)) { T_dst[n] = Tn; return; }
 	uxx j[7];
 	neighbors_temperature(n, j);
@@ -1918,7 +1944,7 @@ string opencl_c_container() { return R( // ########################## begin of O
 			continue;
 		}
 		if((fm&TYPE_SU)==TYPE_G) continue;
-		const float km = conductivity[m];
+		const float km = effective_thermal_conductivity(m, u, flags, capacity, conductivity, material);
 		if(kn>0.0f&&km>0.0f) rhs += (2.0f*kn*km/(kn+km))*(T_src[m]-Tn);
 		if(mn==0u&&mm==0u) {
 			const uint axis = face/2u;

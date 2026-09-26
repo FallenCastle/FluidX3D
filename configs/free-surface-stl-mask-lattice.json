@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "case": { "name": "free-surface-stl-mask" },
+  "solver": {
+    "lattice": "D3Q19",
+    "collision": "SRT",
+    "storage": "FP32",
+    "turbulence": "smagorinsky",
+    "smagorinsky_constant": 0.17
+  },
+  "physics": {
+    "gravity": [0, 0, -0.00001],
+    "thermal": {
+      "reference_temperature": 1.0,
+      "initial_temperature": 1.0,
+      "specific_heat": 1.0,
+      "conductivity": 0.03,
+      "thermal_expansion": 0.0,
+      "turbulent_prandtl": 0.85
+    },
+    "free_surface": {
+      "surface_tension": 0.0001,
+      "environment_pressure": 0
+    }
+  },
+  "units": { "mode": "lattice" },
+  "domain": { "cells": [24, 24, 24] },
+  "fluid": { "rho": 1.0, "nu": 0.08 },
+  "initial": {
+    "velocity": [0, 0, 0],
+    "temperature": 1.0,
+    "liquid_regions": [
+      {
+        "shape": "stl",
+        "file": "assets/unit-cube-binary.stl",
+        "transform": {
+          "mode": "fit",
+          "size": 12,
+          "center": [12, 12, 8]
+        }
+      }
+    ]
+  },
+  "geometry": [],
+  "boundaries": [
+    {
+      "id": "walls",
+      "faces": ["xmin", "xmax", "ymin", "ymax", "zmin", "zmax"],
+      "type": "no_slip",
+      "contact_angle": 90,
+      "thermal": { "type": "adiabatic" }
+    }
+  ],
+  "run": { "steps": 8, "monitor_every": 4 },
+  "output": {
+    "vtk_fields": ["T", "phi", "flags"],
+    "vtk_every": 8,
+    "initial": true
+  }
+}

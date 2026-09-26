@@ -468,6 +468,8 @@ string LBM_Domain::device_defines(const Device_Info& device_info) const { return
     "\n\t#define "+string(model.collision_name())+
     "\n\t#define def_trt_magic "+to_string(static_cast<float>(model.trt_magic_parameter))+"f"
     "\n\t#define def_smagorinsky "+to_string(model.smagorinsky_coefficient())+"f"
+    "\n\t#define def_smagorinsky_length_squared "+to_string(model.smagorinsky_length_squared())+"f"
+    "\n\t#define def_turbulent_prandtl "+to_string(static_cast<float>(model.turbulent_prandtl))+"f"
 
 
 	"\n	#define TYPE_S 0x01" // 0b00000001 // (stationary or moving) solid boundary

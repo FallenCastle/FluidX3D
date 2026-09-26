@@ -13,6 +13,7 @@ struct SolverOptions {
     std::array<double, 3> gravity{0.0, 0.0, 0.0};
     double reference_temperature = 1.0;
     double ambient_density = 1.0;
+    double turbulent_prandtl = 0.9;
     unsigned thermal_substeps = 4;
     static constexpr double default_cs = 0.17326595533835415;
     double smagorinsky_constant = default_cs;
@@ -25,5 +26,8 @@ struct SolverOptions {
         return smagorinsky_constant == default_cs
                    ? 0.76421222f
                    : static_cast<float>(18.0 * std::sqrt(2.0) * smagorinsky_constant * smagorinsky_constant);
+    }
+    float smagorinsky_length_squared() const {
+        return static_cast<float>(smagorinsky_constant * smagorinsky_constant);
     }
 };

@@ -162,6 +162,20 @@ static std::unique_ptr<Mesh> mesh(const Config &c, const Geometry &g) {
     }
     return m;
 }
+static Geometry liquid_region_geometry(const LiquidRegion &region, const size_t index) {
+    Geometry geometry;
+    geometry.id = "initial-liquid-region-" + std::to_string(index);
+    geometry.file = region.file;
+    geometry.mode = region.mode;
+    geometry.size = region.size;
+    geometry.factor = region.factor;
+    geometry.degrees = region.degrees;
+    geometry.center = region.center;
+    geometry.pivot = region.pivot;
+    geometry.translation = region.translation;
+    geometry.axis = region.axis;
+    return geometry;
+}
 struct MotionState {
     Vec translation{}, linear_velocity{}, axis{0, 0, 1};
     double degrees = 0, angular_velocity_radians = 0;
@@ -858,6 +872,17 @@ static Json inspect_meshes(const Config &c) {
              {"file_bytes", fs::file_size(g.file)},
              {"native_index_bounds", {{m->pmin.x, m->pmin.y, m->pmin.z}, {m->pmax.x, m->pmax.y, m->pmax.z}}}});
     }
+    for (size_t i = 0; i < c.liquid_regions.size(); i++)
+        if (c.liquid_regions[i].shape == "stl") {
+            const auto geometry = liquid_region_geometry(c.liquid_regions[i], i);
+            auto m = mesh(c, geometry);
+            list.push_back(
+                {{"id", geometry.id},
+                 {"purpose", "initial_liquid_region"},
+                 {"triangles", m->triangle_number},
+                 {"file_bytes", fs::file_size(geometry.file)},
+                 {"native_index_bounds", {{m->pmin.x, m->pmin.y, m->pmin.z}, {m->pmax.x, m->pmax.y, m->pmax.z}}}});
+        }
     return list;
 }
 static std::string stamp(unsigned long long t) {
@@ -1038,6 +1063,9 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
     unsigned long long count = static_cast<unsigned long long>(c.cells[0]) * c.cells[1] * c.cells[2], mesh_bytes = 0;
     for (const auto &g : c.geometry)
         mesh_bytes = std::max(mesh_bytes, (fs::file_size(g.file) - 84) / 50 * 36ull);
+    for (const auto &region : c.liquid_regions)
+        if (region.shape == "stl")
+            mesh_bytes = std::max(mesh_bytes, (fs::file_size(region.file) - 84) / 50 * 36ull);
     require(count * c.device_cell_bytes() + mesh_bytes + 64 <=
                 static_cast<unsigned long long>(selected.memory) * 1048576,
             "Estimated device memory exceeds selected device capacity");
@@ -1154,6 +1182,10 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
             owner[static_cast<size_t>(n)] = static_cast<int>(object) - 1;
         }
     }
+    std::vector<std::unique_ptr<Mesh>> liquid_meshes(c.liquid_regions.size());
+    for (size_t i = 0; i < c.liquid_regions.size(); i++)
+        if (c.liquid_regions[i].shape == "stl")
+            liquid_meshes[i] = mesh(c, liquid_region_geometry(c.liquid_regions[i], i));
     std::vector<unsigned long long> coverage(c.boundaries.size(), 0);
     std::vector<BoundaryFluxSurface> flux_surfaces;
     std::vector<int> flux_surface_for_boundary(c.boundaries.size(), -1);
@@ -1279,15 +1311,23 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
         }
         if (c.model.free_surface && (!(lbm.flags[n] & TYPE_S) || c.model.dynamic_geometry)) {
             double fill = 0;
-            for (const auto &r : c.liquid_regions)
+            for (size_t region_index = 0; region_index < c.liquid_regions.size(); region_index++) {
+                const auto &r = c.liquid_regions[region_index];
+                const auto *mask = liquid_meshes[region_index].get();
+                const bool inside_stl = mask != nullptr && x >= mask->pmin.x && x <= mask->pmax.x &&
+                                        y >= mask->pmin.y && y <= mask->pmax.y && z >= mask->pmin.z &&
+                                        z <= mask->pmax.z &&
+                                        point_inside_mesh(*mask, float3(static_cast<float>(x), static_cast<float>(y),
+                                                                       static_cast<float>(z)));
                 if ((r.shape == "box" && p[0] >= r.lower[0] && p[0] <= r.upper[0] && p[1] >= r.lower[1] &&
                      p[1] <= r.upper[1] && p[2] >= r.lower[2] && p[2] <= r.upper[2]) ||
                     (r.shape == "sphere" &&
                      (p[0] - r.center[0]) * (p[0] - r.center[0]) +
                              (p[1] - r.center[1]) * (p[1] - r.center[1]) +
                              (p[2] - r.center[2]) * (p[2] - r.center[2]) <=
-                         r.radius * r.radius))
+                         r.radius * r.radius) || inside_stl)
                     fill = std::max(fill, r.fill);
+            }
             if (b >= 0 && c.boundaries[b].type == "liquid_inlet")
                 fill = 1.0;
             lbm.flags[n] = static_cast<uchar>((lbm.flags[n] & ~(TYPE_F | TYPE_I | TYPE_G)) |
@@ -1630,6 +1670,19 @@ int entry(int argc, char *argv[]) {
                                           {"snapshot", "inputs/assets/" + name},
                                           {"sha256", hash}});
         }
+        for (size_t i = 0; i < c.liquid_regions.size(); i++)
+            if (c.liquid_regions[i].shape == "stl") {
+                auto name = "liquid-" + std::to_string(i) + ".stl";
+                auto target = output / "inputs" / "assets" / name;
+                fs::copy_file(c.liquid_regions[i].file, target);
+                auto hash = sha256(target);
+                require(hash == sha256(c.liquid_regions[i].file), "Liquid-region STL changed while snapshotting");
+                effective["initial"]["liquid_regions"][i]["file"] = "inputs/assets/" + name;
+                manifest["assets"].push_back({{"id", "initial.liquid_regions[" + std::to_string(i) + "]"},
+                                               {"original_path", c.liquid_regions[i].file.u8string()},
+                                               {"snapshot", "inputs/assets/" + name},
+                                               {"sha256", hash}});
+            }
         save_json(output / "effective-config.json", effective);
         c = read_config(output / "effective-config.json");
         validate_faces(c);

@@ -131,7 +131,8 @@ Json capabilities() {
                 {"gas", "fixed environment pressure"},
                 {"surface_tension", true},
                 {"static_contact_angle", "per solid wall in degrees"},
-                {"initial_liquid_regions", {"box", "sphere"}},
+                {"initial_liquid_regions", {"box", "sphere", "stl"}},
+                {"initial_liquid_stl_format", "binary STL"},
                 {"open_boundaries", {"liquid_inlet", "open_outlet"}}}}}},
             {"geometry",
              {{"format", "binary STL"},
@@ -166,8 +167,11 @@ Json solver_description(const Config &c) {
     result["physics"] = {{"thermal", c.model.temperature},
                          {"free_surface", c.model.free_surface},
                          {"dynamic_geometry", c.model.dynamic_geometry}};
-    if (c.model.temperature)
+    if (c.model.temperature) {
         result["thermal_substeps"] = c.model.thermal_substeps;
+        result["turbulent_prandtl"] = c.model.turbulent_prandtl;
+        result["smagorinsky_eddy_diffusivity"] = c.model.subgrid;
+    }
     if (c.model.subgrid) {
         result["smagorinsky_constant"] = c.model.smagorinsky_constant;
         result["smagorinsky_coefficient_fp32"] = c.model.smagorinsky_coefficient();
@@ -411,6 +415,8 @@ Config read_config(const fs::path &path) {
         c.model.reference_temperature = 1.0;
         if (thermal.contains("turbulent_prandtl"))
             c.turbulent_prandtl = positive(thermal["turbulent_prandtl"], "physics.thermal.turbulent_prandtl");
+        finite_float(c.turbulent_prandtl, "physics.thermal.turbulent_prandtl", true);
+        c.model.turbulent_prandtl = c.turbulent_prandtl;
         finite_float(c.initial_temperature, "initial lattice temperature", true);
         finite_float(c.thermal_diffusivity, "lattice thermal diffusivity", true);
         finite_float(c.thermal_expansion, "lattice thermal expansion");
@@ -507,22 +513,57 @@ Config read_config(const fs::path &path) {
         require(c.model.free_surface, "initial.liquid_regions requires physics.free_surface");
         require(init["liquid_regions"].is_array(), "initial.liquid_regions must be an array");
         for (const auto &r : init["liquid_regions"]) {
-            keys(r, {"shape", "box_min", "box_max", "center", "radius", "fill"}, "liquid region");
+            keys(r, {"shape", "box_min", "box_max", "center", "radius", "file", "transform", "fill"},
+                 "liquid region");
             LiquidRegion region;
             region.shape = r.contains("shape") ? string_value(r["shape"], "liquid region.shape") : "box";
             if (region.shape == "box") {
-                require(!r.contains("center") && !r.contains("radius"),
+                require(!r.contains("center") && !r.contains("radius") && !r.contains("file") &&
+                            !r.contains("transform"),
                         "box liquid region accepts box_min and box_max only");
                 region.lower = vec(field(r, "box_min"), "liquid region.box_min");
                 region.upper = vec(field(r, "box_max"), "liquid region.box_max");
                 for (int a = 0; a < 3; a++)
                     require(region.lower[a] <= region.upper[a], "Reversed liquid region");
-            } else {
-                require(region.shape == "sphere", "liquid region.shape must be box or sphere");
-                require(!r.contains("box_min") && !r.contains("box_max"),
+            } else if (region.shape == "sphere") {
+                require(!r.contains("box_min") && !r.contains("box_max") && !r.contains("file") &&
+                            !r.contains("transform"),
                         "sphere liquid region accepts center and radius only");
                 region.center = vec(field(r, "center"), "liquid region.center");
                 region.radius = positive(field(r, "radius"), "liquid region.radius");
+            } else {
+                require(region.shape == "stl", "liquid region.shape must be box, sphere, or stl");
+                require(!r.contains("box_min") && !r.contains("box_max") && !r.contains("center") &&
+                            !r.contains("radius"),
+                        "stl liquid region accepts file and transform only");
+                region.file = fs::absolute(c.path.parent_path() /
+                                           fs::u8path(string_value(field(r, "file"), "liquid region.file")));
+                require(fs::is_regular_file(region.file), "Liquid-region STL not found: " + region.file.u8string());
+                const auto &t = field(r, "transform");
+                keys(t, {"mode", "size", "center", "factor", "pivot", "translation", "axis", "degrees"},
+                     "liquid region transform");
+                region.mode = string_value(field(t, "mode"), "liquid region transform.mode");
+                if (t.contains("axis"))
+                    region.axis = vec(t["axis"], "liquid region transform.axis");
+                if (t.contains("degrees"))
+                    region.degrees = number(t["degrees"], "liquid region transform.degrees");
+                const double norm = std::hypot(region.axis[0], std::hypot(region.axis[1], region.axis[2]));
+                require(std::isfinite(norm) && norm > 0, "Liquid-region STL rotation axis must be nonzero");
+                for (double &component : region.axis)
+                    component /= norm;
+                if (region.mode == "fit") {
+                    require(!t.contains("factor") && !t.contains("pivot") && !t.contains("translation"),
+                            "liquid region fit uses size and center");
+                    region.size = positive(field(t, "size"), "liquid region transform.size");
+                    region.center = vec(field(t, "center"), "liquid region transform.center");
+                } else {
+                    require(region.mode == "scale", "liquid region transform.mode must be fit or scale");
+                    require(!t.contains("size") && !t.contains("center"),
+                            "liquid region scale uses factor, pivot and translation");
+                    region.factor = positive(field(t, "factor"), "liquid region transform.factor");
+                    region.pivot = t.contains("pivot") ? vec(t["pivot"], "liquid region transform.pivot") : Vec{};
+                    region.translation = vec(field(t, "translation"), "liquid region transform.translation");
+                }
             }
             region.fill = r.contains("fill") ? number(r["fill"], "liquid region.fill") : 1.0;
             require(region.fill > 0 && region.fill <= 1, "liquid region.fill must be in (0,1]");
