@@ -1,128 +1,144 @@
-# NUC 构建、运行与结果目录
+# Solver-IBM：NUC 构建、运行与版本归档
 
-配置驱动分支使用 `-ConfigPath` 选择实际算例，另支持 `-PrepareOnly` 进行零步体素化检查；当前完整编译步骤、字段参考和运行命令见 [中文使用手册（P3）](user-manual-zh.md)。`CaseName` 继续只用于归档。该模式的配置/STL 快照及求解器记录位于本次 `results/` 内，外层 `inputs/` 保留兼容旧硬编码算例。本文后续“原始基线”及相关资源部署段落记录旧硬编码版本的工作流程，不作为当前 JSON 接口说明。
+当前正式版本为 **V1.0.0**，可执行文件为 `Solver-IBM.exe`。完整配置字段和操作说明见 [用户手册](user-manual-zh.md)，发布内容见 [V1.0.0 发布说明](releases/V1.0.0.md)。以下当前流程适用于配置驱动命令行版本；保留的上游/阶段历史文档可能仍写有 `FluidX3D.exe` 或旧 BuildName。
 
-源码在 Mac 上阅读和修改，经 Git 推送到 fork，再由 NUC 拉取。编译、程序运行和算例计算均在 Windows NUC 上完成。项目根目录的 `AGENTS.md` 暂不纳入 Git；本说明和辅助脚本随源码仓库管理。
+## 工作环境与目录
 
-## 目录约定
+Mac 用于阅读、编辑、Git 提交和推送；所有求解器编译、程序调用和算例计算在 Windows NUC 完成，包括 `--version`、`--validate` 和测试脚本中启动的程序。连接方式为 `ssh NUC`。项目根目录的 `AGENTS.md` 在 Mac、NUC 各保留一份，暂不纳入 Git；源码、脚本和本说明纳入源码仓库管理。
 
 NUC 工作根目录为 `F:\01-Project\Opensource\01-FluidX3D`：
 
 ```text
 01-FluidX3D/
-├── src/                              Git 仓库根目录
-│   ├── src/                          上游 C++ 源文件
+├── AGENTS.md                         NUC 本地长期规则
+├── src/                              Git 仓库，不是仅 C++ src 子目录
+│   ├── src/version.hpp               产品版本的统一来源
 │   ├── scripts/
-│   │   ├── build-nuc.ps1
-│   │   ├── run-nuc.ps1
-│   │   └── get-opencl-devices.ps1
-│   ├── docs/nuc-workflow.md
-│   └── temp/<build-name>/<build-id>/  构建中间文件（被 Git 忽略）
+│   ├── configs/
+│   ├── docs/
+│   └── temp/<build-name>/<build-id>/  被 Git 忽略的构建中间文件
 ├── bin/
-│   ├── <build-name>/
-│   │   ├── FluidX3D.exe              正式构建产物
-│   │   └── build.json                最近一次成功构建的身份记录
-│   └── _runs/<case-name>/<run-id>/
-│       ├── FluidX3D.exe              本次运行的二进制快照
-│       └── export/                   Junction → 对应运行的 results/
-└── workingdir/
-    ├── _builds/<build-id>/
-    │   ├── build.json                每次构建的记录，包含成功或失败状态
-    │   ├── evaluation.json           MSBuild 工具链与路径求值结果
-    │   └── msbuild.log
-    └── <case-name>/<run-id>/
-        ├── run.json                  运行身份、命令、状态、日志位置与验证结果
-        ├── build.json                本次所用构建记录的快照
-        ├── inputs/                   本次算例的输入资源
-        ├── results/                  默认导出文件的实际存储位置
-        └── logs/
-            ├── stdout.log
-            ├── stderr.log
-            └── runner.log
+│   ├── solver-ibm-v1.0.0/
+│   │   ├── Solver-IBM.exe
+│   │   └── build.json                构建身份与校验值
+│   └── _runs/<case-name>/<run-id>/    每次运行的 EXE 快照
+├── workingdir/
+│   ├── _builds/<build-id>/            build.json、evaluation.json、msbuild.log
+│   └── <case-name>/<run-id>/
+│       ├── run.json                  命令、构建、设备、状态、退出码、验证
+│       ├── build.json                本次使用的构建记录
+│       ├── inputs/
+│       ├── results/                  求解器快照、记录、VTK、CSV 等
+│       └── logs/                     stdout.log、stderr.log、runner.log
+└── package/
+    └── V1.0.0/                       固定的正式发布归档
 ```
 
-`build-id` 和 `run-id` 使用 UTC 时间戳和 12 位 Git 提交号，例如 `20260920T013000123Z-0123456789ab`。每次运行创建独立目录，不覆盖上次结果。`BuildName`、`CaseName` 使用字母、数字、点、下划线和连字符，并以字母或数字开头；运行脚本将名称长度限制为 64 个字符，拒绝 Windows 保留名称和末尾的点。建议使用小写英文名称。
+`BuildId` 和 `RunId` 使用 UTC 时间戳及 Git 提交前缀。每次运行创建独立目录，不覆盖上次结果。`BuildName`、`CaseName` 只用于选择构建或结果分类；**算例由 `ConfigPath` 指定**，`-CaseName cavity` 不会自动创建方腔流。名称限制详见用户手册第 6 节。
 
-算例的名称只用于目录分类，**不会自动改变 C++ 中启用的算例**。例如 `-CaseName cavity` 不会把原始 benchmark 切换为方腔流；实际算例仍由 `src/setup.cpp` 和 `src/defines.hpp` 编译决定。
+## Mac 修改，经 Git 同步到 NUC
 
-## 在 Mac 修改并同步
-
-在 Mac 的 `FluidX3D` 仓库中确认当前分支和工作区状态，完成修改后提交并推送到用户的 fork。不要在 Mac 编译或运行 FluidX3D。
+在 Mac 的 `FluidX3D/` 源码仓库内检查实际远端、分支和修改，明确暂存本次文件并提交推送：
 
 ```sh
 git status --short --branch
 git remote -v
+git branch --show-current
 git add <本次修改的文件>
 git commit -m "Describe the change"
 git push -u origin <当前工作分支>
-```
-
-NUC 首次克隆应以完整仓库作为外层 `src`，不要只下载上游的 C++ 子目录。现有仓库无需再次执行 `git init` 或 `git clone`。NUC 上先核实分支和工作区，再拉取对应分支：
-
-```powershell
-Set-Location 'F:\01-Project\Opensource\01-FluidX3D\src'
-git status --short --branch
-git remote -v
-git pull --ff-only
 git rev-parse HEAD
 ```
 
-确保 NUC 的提交号与 Mac 刚推送的提交相同；如需切换分支，先检查未提交修改，再明确执行 `git switch <工作分支>`。不要用强制重置覆盖 NUC 上已有工作。
-
-## 在 NUC 构建
-
-以下命令在 NUC 的 Windows PowerShell 中执行，支持 PowerShell 5.1：
+NUC 上核对当前分支和工作区，再拉取同一分支：
 
 ```powershell
-Set-Location 'F:\01-Project\Opensource\01-FluidX3D\src'
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-nuc.ps1 -BuildName baseline-original
+$root = 'F:\01-Project\Opensource\01-FluidX3D'
+Set-Location "$root\src"
+git status --short --branch
+git remote -v
+git branch --show-current
+git pull --ff-only
+if ($LASTEXITCODE -ne 0) { throw 'Git pull failed.' }
+git rev-parse HEAD
 ```
 
-脚本默认工作根目录为仓库的父目录，使用工程原定的 `Release|x64` 和 `v142`，通过 `vswhere.exe` 查找 Visual Studio/MSBuild，选择实际包含该工具集配置的 VC targets。对于工程中的浮动 Windows SDK 版本 `10.0`，脚本选择完整安装的具体版本。构建前先求值并检查编译器、Windows SDK 和输出目录，再进行 `Rebuild`。无需在 SSH 会话中手动配置全局 `PATH`。
+确保两端提交一致，不强制重置未知修改。算例输入、结果和临时测试文件放在仓库外；构建脚本检查未提交和未跟踪文件。正式 V1.0.0 的精确源码基线是 `v1.0.0` 标签；发布包还保存源码快照和可克隆的 Git bundle。
 
-可显式传入 `-WorkspaceRoot 'F:\01-Project\Opensource\01-FluidX3D'`。`-PlatformToolset` 可用于有意进行的工具集对比，例如 `v143`，此时使用不同的 `BuildName` 保存对比产物；基线保持 `v142`。同一 `BuildName` 重建会替换该名称的正式产物，每次构建日志单独保留。构建脚本要求源码仓库干净，并记录 Git 提交、`src` tree、关键文件 blob、实际工具链、编译参数和 EXE 的 SHA256。
+## 在 NUC 编译
 
-构建失败时不会发布成功的 `bin/<build-name>/build.json`，运行脚本因此不会误用之前的成功产物。运行快照和历史构建日志可用于回溯。
-
-## 在 NUC 运行原始基线
+在 NUC 的 64 位 Windows PowerShell 中执行：
 
 ```powershell
-$devices = powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\get-opencl-devices.ps1 | ConvertFrom-Json
-$gpu = @($devices | Where-Object {
-    $_.platform -eq 'NVIDIA CUDA' -and $_.name -eq 'NVIDIA GeForce RTX 3060'
-})
-if ($gpu.Count -ne 1) { throw 'Expected exactly one RTX 3060; inspect the OpenCL device list.' }
-$deviceId = $gpu[0].id
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-nuc.ps1 -BuildName baseline-original -CaseName benchmark -DeviceId $deviceId -ExpectBenchmark -TimeoutSeconds 900
+$root = 'F:\01-Project\Opensource\01-FluidX3D'
+Set-Location "$root\src"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-nuc.ps1 `
+  -WorkspaceRoot $root -BuildName solver-ibm-v1.0.0 -PlatformToolset v142
+if ($LASTEXITCODE -ne 0) { throw 'Build failed; inspect workingdir/_builds.' }
+Get-Content "$root\bin\solver-ibm-v1.0.0\build.json" -Raw | ConvertFrom-Json
+& "$root\bin\solver-ibm-v1.0.0\Solver-IBM.exe" --version
 ```
 
-`get-opencl-devices.ps1` 按原始 FluidX3D 相同的枚举顺序输出 JSON，字段为 `id`、`platform`、`name`、`vendor`、`driver`、`version`。先据此定位 RTX 3060，再显式传入本次的 OpenCL `id`；不能使用 `nvidia-smi` 编号代替，也不要把 0 写死。在 `logs/stdout.log` 核对实际使用的 `Device ID` 和 `Device Name`。其他有意运行的设备同样先查列表，再传入 `-DeviceId <编号>`；不传时使用 FluidX3D 自身的自动设备选择。
+脚本使用 `Release|x64` 和默认 `v142`，通过 `vswhere.exe` 查找实际安装的 Visual Studio/MSBuild、VC targets 和 Windows SDK；先核对工具链与输出目录，再执行 `Rebuild`。现有验收环境使用 MSVC `14.29.30133`、Windows SDK `10.0.22621.0`。源码随附 OpenCL 头文件/链接库，运行时仍需 GPU 驱动提供 OpenCL。
 
-原始基线由源码启用 `BENCHMARK`、`D3Q19`、`SRT`、`FP16S`，网格为 `256 × 256 × 256`，黏度为 `1.0`，循环 1000 次、每次运行 10 步，共 10000 步。`FP16S` 用于分布函数存储压缩，算术仍使用 FP32。该 benchmark 没有外部输入，也不默认导出流场或图像，所以成功运行后的 `inputs`、`results` 目录可以为空。
+`build.json` 保存 Git 提交、源码树、实际工具链、编译参数和 EXE SHA256。成功必须同时满足脚本退出成功、记录 `status=succeeded` 和 EXE 哈希匹配。不能只看是否存在 EXE。同一 BuildName 重建会替换开发区该名称的产物；每次构建日志和运行快照独立保留。**已经发布的 `package/V1.0.0` 不通过重建覆盖。**
 
-运行前，脚本要求构建记录为 `schemaVersion=1`、`status=succeeded`，核对正式 EXE 的路径及 SHA256，并再次核对二进制快照的 SHA256。退出码为零且日志没有 FluidX3D `Error:` 才满足基本运行检查；传入 `-ExpectBenchmark` 还要求：
+模型、参数、STL 或边界只改 JSON 时无须重建 C++；改变 C++ 或编译选项后重新构建并完成对应验收。尝试其他工具集时使用新的 BuildName。
 
-- 日志包含 `256 x 256 x 256 = 16777216` 网格信息；
-- 日志包含 `D3Q19 SRT (FP32/FP16S)`；
-- 日志声明 `Time Steps` 为 `10000`；
-- 日志包含正数 `Peak MLUPs/s`，该行位于原始 benchmark 的完整循环之后。
+## 选择设备并运行配置
 
-`Peak MLUPs/s` 是此实现报告的峰值吞吐量，不等于整次运行的平均速度；首轮运行可能包含 OpenCL 内核即时编译等开销。该检查验证原始 benchmark 能完成，不能代替后续物理算例的守恒性、收敛性和精度验证。不使用 `-ExpectBenchmark` 时，`succeeded` 只代表进程正常结束且未检测到标准错误消息，具体算例仍需检查其输出。
+```powershell
+$root = 'F:\01-Project\Opensource\01-FluidX3D'
+Set-Location "$root\src"
+$devices = powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File .\scripts\get-opencl-devices.ps1 | ConvertFrom-Json
+$devices | Format-Table id, platform, name, driver
+$gpu = @($devices | Where-Object { $_.name -eq 'NVIDIA GeForce RTX 3060' })
+if ($gpu.Count -ne 1) { throw 'Inspect the OpenCL list and choose the intended device.' }
+$deviceId = [int]$gpu[0].id
 
-标准输出、标准错误和运行记录都写入本次目录。运行超时为 1–86400 秒，默认 900 秒；超时会终止本次启动的进程树，确认进程退出并记录 `timed_out`，清理异常会记录 `cleanup_failed`。`run.json` 保存开始/结束 UTC 时间、耗时、退出码、进程 ID、设备请求参数、实际命令和所有日志路径。脚本运行时保持会话直到其返回，避免直接断开 SSH 中止记录写入。
+& "$root\bin\solver-ibm-v1.0.0\Solver-IBM.exe" `
+  --config "$root\src\configs\periodic-lattice.json" --validate
+if ($LASTEXITCODE -ne 0) { throw 'Configuration validation failed.' }
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-nuc.ps1 `
+  -WorkspaceRoot $root -BuildName solver-ibm-v1.0.0 -CaseName periodic-demo `
+  -ConfigPath "$root\src\configs\periodic-lattice.json" -DeviceId $deviceId `
+  -TimeoutSeconds 900
+if ($LASTEXITCODE -ne 0) { throw 'Run failed; inspect run.json and logs.' }
+```
 
-Windows 原始 benchmark 结束时会调用 `std::cin.get()` 等待输入。脚本将标准输入连接到空文件并提供 EOF，使其自动返回；结束后删除该临时空文件。脚本仅面向无需用户交互的控制台算例，不适合需要键盘控制的交互图形模式。
+OpenCL 设备编号与 `nvidia-smi` 编号不等价，每次按实际列表选择。`--validate` 不初始化 GPU；STL 体素化、探针落入固体或受力归属等检查需要 `-PrepareOnly`。预处理输出第 0 步，正式运行会重新初始化，不从预处理结果续算。
 
-## 输出与输入资源
+运行脚本核对构建记录和 EXE 哈希，保存本次二进制快照。旧默认 `export/` 路径通过该快照目录的 junction 映射到本次 `results/`；配置模式同时显式指定求解器输出目录。配置和 STL 的有效快照在 `results/effective-config.json`、`results/inputs/assets/`，不要把 `resolved-config.json` 当作可运行输入。
 
-FluidX3D 的默认导出路径是 `get_exe_path() + "export/"`，因此仅改变当前目录不能把结果写入 `workingdir`。运行脚本将正式 EXE 复制到 `bin/_runs/<case-name>/<run-id>`，在该快照目录创建本次专属 `export` junction，指向 `workingdir/<case-name>/<run-id>/results`。程序当前目录设为本次 `workingdir`。这样可保持原始 C++ 不变，默认导出结果进入每次运行独立的目录，同时所有 EXE 仍位于 `bin`。
+标准输出、标准错误和运行记录均保留。正常计算要求外层 `run.json.status=succeeded`、内层 `completion.json.status=succeeded` 且实际步数等于请求步数；预处理的内层状态为 `prepared`、实际 0 步。进程成功不等于物理精度达标，还需查看守恒、受力、剖面和收敛依据。
 
-该映射只覆盖默认的 `export` 路径，不能重定向算例中显式指定的其他绝对路径或 `get_exe_path()` 的其他子目录。后续算例应把模型、初始条件、配置等输入明确放入本次 `inputs`，并在代码或相应算例启动流程中明确指定路径；要复现的资源需记录来源和版本/哈希。
+超时范围为 1–86400 秒，默认 900 秒。脚本只终止自己启动的进程树，记录 `timed_out`；无法确认清理完成时记录 `cleanup_failed`。运行及记录写入结束前保持 SSH 会话。
 
-脚本不会自动部署任意 STL 模型、skybox 或其他资源。一些上游示例使用 `get_exe_path()+"../stl/..."`，这些相对位置在独立运行快照布局中不会自动成立，启用前必须明确调整资源路径或增加针对该算例的部署步骤。启用图形功能时也必须核对 skybox 路径。当前脚本自动创建新的运行目录，因此需要外部输入的算例应先扩展明确的输入部署接口，再执行；不要假定预先放在另一次运行目录里的文件会被复制。
+## 正式发布包
 
-运行快照、junction、结果和记录共同保留供回溯；它们属于外层工作目录，不纳入源码 Git。清理某次历史运行时，先确认其进程已经退出，删除 junction 本身时不要递归遍历其目标，再按需要删除该运行的 `workingdir` 和 `bin/_runs` 目录。
+每个正式版本必须在 `package/V<major>.<minor>.<patch>/` 单独归档。V1.0.0 的固定位置为 `F:\01-Project\Opensource\01-FluidX3D\package\V1.0.0`。至少包含：
 
-## SSH 会话收尾
+- 原样源码快照、Git bundle、原有许可证与第三方许可证。
+- `bin/Solver-IBM.exe` 和原始构建记录。
+- 用户手册、发布说明、交接文档。
+- 全部算例配置、STL 及其他输入，完整测试脚本和必要基准资料。
+- 历史与本版本验收报告、文件清单和 SHA256。
 
-通过 `ssh NUC` 完成操作后，检查本次开启的 SSH 会话、后台连接、隧道和转发；已完成用途的连接应关闭并确认。仅处理能确认归属本次操作的连接。若仍在执行必要任务，说明实际状态和保留原因；需用户审核的事项明确列出。每次回答结束前报告本次连接检查和清理结果。
+包内 `manifest.json` 校验文件清单中的全部文件，清单自身除外。保留必要对照 VTK；不归档全部历史运行流场。历史输入和报告保留原文、失败记录及来源路径，不把旧数据改成当次发布的验证结果。P1/P2 等历史对照程序保留原始程序名和 build.json。
+
+运行正式包使用 `source/scripts/run-package.ps1`，详见[用户手册第 2.5 节](user-manual-zh.md#25-使用正式发布包)。输出写在包外 `workingdir/`，不修改包内文件。包中 `source/` 不含 `.git`，重建时先从 `source.git.bundle` 克隆到新的工作区。
+
+发布先在独立暂存目录整理并校验，完成包内运行验证后再固定为对应版本目录。若发现已发布版本需要修复，发布新补丁版本，不覆盖已有包或移动标签。Git 标签、代码版本、EXE 版本、文档和 manifest 必须对应同一正式版本。
+
+## 开发阶段与版本号
+
+V2.0 是下一阶段名称：开发期间仍使用 `V1.x.x`，功能开发完成且测试通过后才正式发布 `V2.0.0`。之后 V3.0 开发期间使用 `V2.x.x`，通过发布验收后才使用 `V3.0.0`，依次类推。开发版本的小版本/补丁号随实际变更递增，每次更新统一修改 `src/version.hpp` 并同步文档和记录。
+
+新阶段先确认需求、边界和验收标准，不因阶段名称自动启用此前讨论的功能建议。长期规则以两端项目根目录 `AGENTS.md` 为准，交接入口见 [V1.0.0 交接文档](handoff-v1.0.0.md)。
+
+## 历史产物与 SSH 收尾
+
+过去 `FluidX3D.exe`、`config-runner*` 和 `baseline-original` 对应的构建及验收证据不改名、不伪造版本身份。旧硬编码 benchmark 的 `-ExpectBenchmark`、位置式设备参数及 `setup.cpp` 选算例方式不适用于当前配置驱动 EXE；历史重放使用明确保留的旧程序及配套说明。
+
+完成 NUC 操作后，检查本次开启的 SSH 会话、后台连接、隧道及端口转发；用途结束的连接关闭并确认。只处理能确认归属本次操作的连接，不关闭用户或其他任务的会话。如果连接仍承载必要任务，应检查实际状态并说明保留原因。每次回答结束前如实报告检查及清理结果。

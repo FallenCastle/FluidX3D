@@ -1,8 +1,8 @@
-# FluidX3D 配置驱动命令行使用手册（P3）
+# Solver-IBM V1.0.0 使用手册
 
-本手册面向当前 fork 的 **P3 配置驱动版本**，覆盖编译、JSON 配置、STL、命令行运行和结果检查。修改配置中的模型、参数、网格、边界或 STL 后，可直接复用同一个 EXE；OpenCL 内核仍会在运行时由设备驱动编译或从驱动缓存加载。
+本手册面向基于 FluidX3D 开发的 **Solver-IBM V1.0.0**，覆盖编译、JSON 配置、STL、命令行运行和结果检查。修改配置中的模型、参数、网格、边界或 STL 后，可直接复用同一个 EXE；OpenCL 内核仍会在运行时由设备驱动编译或从驱动缓存加载。
 
-核对基准：分支 `codex/config-runner-p3`，文档编写前提交 `e44cef7c300775c41bcbbad30c7cf6b864fa0616`；其求解器源码与已验收构建提交 `98cdd1cffdbc8d9105a9f51b677c1a8507f8d1df` 相同。本手册不要求使用旧提交；重新构建时以实际 Git 提交和 `build.json` 为准。
+正式版本由 Git 标签 `v1.0.0` 固定；产品版本的唯一代码来源为 `src/version.hpp`。发布包的 `manifest.json` 和构建记录 `build.json` 保存具体提交、源码树和可执行文件 SHA256。`Solver-IBM.exe --version` 查询程序版本；`schema_version: 1` 仍表示 JSON 配置格式版本，与产品版本号分开管理。项目仓库和 NUC 工作目录仍沿用现有 `FluidX3D` 路径。
 
 当前支持：单 GPU、三维单相流、静态 STL 并集、常量体积力、固定位置的运动壁面、探针及受力统计；模型组合为 D3Q19/D3Q27 × SRT/TRT × Smagorinsky 开/关 × FP16S/FP32，共 16 种。图形模式、运动 STL、自由液面、热模型、多 GPU、断点续算未作为本配置接口开放。
 
@@ -23,7 +23,7 @@
 
 ### 1.1 工作分工
 
-Mac 用于编辑代码、配置和文档，并通过 Git 提交、推送。**FluidX3D 的编译、可执行程序调用和计算均在 Windows NUC 上完成**，包括 `--validate`。Mac 不编译或运行求解器。
+Mac 用于编辑代码、配置和文档，并通过 Git 提交、推送。**Solver-IBM 的编译、可执行程序调用和计算均在 Windows NUC 上完成**，包括 `--validate`。Mac 不编译或运行求解器。
 
 | 用途 | 位置 |
 |---|---|
@@ -31,9 +31,10 @@ Mac 用于编辑代码、配置和文档，并通过 Git 提交、推送。**Flu
 | 连接 NUC | 在 Mac 终端执行 `ssh NUC` |
 | NUC 工作根目录 | `F:\01-Project\Opensource\01-FluidX3D` |
 | NUC 源码仓库 | `F:\01-Project\Opensource\01-FluidX3D\src` |
-| 正式 EXE 和构建记录 | `bin/<BuildName>/FluidX3D.exe`、`build.json` |
+| 正式 EXE 和构建记录 | `bin/<BuildName>/Solver-IBM.exe`、`build.json` |
 | 算例运行记录 | `workingdir/<CaseName>/<RunId>/` |
 | 每次运行的 EXE 快照 | `bin/_runs/<CaseName>/<RunId>/` |
+| V1.0.0 正式发布归档 | `package/V1.0.0/`，发布后不在其中写入新结果 |
 
 后文 PowerShell 示例均在 **NUC 的 64 位 Windows PowerShell** 中执行。若 SSH 登录后进入 `cmd.exe`，先输入 `powershell.exe -NoProfile`。PowerShell 中行尾反引号 `` ` `` 表示续行，其后不能再有空格。
 
@@ -74,7 +75,7 @@ Set-Location "$root\src"
 git status --short --branch
 git remote -v
 git branch --show-current
-# 本手册对应 codex/config-runner-p3；如需切换，先处理现有未提交工作。
+# 开发仓库拉取当前工作分支；精确复现正式发布请使用 v1.0.0 标签或第 2.5 节的 bundle。
 git pull --ff-only
 if ($LASTEXITCODE -ne 0) { throw 'Git pull failed.' }
 git rev-parse HEAD
@@ -88,19 +89,19 @@ git rev-parse HEAD
 $root = 'F:\01-Project\Opensource\01-FluidX3D'
 Set-Location "$root\src"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-nuc.ps1 `
-  -WorkspaceRoot $root -BuildName config-runner-p3 -PlatformToolset v142
+  -WorkspaceRoot $root -BuildName solver-ibm-v1.0.0 -PlatformToolset v142
 if ($LASTEXITCODE -ne 0) { throw 'Build failed; inspect the build log.' }
 
-$build = Get-Content "$root\bin\config-runner-p3\build.json" -Raw | ConvertFrom-Json
+$build = Get-Content "$root\bin\solver-ibm-v1.0.0\build.json" -Raw | ConvertFrom-Json
 $build | Select-Object status, gitCommit, sourceTree, executablePath, executableSha256
 ```
 
-构建脚本执行 `Release|x64` 的 `Rebuild`，检查工具链和输出路径，将 EXE 发布到 `bin/config-runner-p3/`。详细日志位于 `workingdir/_builds/<BuildId>/msbuild.log`。成功应同时满足脚本正常退出、`build.json.status = succeeded`、EXE 哈希与记录一致，不能仅凭 EXE 存在判断。
+构建脚本执行 `Release|x64` 的 `Rebuild`，检查工具链和输出路径，将 EXE 发布到 `bin/solver-ibm-v1.0.0/`。详细日志位于 `workingdir/_builds/<BuildId>/msbuild.log`。成功应同时满足脚本正常退出、`build.json.status = succeeded`、EXE 哈希与记录一致，不能仅凭 EXE 存在判断。
 
 | `build-nuc.ps1` 参数 | 可用值 / 约束 | 缺省值 |
 |---|---|---|
 | `-WorkspaceRoot` | Windows 工作根目录，输出写入其 `bin`、`workingdir` | 脚本所在源码仓库的父目录 |
-| `-BuildName` | 以字母或数字开头，后续为字母、数字、`.`、`_`、`-`；为兼容运行脚本，使用不超过 64 字符的非 Windows 保留名且不以点结尾 | `baseline-original`；本版本应显式用 `config-runner-p3` |
+| `-BuildName` | 以字母或数字开头，后续为字母、数字、`.`、`_`、`-`；为兼容运行脚本，使用不超过 64 字符的非 Windows 保留名且不以点结尾 | `solver-ibm-v1.0.0`；建议仍显式填写 |
 | `-PlatformToolset` | `v` 加数字，且必须实际安装，如 `v142`、`v143` | `v142` |
 
 同一 `BuildName` 重建会替换该名称的正式产物，历史构建日志和历史运行快照保留。比较工具集或代码版本时使用不同 `BuildName`。仅改变 JSON/STL 无需重建；改变 C++ 或构建选项后需要重建。
@@ -108,7 +109,8 @@ $build | Select-Object status, gitCommit, sourceTree, executablePath, executable
 ### 2.3 查询能力与设备
 
 ```powershell
-$exe = "$root\bin\config-runner-p3\FluidX3D.exe"
+$exe = "$root\bin\solver-ibm-v1.0.0\Solver-IBM.exe"
+& $exe --version
 & $exe --help
 & $exe --capabilities
 & $exe --list-devices
@@ -121,7 +123,7 @@ if ($gpu.Count -ne 1) { throw 'Inspect the device list and select the intended O
 $deviceId = [int]$gpu[0].id
 ```
 
-`--device` 使用 **OpenCL 设备编号**，不能用 `nvidia-smi` 编号代替。上例按本 NUC 的 RTX 3060 名称选择；更换硬件时按实际列表修改筛选条件。`--capabilities` 返回 JSON，其中 `defaults` 是模型默认值，`parameters` 是条件参数范围，`model_device_bytes_per_cell` 是各模型的字段内存估算。
+`--device` 使用 **OpenCL 设备编号**，不能用 `nvidia-smi` 编号代替。上例按本 NUC 的 RTX 3060 名称选择；更换硬件时按实际列表修改筛选条件。`--version` 输出 `Solver-IBM 1.0.0`。`--capabilities` 返回 JSON，其中 `product`、`version` 标识产品，`upstream` 保留来源，`defaults` 是模型默认值，`parameters` 是条件参数范围，`model_device_bytes_per_cell` 是各模型的字段内存估算。
 
 ### 2.4 校验并运行第一个算例
 
@@ -132,13 +134,58 @@ $deviceId = [int]$gpu[0].id
 if ($LASTEXITCODE -ne 0) { throw 'Configuration validation failed.' }
 
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-nuc.ps1 `
-  -WorkspaceRoot $root -BuildName config-runner-p3 -CaseName periodic-demo `
+  -WorkspaceRoot $root -BuildName solver-ibm-v1.0.0 -CaseName periodic-demo `
   -ConfigPath "$root\src\configs\periodic-lattice.json" -DeviceId $deviceId `
   -TimeoutSeconds 900
 if ($LASTEXITCODE -ne 0) { throw 'Run failed; inspect run.json and logs.' }
 ```
 
 运行脚本会打印本次目录。`CaseName` 只是归档名称，**实际算例由 `ConfigPath` 指定**。重复运行会创建新 `RunId`，无需手动更改输出路径。检查该目录下 `run.json` 和 `results/completion.json`，再查看 VTK、CSV；[第 8 节](#8-输出文件与结果检查)说明各文件用途。
+
+### 2.5 使用正式发布包
+
+V1.0.0 完整归档位于 `F:\01-Project\Opensource\01-FluidX3D\package\V1.0.0`。已有可执行文件，无需重新编译。包内 `cases/configs/` 保存可移植配置，`cases/models/` 保存全部已有模型输入；模型目录还包含未完成几何准备的素材，不表示每个模型都已通过计算验收。完整内容及限制见 [V1.0.0 发布说明](releases/V1.0.0.md)。
+
+在 NUC 上运行包内配置：
+
+```powershell
+$root = 'F:\01-Project\Opensource\01-FluidX3D'
+$package = "$root\package\V1.0.0"
+$exe = "$package\bin\Solver-IBM.exe"
+& $exe --version
+& $exe --list-devices
+# 按刚才的 OpenCL 列表选择设备，当前 NUC 的 RTX 3060 为设备 0。
+$deviceId = 0
+& $exe --config "$package\cases\configs\periodic-lattice.json" --validate
+if ($LASTEXITCODE -ne 0) { throw 'Packaged configuration validation failed.' }
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File "$package\source\scripts\run-package.ps1" `
+  -PackageRoot $package -WorkspaceRoot $root -CaseName release-periodic `
+  -ConfigPath "$package\cases\configs\periodic-lattice.json" -DeviceId $deviceId
+if ($LASTEXITCODE -ne 0) { throw 'Packaged run failed; inspect the run record.' }
+```
+
+将 `ConfigPath` 改为包内 `poiseuille.json`、`couette.json`、`boeing-regression.json` 或 `ahmed-smoke.json`，即可使用同一 EXE 运行对应算例。计算结果和运行记录保存到包外 `workingdir/`。需要修改算例时，将配置复制到新的工作目录，同时调整 `geometry[].file` 指向的 STL；不要修改正式包中的文件。不要直接把正式包当作 `run-nuc.ps1` 的普通构建目录，因为原始 `build.json` 保留了构建时的绝对路径；包运行入口负责这一层适配并保留来源记录。
+
+`source/` 是发布提交的源码快照，不含 `.git`。需要从包中重建时，使用 `source.git.bundle` 克隆到一个新的、空的工作目录；不要在正式包内编译：
+
+```powershell
+$root = 'F:\01-Project\Opensource\01-FluidX3D'
+$package = "$root\package\V1.0.0"
+$rebuild = "$root\workingdir\rebuild-v1.0.0-" + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')
+New-Item -ItemType Directory -Path $rebuild | Out-Null
+git clone "$package\source.git.bundle" "$rebuild\src"
+if ($LASTEXITCODE -ne 0) { throw 'Bundle clone failed.' }
+git -C "$rebuild\src" checkout --detach v1.0.0
+if ($LASTEXITCODE -ne 0) { throw 'Release tag checkout failed.' }
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File "$rebuild\src\scripts\build-nuc.ps1" `
+  -WorkspaceRoot $rebuild -BuildName solver-ibm-v1.0.0 -PlatformToolset v142
+if ($LASTEXITCODE -ne 0) { throw 'Release rebuild failed.' }
+```
+
+源码可复现不意味着不同工具链、驱动或 OpenCL 设备一定产生相同的 EXE 或逐字节相同的流场。每次重建保留自己的 `build.json` 和验收记录，不替换发布包中的构建证据。
 
 ## 3. JSON 通用规则
 
@@ -554,11 +601,11 @@ my-case/
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-nuc.ps1 `
-  -WorkspaceRoot $root -BuildName config-runner-p3 -CaseName poiseuille `
+  -WorkspaceRoot $root -BuildName solver-ibm-v1.0.0 -CaseName poiseuille `
   -ConfigPath "$root\src\configs\poiseuille.json" -DeviceId $deviceId -TimeoutSeconds 900
 
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-nuc.ps1 `
-  -WorkspaceRoot $root -BuildName config-runner-p3 -CaseName couette `
+  -WorkspaceRoot $root -BuildName solver-ibm-v1.0.0 -CaseName couette `
   -ConfigPath "$root\src\configs\couette.json" -DeviceId $deviceId -TimeoutSeconds 900
 ```
 
@@ -587,10 +634,11 @@ STL 算例仍以配置中 `geometry[].file` 指向的实际文件为准。`--val
 ### 6.1 直接调用 EXE
 
 ```text
-FluidX3D.exe --config FILE [--device ID] [--output DIR] [--validate | --prepare-only]
-FluidX3D.exe --help
-FluidX3D.exe --capabilities
-FluidX3D.exe --list-devices
+Solver-IBM.exe --config FILE [--device ID] [--output DIR] [--validate | --prepare-only]
+Solver-IBM.exe --version
+Solver-IBM.exe --help
+Solver-IBM.exe --capabilities
+Solver-IBM.exe --list-devices
 ```
 
 | 参数 | 可用值 / 含义 | 缺省行为 |
@@ -600,6 +648,7 @@ FluidX3D.exe --list-devices
 | `--output DIR` | 不存在的目录或已有空目录；不能复用非空结果目录 | 配置所在目录下的 `results` |
 | `--validate` | 解析、换算、边界覆盖和 STL 格式/变换检查，不初始化 GPU，不创建结果目录 | 不启用 |
 | `--prepare-only` | 初始化 GPU、体素化、完成几何/探针/受力归属检查，输出第 0 步，不迭代 | 不启用 |
+| `--version` | 输出产品名称和版本，单独使用 | 不启用 |
 | `--help` | 显示用法，单独使用 | 无参数启动也显示帮助 |
 | `--capabilities` | 输出当前 EXE 支持能力的 JSON，单独使用 | 不启用 |
 | `--list-devices` | 枚举 OpenCL 设备，单独使用 | 不启用 |
@@ -609,7 +658,7 @@ FluidX3D.exe --list-devices
 正常完成返回退出码 0，配置入口捕获错误返回 1；外部运行脚本还会检查完成记录及日志，不只依赖退出码。调用示例：
 
 ```powershell
-$exe = "$root\bin\config-runner-p3\FluidX3D.exe"
+$exe = "$root\bin\solver-ibm-v1.0.0\Solver-IBM.exe"
 & $exe --config 'F:\cases\my-case\case.json' --validate
 
 $stamp = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')
@@ -624,21 +673,22 @@ $stamp = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')
 | 参数 | 可用值 / 范围 | 缺省值与条件 |
 |---|---|---|
 | `-WorkspaceRoot` | Windows 工作根目录 | 脚本所在源码仓库的父目录；建议显式填写 |
-| `-BuildName` | 选择 `bin/<BuildName>` 下已成功构建的 EXE | `baseline-original`；P3 显式填 `config-runner-p3` |
+| `-BuildName` | 选择 `bin/<BuildName>` 下已成功构建的 EXE | `solver-ibm-v1.0.0` |
+| `-ExecutablePath` | 显式指定迁移后的 `Solver-IBM.exe`，同目录必须有对应 `build.json`；用于发布包和测试入口 | 无；省略时按 BuildName 定位 |
 | `-CaseName` | 结果归档目录名，不改变物理算例 | `benchmark`；建议填写本次算例名 |
 | `-DeviceId` | 整数 `0..2147483647`，实际 OpenCL ID | 不提供时由求解器自动选择 |
 | `-TimeoutSeconds` | 整数 `1..86400`，整次进程最长时间，秒 | `900` |
 | `-ConfigPath` | 算例 JSON 路径，相对当前目录或绝对路径 | 无；当前配置驱动 EXE 运行时应提供 |
 | `-PrepareOnly` | 开关，不跟 `true`；只进行零步预处理 | 默认关闭，必须同时提供 `ConfigPath` |
-| `-ExpectBenchmark` | 上游硬编码 benchmark 专用验收开关 | 默认关闭；与 `ConfigPath` 互斥，P3 配置运行不使用 |
+| `-ExpectBenchmark` | 上游硬编码 benchmark 专用验收开关 | 默认关闭；与 `ConfigPath` 互斥，当前配置运行不使用 |
 
-`BuildName`、`CaseName` 均为 1–64 字符，首字符字母或数字，余下允许字母、数字、点、下划线和连字符；不能以点结尾，不能使用 Windows 保留名。脚本要求对应 `build.json` 成功、路径正确且 EXE SHA256 一致；手动替换 EXE 会被拒绝。
+`BuildName`、`CaseName` 均为 1–64 字符，首字符字母或数字，余下允许字母、数字、点、下划线和连字符；不能以点结尾，不能使用 Windows 保留名。脚本要求对应 `build.json` 成功且 EXE SHA256 一致；普通构建还要求记录中的绝对路径匹配。`-ExecutablePath` 允许迁移定位，但保留原始构建路径作为来源记录，不省略哈希校验。手动替换 EXE 会被拒绝。
 
 对一个 STL 算例先预处理：
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-nuc.ps1 `
-  -WorkspaceRoot $root -BuildName config-runner-p3 -CaseName ahmed-prepare `
+  -WorkspaceRoot $root -BuildName solver-ibm-v1.0.0 -CaseName ahmed-prepare `
   -ConfigPath "$root\src\configs\ahmed-smoke.json" -DeviceId $deviceId `
   -PrepareOnly -TimeoutSeconds 900
 ```
@@ -647,13 +697,39 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-nuc.ps1 `
 
 超时时脚本终止自己启动的进程树并写入 `timed_out`；计算及脚本返回前保持 SSH 会话。正常结束后可执行 `exit` 退出 PowerShell，再按登录环境退出 SSH；不要通过断开会话代替正常结束计算。
 
+### 6.3 `run-package.ps1` 参数与包验证
+
+正式发布包推荐使用此入口；它核对产品身份、版本和 EXE 哈希，再委托 `run-nuc.ps1` 建立包外运行目录。
+
+| 参数 | 可用值 / 含义 | 缺省值 |
+|---|---|---|
+| `-PackageRoot` | 含 `manifest.json` 的发布包目录 | 必填 |
+| `-WorkspaceRoot` | 包外 Windows 工作根目录，不能指向包内部；输出路径不能经 junction/symlink 回到包内 | 必填 |
+| `-ConfigPath` | 完整算例 JSON，STL 相对路径仍以该 JSON 所在目录解释 | 包内 `cases/configs/periodic-lattice.json` |
+| `-CaseName` | 包外结果目录名，名称规则与 `run-nuc.ps1` 一致 | `solver-ibm-demo` |
+| `-DeviceId` | 实际 OpenCL ID，整数 `0..2147483647` | 不提供时由求解器自动选择 |
+| `-TimeoutSeconds` | 整次进程秒数，整数 `1..86400` | `900` |
+| `-PrepareOnly` | 只做零步预处理 | 默认关闭 |
+
+全包文件校验及发布验收使用 `test-package.py`，结果写在包外：
+
+```powershell
+$root = 'F:\01-Project\Opensource\01-FluidX3D'
+$package = "$root\package\V1.0.0"
+python "$package\source\scripts\test-package.py" `
+  --package-root $package --workspace-root $root --device $deviceId
+if ($LASTEXITCODE -ne 0) { throw 'Package acceptance failed; inspect the printed report.' }
+```
+
+默认执行文件清单校验、版本/能力核对、包运行入口检查以及 P1/P2/存储/P3/扫描套件。`--skip-suites` 可跳过这五套完整回归，仅执行文件、身份和包运行检查；报告明确记录跳过内容，不能将这种检查当作完整发布验收。程序启动前后均检查包内容没有改变。所有程序调用仍须在 NUC 执行。
+
 ## 7. 参数扫描
 
 扫描器把一份基础算例和若干参数轴展开成笛卡尔积，每个组合生成独立 JSON，随后串行通过 `run-nuc.ps1` 执行。下面所有示例在 NUC 运行。
 
 ### 7.1 扫描规格格式
 
-扫描规格与算例配置是**两种不同 JSON**。扫描规格只能包含下列字段，不能直接传给 `FluidX3D.exe --config`：
+扫描规格与算例配置是**两种不同 JSON**。扫描规格只能包含下列字段，不能直接传给 `Solver-IBM.exe --config`：
 
 | 字段 | 可用值 / 范围 | 缺省值 |
 |---|---|---|
@@ -696,7 +772,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Study generation failed.' }
 
 # $deviceId 由第 2.3 节的设备探针选定。
 python .\scripts\parameter-study.py run --study $study `
-  --workspace-root $root --build-name config-runner-p3 --device $deviceId --timeout 900
+  --workspace-root $root --build-name solver-ibm-v1.0.0 --device $deviceId --timeout 900
 if ($LASTEXITCODE -ne 0) { throw 'Some study cases failed; inspect summary.json.' }
 ```
 
@@ -706,9 +782,12 @@ if ($LASTEXITCODE -ne 0) { throw 'Some study cases failed; inspect summary.json.
 | `generate --output` | 新目录或已有空目录，存放整个扫描快照 | 必填 |
 | `run --study` | 包含生成的 `study.json` 的**目录**，不是文件路径 | 必填 |
 | `run --workspace-root` | NUC 工作根目录 | 必填 |
-| `run --build-name` | 成功构建名称；遵循运行脚本名称规则 | 当前脚本仍为 `config-runner-p2`，运行 P3 必须显式覆盖 |
+| `run --build-name` | 成功构建名称；遵循运行脚本名称规则 | `solver-ibm-v1.0.0` |
+| `run --executable` | 显式指定已迁移的 `Solver-IBM.exe`，旁边保留其 `build.json`；用于包内 EXE | 无；默认按 workspace 和 build-name 定位 |
 | `run --device` | 整数；下游运行脚本要求 `0..2147483647` 且设备存在 | `0`，建议查询后显式传入 |
 | `run --timeout` | 每个算例的秒数；下游脚本要求 `1..86400` | `900` |
+
+若要扫描正式包中的模型，`generate --spec` 指向包内 `cases/configs/study-models.json`，生成目录仍放在包外；`run` 增加 `--executable "$package\bin\Solver-IBM.exe"`。不要把新 study 生成到正式发布包内。
 
 目录中包含 `study-original.json`、`base-original.json`、`configs/00000.json` 等、`assets/` 和 `study.json`。运行前校验快照及 EXE 哈希，运行过程中也检查 EXE 是否被替换。单个算例失败后继续其他组合，最终有失败则返回非零；各次执行的汇总写到 `<study>/runs/<RunId>/summary.json` 和 `summary.csv`。重复 `run` 会全部重新执行并创建新记录，不会跳过上次成功项。
 
@@ -796,7 +875,7 @@ Import-Csv "$runDir\results\monitor.csv" | Select-Object -Last 5
 |---|---|
 | `The source repository must be clean` | Mac 上提交应跟踪的改动并推送，NUC 拉取；自己的算例/结果放在仓库外，检查未跟踪文件，不直接丢弃未知修改 |
 | 找不到 `vswhere`、工具集或 Windows SDK | 安装/补齐 1.2 所列依赖，检查构建日志；使用实际安装的工具集，默认 v142 |
-| EXE 只显示帮助 | 提供 `--config`；不要沿用硬编码版本的位置参数 `FluidX3D.exe 0` |
+| EXE 只显示帮助 | 提供 `--config`；不要沿用硬编码版本的位置参数 `Solver-IBM.exe 0` |
 | `Unknown field` / `Missing required field` | 对照第 4 节检查拼写、大小写、必填字段和互斥项；不要用 `null` 代替省略 |
 | `Output directory must be empty` | 给直接调用指定新的 `--output`，或用运行脚本自动分配目录；不要覆盖已有结果 |
 | `Requested OpenCL device not found` | 重新枚举 OpenCL ID，确认驱动及所选设备；校验模式不会检测该错误 |
@@ -822,6 +901,7 @@ Import-Csv "$runDir\results\monitor.csv" | Select-Object -Last 5
 本手册是当前配置驱动接口的统一使用入口。阶段设计和验收记录保留历史信息：
 
 - [NUC 构建、运行目录约定](nuc-workflow.md)
+- [V1.0.0 发布说明](releases/V1.0.0.md)、[版本交接文档](handoff-v1.0.0.md)
 - [P0/P1 说明](config-runner.md)、[P2 说明](config-runner-p2.md)、[P3 模型说明](config-runner-p3.md)
 - [P3 验收记录及精度边界](validation/config-runner-p3-2026-09-22.md)
 

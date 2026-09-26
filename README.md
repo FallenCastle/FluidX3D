@@ -1,6 +1,17 @@
-# FluidX3D
+# Solver-IBM V1.0.0
 
-本 fork 的配置驱动命令行版本请先阅读 **[中文使用手册（P3）](docs/user-manual-zh.md)**：编译、全部 JSON 字段及默认值、STL、运行命令、参数扫描和输出说明。下文保留上游项目介绍。
+Solver-IBM 是基于 [FluidX3D](https://github.com/ProjectPhysX/FluidX3D) 修改的配置驱动命令行求解器。编译一次 `Solver-IBM.exe`，通过 JSON 和 STL 选择受支持的模型、单位、计算域、边界条件及分析输出。产品名称不改变上游算法和依赖的来源；上游作者署名、许可证及第三方许可证继续保留。
+
+- [中文使用手册](docs/user-manual-zh.md)：编译、全部 JSON 字段及默认值、STL、运行命令、参数扫描和输出。
+- [V1.0.0 发布说明](docs/releases/V1.0.0.md)：发布包内容、复现方式与已知限制。
+- [交接文档](docs/handoff-v1.0.0.md)：架构、测试依据、版本规则与下一阶段入口。
+- [NUC 工作流程](docs/nuc-workflow.md)：Git 同步、构建、运行及归档。
+
+正式归档目录：`F:\01-Project\Opensource\01-FluidX3D\package\V1.0.0`。版本代码以 Git 标签 `v1.0.0` 固定，版本号统一维护在 `src/version.hpp`；执行 `Solver-IBM.exe --version` 查询程序版本。V2.0 开发阶段使用 `V1.x.x`，功能完成且验收通过后才发布 `V2.0.0`。
+
+## 上游 FluidX3D 说明
+
+以下保留上游项目介绍和历史；其中的上游版本号、平台能力、构建命令及历史程序名不代表 Solver-IBM V1.0.0 配置接口的支持范围。当前使用方式以以上中文文档为准。
 
 The fastest and most memory efficient lattice Boltzmann CFD software, running on all GPUs and CPUs via [OpenCL](https://github.com/ProjectPhysX/OpenCL-Wrapper "OpenCL-Wrapper"). Free for non-commercial use.
 
