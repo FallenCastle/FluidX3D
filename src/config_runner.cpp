@@ -546,7 +546,7 @@ static void project_closed_sensible_energy(LBM &lbm, const Config &c, const doub
         const double heat_capacity = fraction * domain->thermal_capacity[n];
         current += heat_capacity * domain->T[n];
         all_capacity += heat_capacity;
-        if (domain->material[n] == 0u)
+        if (domain->material[n] == 0u && !(lbm.flags[n] & TYPE_T))
             fluid_capacity += heat_capacity;
     }
     const bool correct_all = fluid_capacity <= 0;
@@ -558,7 +558,7 @@ static void project_closed_sensible_energy(LBM &lbm, const Config &c, const doub
         const bool active = domain->material[n] != 255u &&
                             (!c.model.free_surface || domain->material[n] > 0u ||
                              (lbm.flags[n] & (TYPE_F | TYPE_I)));
-        if (active && (correct_all || domain->material[n] == 0u)) {
+        if (active && (correct_all || (domain->material[n] == 0u && !(lbm.flags[n] & TYPE_T)))) {
             domain->T[n] = static_cast<float>(domain->T[n] + delta);
             require(std::isfinite(domain->T[n]) && domain->T[n] > 0,
                     context + " sensible-energy correction produced an invalid temperature");
@@ -1734,6 +1734,8 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
     c.resolved["conservation"] = {{"closed_domain", closed_domain},
                                   {"mass_projection", conserve_mass},
                                   {"sensible_energy_projection", closed_adiabatic_thermal},
+                                  {"open_free_surface_energy_projection",
+                                   c.model.temperature && c.model.free_surface && !closed_adiabatic_thermal},
                                   {"thermal_boundary_exchange", has_thermal_boundary_exchange}};
     if (std::isfinite(dynamic_mass_target))
         c.resolved["conservation"]["initial_mass_lattice"] = dynamic_mass_target;
@@ -1742,9 +1744,25 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
     save_json(output / "resolved-config.json", c.resolved);
     BudgetTotals budget;
     double open_mass_target = std::numeric_limits<double>::quiet_NaN();
+    double open_energy_target = std::numeric_limits<double>::quiet_NaN();
+    if (c.model.temperature && c.model.free_surface && !std::isfinite(dynamic_energy_target)) {
+        auto *domain = lbm.lbm_domain[0];
+        open_energy_target = 0;
+        for (ulong n = 0; n < lbm.get_N(); n++) {
+            const bool active = domain->material[n] != 255u &&
+                                (domain->material[n] > 0u || (lbm.flags[n] & (TYPE_F | TYPE_I)));
+            if (!active)
+                continue;
+            const double fraction = domain->material[n] == 0u
+                                        ? std::clamp(static_cast<double>(lbm.phi[n]), 0.0, 1.0)
+                                        : 1.0;
+            open_energy_target += fraction * domain->thermal_capacity[n] * lbm.T[n];
+        }
+    }
     auto advance_to = [&](ulong target) {
         if (!c.model.dynamic_geometry && !(c.model.free_surface && std::isfinite(dynamic_mass_target)) &&
-            flux_surfaces.empty() && !has_thermal_boundary_exchange) {
+            !std::isfinite(dynamic_energy_target) && !std::isfinite(open_energy_target) && flux_surfaces.empty() &&
+            !has_thermal_boundary_exchange) {
             const ulong steps = target - lbm.get_t();
             lbm.run(steps, c.steps);
             budget.cumulative_source_in += dynamic_energy_source_per_step * static_cast<double>(steps);
@@ -1765,9 +1783,14 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
                     project_closed_sensible_energy(lbm, c, dynamic_energy_target, "Closed-domain");
                 }
             }
-            budget.cumulative_source_in += dynamic_energy_source_per_step;
-            if (has_thermal_boundary_exchange)
-                budget.cumulative_boundary_heat_in += thermal_boundary_heat(lbm);
+            const double step_source = dynamic_energy_source_per_step;
+            budget.cumulative_source_in += step_source;
+            double step_boundary_heat = 0;
+            if (has_thermal_boundary_exchange) {
+                step_boundary_heat = thermal_boundary_heat(lbm);
+                budget.cumulative_boundary_heat_in += step_boundary_heat;
+            }
+            double step_enthalpy_outward = 0;
             if (!flux_surfaces.empty()) {
                 sync(lbm);
                 const auto flow = boundary_flow(lbm, c, flux_surfaces);
@@ -1779,6 +1802,11 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
                 }
                 budget.cumulative_mass_outward += flow.first;
                 budget.cumulative_enthalpy_outward += flow.second;
+                step_enthalpy_outward = flow.second;
+            }
+            if (std::isfinite(open_energy_target)) {
+                open_energy_target += step_source + step_boundary_heat - step_enthalpy_outward;
+                project_closed_sensible_energy(lbm, c, open_energy_target, "Open free-surface");
             }
         }
     };
