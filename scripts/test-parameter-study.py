@@ -15,13 +15,20 @@ p1=importlib.util.module_from_spec(spec);spec.loader.exec_module(p1)
 
 def main():
     p=argparse.ArgumentParser();p.add_argument('--workspace-root',type=Path,required=True)
+    p.add_argument('--repository-root',type=Path)
+    p.add_argument('--configs-root',type=Path)
+    p.add_argument('--build-name',default='solver-ibm-v1.0.0')
+    p.add_argument('--executable',type=Path)
+    p.add_argument('--device',default='0')
     args=p.parse_args()
     if os.name!='nt':p.error('NUC only')
-    workspace=args.workspace_root;repo=workspace/'src'
+    workspace=args.workspace_root.resolve();repo=(args.repository_root or workspace/'src').resolve()
+    configs=(args.configs_root or repo/'configs').resolve()
+    exe=(args.executable or workspace/'bin'/args.build_name/'Solver-IBM.exe').resolve()
     root=workspace/'workingdir'/'study-validation'/datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
     root.mkdir(parents=True)
     script=repo/'scripts'/'parameter-study.py'
-    base=json.loads((repo/'configs'/'periodic-lattice.json').read_text())
+    base=json.loads((configs/'periodic-lattice.json').read_text())
     p1.cube(root/'cube.stl')
     base['geometry']=[{'id':'cube','file':'cube.stl','transform':{'mode':'scale','factor':4,'translation':[6,6,6],'degrees':0}}]
     (root/'base.json').write_text(json.dumps(base),encoding='utf-8')
@@ -39,7 +46,7 @@ def main():
         command('generate',['generate','--spec',root/'study-spec.json','--output',bundle])
         command('refuse-overwrite',['generate','--spec',root/'study-spec.json','--output',bundle],False)
         (root/'cube.stl').rename(root/'original-moved.stl')
-        command('run-without-original-asset',['run','--study',bundle,'--workspace-root',workspace])
+        command('run-without-original-asset',['run','--study',bundle,'--workspace-root',workspace,'--build-name',args.build_name,'--executable',exe,'--device',args.device])
         summary=json.loads(next((bundle/'runs').glob('*/summary.json')).read_text())
         assert len(summary['cases'])==2 and summary['status']=='succeeded'
         for case in summary['cases']:
@@ -48,7 +55,7 @@ def main():
             assert case['statistics'] is None
         report['batch']=summary
         config=bundle/'configs'/'00000.json';config.write_text(config.read_text()+'\n')
-        command('reject-tampered-config',['run','--study',bundle,'--workspace-root',workspace],False)
+        command('reject-tampered-config',['run','--study',bundle,'--workspace-root',workspace,'--build-name',args.build_name,'--executable',exe,'--device',args.device],False)
         for name,axes in [
             ('missing-path',[{'path':'/unknown','values':[1]}]),
             ('duplicate-path',[{'path':'/fluid/nu','values':[1]}]*2),

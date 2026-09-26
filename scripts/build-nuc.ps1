@@ -3,7 +3,7 @@
 param(
     [string]$WorkspaceRoot = (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)),
     [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9._-]*$')]
-    [string]$BuildName = 'baseline-original',
+    [string]$BuildName = 'solver-ibm-v1.0.0',
     [ValidatePattern('^v[0-9]+$')]
     [string]$PlatformToolset = 'v142'
 )
@@ -58,7 +58,7 @@ function ConvertTo-MSBuildDirectory {
 $RepositoryRoot = [System.IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
 $WorkspaceRoot = [System.IO.Path]::GetFullPath($WorkspaceRoot)
 $outputDirectory = Join-Path (Join-Path $WorkspaceRoot 'bin') $BuildName
-$executablePath = Join-Path $outputDirectory 'FluidX3D.exe'
+$executablePath = Join-Path $outputDirectory 'Solver-IBM.exe'
 $manifestPath = Join-Path $outputDirectory 'build.json'
 $temporaryManifestPath = Join-Path $outputDirectory 'build.json.tmp'
 $lockStream = $null
@@ -70,6 +70,16 @@ try {
     if ($env:OS -ne 'Windows_NT') {
         throw 'Run this script on NUC under Windows, not on the Mac.'
     }
+    $versionHeader = [IO.File]::ReadAllText((Join-Path $RepositoryRoot 'src\version.hpp'))
+    $productMatch = [regex]::Match($versionHeader, '(?m)^#define\s+SOLVER_IBM_NAME\s+"([^"]+)"\s*$')
+    if (-not $productMatch.Success) { throw 'Missing SOLVER_IBM_NAME in src/version.hpp.' }
+    $productName = $productMatch.Groups[1].Value
+    $versionParts = foreach ($part in @('MAJOR', 'MINOR', 'PATCH')) {
+        $match = [regex]::Match($versionHeader, "(?m)^#define\s+SOLVER_IBM_VERSION_$part\s+([0-9]+)\s*$")
+        if (-not $match.Success) { throw "Missing SOLVER_IBM_VERSION_$part in src/version.hpp." }
+        $match.Groups[1].Value
+    }
+    $productVersion = $versionParts -join '.'
     New-Item -ItemType Directory -Path $outputDirectory -Force | Out-Null
     # One build at a time may publish a particular BuildName.
     $lockStream = [System.IO.File]::Open((Join-Path $outputDirectory '.build.lock'),
@@ -89,6 +99,9 @@ try {
         schemaVersion = 1
         status = 'running'
         buildName = $BuildName
+        productName = $productName
+        productVersion = $productVersion
+        executableName = 'Solver-IBM.exe'
         gitCommit = $gitCommit
         sourceTree = $sourceTree
         repositoryPath = $RepositoryRoot
@@ -155,7 +168,7 @@ try {
         "/p:SolutionDir=$(ConvertTo-MSBuildDirectory $RepositoryRoot)",
         "/p:OutDir=$(ConvertTo-MSBuildDirectory $outputDirectory)",
         "/p:IntDir=$(ConvertTo-MSBuildDirectory $intermediateDirectory)",
-        '/p:TargetName=FluidX3D'
+        '/p:TargetName=Solver-IBM'
     )
     $evaluationLog = Join-Path $logDirectory 'evaluation.json'
     $propertyNames = 'VCTargetsPath,PlatformToolset,VCToolsInstallDir,VCToolsVersion,WindowsSdkDir,WindowsTargetPlatformVersion,TargetPath,OutDir,IntDir'
@@ -230,6 +243,11 @@ try {
         throw 'The source repository changed during the build; the executable will not be published.'
     }
     $record['executableSha256'] = (Get-FileHash -LiteralPath $executablePath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $versionOutput = @(& $executablePath --version)
+    if ($LASTEXITCODE -ne 0 -or ($versionOutput -join "`n").Trim() -ne "$productName $productVersion") {
+        throw 'Built executable --version does not match src/version.hpp.'
+    }
+    $record['reportedVersion'] = ($versionOutput -join "`n").Trim()
     $record['status'] = 'succeeded'
     $record['completedAtUtc'] = [DateTime]::UtcNow.ToString('o')
     Write-JsonFile $record $recordPath

@@ -36,7 +36,10 @@ def rows(path):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--workspace-root', type=Path, required=True)
-    parser.add_argument('--build-name', default='config-runner-p2')
+    parser.add_argument('--build-name', default='solver-ibm-v1.0.0')
+    parser.add_argument('--repository-root', type=Path)
+    parser.add_argument('--configs-root', type=Path)
+    parser.add_argument('--executable', type=Path)
     parser.add_argument('--device', default='0')
     scaling=parser.add_mutually_exclusive_group()
     scaling.add_argument('--diffusive-refinement', dest='diffusive_refinement', action='store_true', default=True)
@@ -44,9 +47,10 @@ def main():
     args = parser.parse_args()
     if os.name != 'nt':
         parser.error('Run on Windows NUC only')
-    workspace = args.workspace_root
-    repo = workspace / 'src'
-    exe = workspace / 'bin' / args.build_name / 'FluidX3D.exe'
+    workspace = args.workspace_root.resolve()
+    repo = (args.repository_root or workspace / 'src').resolve()
+    configs = (args.configs_root or repo/'configs').resolve()
+    exe = (args.executable or workspace / 'bin' / args.build_name / 'Solver-IBM.exe').resolve()
     root = workspace / 'workingdir' / 'p2-validation' / datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
     root.mkdir(parents=True)
     report = {'status': 'running', 'build': read(exe.parent/'build.json'),
@@ -77,7 +81,7 @@ def main():
         return directory/'results'
 
     try:
-        base = read(repo/'configs'/'probes-periodic.json')
+        base = read(configs/'probes-periodic.json')
         base['analysis']['probes'][0]['id'] = '中心,"probe"'
         base['analysis']['probes'][0]['position'] = [8, 8.5, 8.5]
         r = invoke('periodic-probes', base)
@@ -130,7 +134,7 @@ def main():
                 assert math.isclose(float(b[field]),float(a[field])*scale,rel_tol=2e-6,abs_tol=1e-8),(field,a,b)
         for case in ['poiseuille','couette']:
             for height in [8,16,32]:
-                c = read(repo/'configs'/f'{case}.json')
+                c = read(configs/f'{case}.json')
                 c['domain']['cells']=[8,height+2,8]
                 speed = .1
                 nu = .2*height/8  # acoustic scaling: fixed U=0.1 and Re=4
@@ -183,11 +187,11 @@ def main():
                     assert math.isclose(b,a*rho*dx**4/dt**2,rel_tol=1e-5,abs_tol=1e-7),(case,side,field,a,b)
             fields=p1.vtk(out/f"u-{config['run']['steps']:09d}.vtk")
             assert fields['spacing']==(.01,.01,.01)
-        wall=read(repo/'configs'/'couette.json');wall['boundaries'][2]['velocity'][1]=.01
+        wall=read(configs/'couette.json');wall['boundaries'][2]['velocity'][1]=.01
         invoke('normal-wall-speed',wall,error='tangential')
         wall['boundaries'][2]['velocity'][1]=0;wall['fluid']['rho']=2
         invoke('wall-density',wall,error='density 1')
-        wall=read(repo/'configs'/'couette.json');wall['analysis']['probes'][0]['position']=[4.5,.5,4.5]
+        wall=read(configs/'couette.json');wall['analysis']['probes'][0]['position']=[4.5,.5,4.5]
         invoke('solid-probe',wall,error='inside solid')
         # Snapshot geometry targets, rejected overlapping target, force sampling must not perturb fields.
         mesh=root/'cube.stl';p1.cube(mesh)
@@ -203,18 +207,18 @@ def main():
         # Batch generation and execution, all through the production NUC wrapper.
         study=root/'study 中文'
         script=repo/'scripts'/'parameter-study.py'
-        subprocess.run([sys.executable,str(script),'generate','--spec',str(repo/'configs'/'study-periodic.json'),'--output',str(study)],check=True)
-        subprocess.run([sys.executable,str(script),'run','--study',str(study),'--workspace-root',str(workspace),'--build-name',args.build_name,'--device',args.device],check=True)
+        subprocess.run([sys.executable,str(script),'generate','--spec',str(configs/'study-periodic.json'),'--output',str(study)],check=True)
+        subprocess.run([sys.executable,str(script),'run','--study',str(study),'--workspace-root',str(workspace),'--build-name',args.build_name,'--executable',str(exe),'--device',args.device],check=True)
         summary=read(next((study/'runs').glob('*/summary.json')))
         report['batch_success']=summary
         assert summary['status']=='succeeded' and len(summary['cases'])==4
         assert all(x['steps']==23 for x in summary['cases'])
         # Failed combination is retained and does not stop the remaining case.
         badspec=root/'study-fail.json'
-        write(badspec,{'schema_version':1,'base_config':str(repo/'configs'/'probes-periodic.json'),'parameters':[{'path':'/fluid/nu','values':[-.01,.02]}]})
+        write(badspec,{'schema_version':1,'base_config':str(configs/'probes-periodic.json'),'parameters':[{'path':'/fluid/nu','values':[-.01,.02]}]})
         badstudy=root/'failed-study'
         subprocess.run([sys.executable,str(script),'generate','--spec',str(badspec),'--output',str(badstudy)],check=True)
-        result=subprocess.run([sys.executable,str(script),'run','--study',str(badstudy),'--workspace-root',str(workspace),'--build-name',args.build_name,'--device',args.device])
+        result=subprocess.run([sys.executable,str(script),'run','--study',str(badstudy),'--workspace-root',str(workspace),'--build-name',args.build_name,'--executable',str(exe),'--device',args.device])
         assert result.returncode!=0
         summary=read(next((badstudy/'runs').glob('*/summary.json')))
         report['batch_mixed']=summary

@@ -2,6 +2,7 @@
 #include "config_analysis.hpp"
 #include "info.hpp"
 #include "lbm.hpp"
+#include "version.hpp"
 #include <cstring>
 #include <iomanip>
 #include <memory>
@@ -184,7 +185,9 @@ static void vtk(LBM &lbm, const Config &c, const fs::path &output, const std::st
     std::ofstream file(filename, std::ios::binary);
     require(bool(file), "Cannot write VTK");
     file << std::setprecision(17)
-         << "# vtk DataFile Version 3.0\nFluidX3D configuration runner\nBINARY\nDATASET STRUCTURED_POINTS\nDIMENSIONS "
+         << "# vtk DataFile Version 3.0\n" SOLVER_IBM_NAME " " SOLVER_IBM_VERSION_STRING
+            " (based on " SOLVER_IBM_UPSTREAM_NAME " " SOLVER_IBM_UPSTREAM_VERSION
+            ")\nBINARY\nDATASET STRUCTURED_POINTS\nDIMENSIONS "
          << c.cells[0] << ' ' << c.cells[1] << ' ' << c.cells[2] << "\nORIGIN " << c.origin[0] + .5 * c.dx << ' '
          << c.origin[1] + .5 * c.dx << ' ' << c.origin[2] + .5 * c.dx << "\nSPACING " << c.dx << ' ' << c.dx << ' '
          << c.dx << "\nPOINT_DATA " << lbm.get_N() << "\nSCALARS " << fieldname << ' '
@@ -435,13 +438,16 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
     (void)last_output;
     analysis.finish();
     std::ofstream status(output / "status.txt", std::ios::binary);
-    status << "FluidX3D configuration runner\nCase = " << c.name << "\nSteps = " << lbm.get_t()
+    status << SOLVER_IBM_NAME " " SOLVER_IBM_VERSION_STRING "\nBased on " SOLVER_IBM_UPSTREAM_NAME " "
+              SOLVER_IBM_UPSTREAM_VERSION "\nCase = " << c.name << "\nSteps = " << lbm.get_t()
            << "\nRequested steps = " << c.steps << "\nLattice viscosity = " << std::setprecision(17) << c.nu
            << "\nTime per step = " << c.dt << "\nStorage = " << ddf_storage_name(c.storage)
            << "\nSolver = " << solver_description(c).dump() << "\n";
     status.close();
     require(bool(status), "Cannot write status report");
-    save_json(output / "completion.json", {{"status", prepare ? "prepared" : "succeeded"},
+    save_json(output / "completion.json", {{"product", SOLVER_IBM_NAME},
+                                           {"version", SOLVER_IBM_VERSION_STRING},
+                                           {"status", prepare ? "prepared" : "succeeded"},
                                            {"storage", ddf_storage_name(c.storage)},
                                            {"solver", solver_description(c)},
                                            {"steps", lbm.get_t()},
@@ -479,8 +485,16 @@ int entry(int argc, char *argv[]) {
         bool validate = false, prepare = false;
         std::set<std::string> seen;
         if (args.empty() || (args.size() == 1 && args[0] == "--help")) {
-            std::cout << "FluidX3D.exe --config FILE [--device ID] [--output DIR] [--validate | "
-                         "--prepare-only]\nFluidX3D.exe --capabilities | --list-devices | --help\n";
+            std::cout << SOLVER_IBM_NAME " " SOLVER_IBM_VERSION_STRING "\n"
+                         SOLVER_IBM_EXECUTABLE " --config FILE [--device ID] [--output DIR] [--validate | "
+                         "--prepare-only]\n" SOLVER_IBM_EXECUTABLE
+                         " --capabilities | --list-devices | --version | --help\n"
+                         "Based on " SOLVER_IBM_UPSTREAM_NAME " " SOLVER_IBM_UPSTREAM_VERSION "; "
+                         SOLVER_IBM_UPSTREAM_CREDIT ".\n";
+            return 0;
+        }
+        if (args.size() == 1 && args[0] == "--version") {
+            std::cout << SOLVER_IBM_NAME " " SOLVER_IBM_VERSION_STRING "\n";
             return 0;
         }
         if (args.size() == 1 && args[0] == "--capabilities") {
@@ -537,7 +551,10 @@ int entry(int argc, char *argv[]) {
         require(sha256(c.path) == sha256(original), "Config changed while snapshotting");
         std::ifstream copied_config(original, std::ios::binary);
         require(Json::parse(copied_config) == c.source, "Config changed after validation");
-        Json effective = c.source, manifest = {{"config_sha256", sha256(original)}, {"assets", Json::array()}};
+        Json effective = c.source, manifest = {{"product", SOLVER_IBM_NAME},
+                                               {"version", SOLVER_IBM_VERSION_STRING},
+                                               {"config_sha256", sha256(original)},
+                                               {"assets", Json::array()}};
         for (size_t i = 0; i < c.geometry.size(); i++) {
             auto name = std::to_string(i) + ".stl";
             auto target = output / "inputs" / "assets" / name;
@@ -562,7 +579,11 @@ int entry(int argc, char *argv[]) {
         manifest["executable_sha256"] = sha256(fs::path(exe));
 #endif
         save_json(output / "manifest.json", manifest);
-        save_json(output / "completion.json", {{"status", "starting"}, {"requested_steps", c.steps}, {"steps", 0}});
+        save_json(output / "completion.json", {{"product", SOLVER_IBM_NAME},
+                                               {"version", SOLVER_IBM_VERSION_STRING},
+                                               {"status", "starting"},
+                                               {"requested_steps", c.steps},
+                                               {"steps", 0}});
         info.print_logo();
         solve(c, output, device, prepare);
         running = false;
@@ -571,7 +592,10 @@ int entry(int argc, char *argv[]) {
         std::cerr << "Error: " << e.what() << std::endl;
         if (owns_output)
             try {
-                save_json(output / "completion.json", {{"status", "failed"}, {"error", e.what()}});
+                save_json(output / "completion.json", {{"product", SOLVER_IBM_NAME},
+                                                       {"version", SOLVER_IBM_VERSION_STRING},
+                                                       {"status", "failed"},
+                                                       {"error", e.what()}});
             } catch (...) {
             }
         running = false;

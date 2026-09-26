@@ -128,7 +128,7 @@ def run(args):
         if not path.is_relative_to(root) or sha(path) != expected:
             raise ValueError(f'Study snapshot mismatch: {rel}')
     workspace = args.workspace_root.resolve()
-    exe = workspace / 'bin' / args.build_name / 'FluidX3D.exe'
+    exe = (args.executable or workspace / 'bin' / args.build_name / 'Solver-IBM.exe').resolve()
     expected = sha(exe)
     build = read(exe.parent / 'build.json')
     if expected != build['executableSha256']:
@@ -148,7 +148,7 @@ def run(args):
             if not config.is_relative_to(root) or item['config'] not in manifest['files'] or sha(config) != manifest['files'][item['config']]:
                 raise ValueError('Config snapshot mismatch')
             command = ['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(script),
-                       '-WorkspaceRoot', str(workspace), '-BuildName', args.build_name, '-CaseName', name,
+                       '-WorkspaceRoot', str(workspace), '-BuildName', args.build_name, '-ExecutablePath', str(exe), '-CaseName', name,
                        '-ConfigPath', str(config), '-DeviceId', str(args.device), '-TimeoutSeconds', str(args.timeout)]
             with (output / (item['id'] + '.log')).open('wb') as log:
                 result = subprocess.run(command, stdout=log, stderr=subprocess.STDOUT)
@@ -190,7 +190,8 @@ def main():
     exe = commands.add_parser('run')
     exe.add_argument('--study', type=Path, required=True)
     exe.add_argument('--workspace-root', type=Path, required=True)
-    exe.add_argument('--build-name', default='config-runner-p2')
+    exe.add_argument('--build-name', default='solver-ibm-v1.0.0')
+    exe.add_argument('--executable', type=Path, help='Relocated Solver-IBM.exe with adjacent build.json')
     exe.add_argument('--device', type=int, default=0)
     exe.add_argument('--timeout', type=int, default=900)
     args = parser.parse_args()

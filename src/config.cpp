@@ -1,4 +1,5 @@
 #include "config.hpp"
+#include "version.hpp"
 #include <algorithm>
 #include <cmath>
 #include <fstream>
@@ -110,7 +111,10 @@ std::string sha256(const fs::path &path) {
 #endif
 }
 Json capabilities() {
-    return {{"schema_version", 1},
+    return {{"product", SOLVER_IBM_NAME},
+            {"version", SOLVER_IBM_VERSION_STRING},
+            {"upstream", {{"product", SOLVER_IBM_UPSTREAM_NAME}, {"version", SOLVER_IBM_UPSTREAM_VERSION}}},
+            {"schema_version", 1},
             {"lattice", {"D3Q19", "D3Q27"}},
             {"collision", {"SRT", "TRT"}},
             {"storage", {"FP16S", "FP32"}},
@@ -568,7 +572,9 @@ Config read_config(const fs::path &path) {
         umax = std::max(umax, speed(r.velocity));
     require(static_cast<float>(0.5 + 3 * c.nu) > 0.5f,
             "Viscosity is too small to represent a relaxation time above 0.5");
-    c.resolved = {{"schema_version", 1},
+    c.resolved = {{"product", SOLVER_IBM_NAME},
+                  {"version", SOLVER_IBM_VERSION_STRING},
+                  {"schema_version", 1},
                   {"case", c.name},
                   {"capabilities", capabilities()},
                   {"storage", ddf_storage_name(c.storage)},

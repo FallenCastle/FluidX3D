@@ -32,6 +32,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>$(SolutionDir)bin\</OutDir>
     <IntDir>$(SolutionDir)temp\</IntDir>
+    <TargetName>Solver-IBM</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -70,6 +71,7 @@
     <ClCompile Include="src\shapes.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\version.hpp" />
     <ClInclude Include="src\storage.hpp" />
     <ClInclude Include="src\solver_options.hpp" />
     <ClInclude Include="src\config.hpp" />

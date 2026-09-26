@@ -1,12 +1,13 @@
 #define APSTUDIO_READONLY_SYMBOLS
 #include "winres.h"
+#include "version.hpp"
 #undef APSTUDIO_READONLY_SYMBOLS
 
 MAINICON ICON "icon.ico"
 
 VS_VERSION_INFO VERSIONINFO
-	FILEVERSION 0,0,0,0
-	PRODUCTVERSION 0,0,0,0
+	FILEVERSION SOLVER_IBM_VERSION_RESOURCE
+	PRODUCTVERSION SOLVER_IBM_VERSION_RESOURCE
 	FILEFLAGSMASK 0x3FL
 	FILEFLAGS 0x0L
 	FILEOS 0x4L
@@ -17,14 +18,15 @@ BEGIN
 	BEGIN
 		BLOCK "040904E4"
 		BEGIN
-			VALUE "CompanyName", "ProjectPhysX"
-			VALUE "FileDescription", "FluidX3D"
-			VALUE "FileVersion", "0.0.0.0"
-			VALUE "InternalName", "FluidX3D"
+			VALUE "CompanyName", "Solver-IBM contributors"
+			VALUE "FileDescription", SOLVER_IBM_NAME " command-line LBM solver"
+			VALUE "FileVersion", SOLVER_IBM_VERSION_STRING
+			VALUE "InternalName", SOLVER_IBM_NAME
 			VALUE "LegalCopyright", "(c) Dr. Moritz Lehmann"
-			VALUE "OriginalFilename", "FluidX3D.exe"
-			VALUE "ProductName", "FluidX3D"
-			VALUE "ProductVersion", "v3.8"
+			VALUE "OriginalFilename", SOLVER_IBM_EXECUTABLE
+			VALUE "ProductName", SOLVER_IBM_NAME
+			VALUE "ProductVersion", SOLVER_IBM_VERSION_STRING
+			VALUE "Comments", "Altered version of " SOLVER_IBM_UPSTREAM_NAME " " SOLVER_IBM_UPSTREAM_VERSION
 		END
 	END
 	BLOCK "VarFileInfo"

@@ -1,5 +1,6 @@
 #include "info.hpp"
 #include "lbm.hpp"
+#include "version.hpp"
 
 Info info;
 
@@ -25,26 +26,12 @@ double Info::time() const { // returns either elapsed time or remaining time
 	//return steps==max_ulong ? runtime_lbm : ((double)steps-(double)(lbm->get_t()-steps_last))*runtime_lbm_timestep_smooth; // instantaneous time estimation
 }
 void Info::print_logo() const {
-	const int a=color_light_blue, b=color_orange, c=color_pink;
-	print(".-----------------------------------------------------------------------------.\n");
-	print("|                      "); print(  " ______________  ", a);                  print(" ______________ ", b); print("                      |\n");
-	print("|                       "); print( "\\   ________  | ", a);                  print("|  ________   /", b); print("                       |\n");
-	print("|                        "); print("\\  \\       | | ", a);                  print("| |       /  /", b); print("                        |\n");
-	print("|                         "); print("\\  \\      | | ", a);                  print("| |      /  /", b); print("                         |\n");
-	print("|                          "); print("\\  \\     | | ", a);                  print("| |     /  /", b); print("                          |\n");
-	print("|                           "); print("\\  \\_.-\"  | ", a);                print("|  \"-._/  /", b); print("                           |\n");
-	print("|                            "); print("\\    _.-\" ", a);  print("_ ", c);  print("\"-._    /", b); print("                            |\n");
-	print("|                             "); print("\\.-\" ", a); print("_.-\" \"-._ ", c); print("\"-./", b); print("                             |\n");
-	print("|                              ");                 print(" .-\"  .-\"-.  \"-. ", c);               print("                              |\n");
-	print("|                               ");                 print("\\  v\"     \"v  /", c);               print("                               |\n");
-	print("|                                ");                 print("\\  \\     /  /", c);                print("                                |\n");
-	print("|                                 ");                 print("\\  \\   /  /", c);                print("                                 |\n");
-	print("|                                  ");                 print("\\  \\ /  /", c);                print("                                  |\n");
-	print("|                                   ");                 print("\\  '  /", c);                 print("                                   |\n");
-	print("|                                    ");                 print("\\   /", c);                 print("                                    |\n");
-	print("|                                     ");                 print("\\ /", c);                 print("                FluidX3D Version 3.8 |\n");
-	print("|                                      ");                 print( "'", c);                 print("     Copyright (c) Dr. Moritz Lehmann |\n");
-	print("|-----------------------------------------------------------------------------|\n");
+	println(".-----------------------------------------------------------------------------.");
+	println("| "+alignl(75, SOLVER_IBM_NAME " " SOLVER_IBM_VERSION_STRING)+" |");
+	println("| "+alignl(75, "Configuration-driven command-line LBM solver")+" |");
+	println("| "+alignl(75, "Based on " SOLVER_IBM_UPSTREAM_NAME " " SOLVER_IBM_UPSTREAM_VERSION " (altered source version)")+" |");
+	println("| "+alignl(75, SOLVER_IBM_UPSTREAM_CREDIT)+" |");
+	println("|-----------------------------------------------------------------------------|");
 }
 void Info::print_initialize(LBM* lbm) {
 	info.allow_printing.lock(); // disable print_update() until print_initialize() has finished

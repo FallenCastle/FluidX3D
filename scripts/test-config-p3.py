@@ -24,16 +24,21 @@ read, write, vtk = p2.read, p2.write, p2.p1.vtk
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--workspace-root', required=True, type=Path)
-    parser.add_argument('--build-name', default='config-runner-p3')
+    parser.add_argument('--build-name', default='solver-ibm-v1.0.0')
+    parser.add_argument('--repository-root', type=Path)
+    parser.add_argument('--configs-root', type=Path)
+    parser.add_argument('--executable', type=Path)
     parser.add_argument('--device', default='0')
+    parser.add_argument('--reference-root', type=Path, help='Reference bundle containing p2-build')
     parser.add_argument('--matrix-reference', type=Path, help='Reuse a complete matrix report with the exact same EXE hash')
     args = parser.parse_args()
     if os.name != 'nt':
         parser.error('Run on Windows NUC only')
-    w = args.workspace_root
-    repo = w/'src'
-    exe = w/'bin'/args.build_name/'FluidX3D.exe'
-    baseline = w/'bin'/'config-runner-p2'/'FluidX3D.exe'
+    w = args.workspace_root.resolve()
+    repo = (args.repository_root or w/'src').resolve()
+    configs = (args.configs_root or repo/'configs').resolve()
+    exe = (args.executable or w/'bin'/args.build_name/'Solver-IBM.exe').resolve()
+    baseline = ((args.reference_root/'p2-build' if args.reference_root else w/'bin'/'config-runner-p2')/'FluidX3D.exe').resolve()
     root = w/'workingdir'/'p3-validation'/datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
     root.mkdir(parents=True)
     sha = lambda p: hashlib.sha256(p.read_bytes()).hexdigest()
@@ -96,9 +101,9 @@ def main():
         assert cap['lattice']==['D3Q19','D3Q27'] and cap['collision']==['SRT','TRT']
         assert cap['turbulence']==['none','smagorinsky'] and cap['storage']==['FP16S','FP32']
         report['capabilities']=cap
-        periodic=read(repo/'configs'/'probes-periodic.json')
+        periodic=read(configs/'probes-periodic.json')
         mesh=root/'cube.stl'; p2.p1.cube(mesh)
-        combined=read(repo/'configs'/'couette.json')
+        combined=read(configs/'couette.json')
         combined['domain']['cells']=[16,18,16]
         combined['fluid']['body_force']=[.0001,0,0]
         combined['boundaries'][2]['velocity']=[.08,0,0]
@@ -142,7 +147,7 @@ def main():
                 'device_field_bytes':math.prod(perf['domain']['cells'])*(int(lattice[3:])*(4 if storage=='FP32' else 2)+29)})
             report['matrix'].append({'solver':model,'status':'succeeded'})
             for case,height in itertools.product(['poiseuille','couette'],[8,16,32]):
-                c=read(repo/'configs'/(case+'.json'));c['solver']=model
+                c=read(configs/(case+'.json'));c['solver']=model
                 speed=.05*8/height;nu=.1;steps=math.ceil(1.6*height*height/nu)
                 c['domain']['cells']=[8,height+2,8];c['fluid']['nu']=nu
                 c['run']={'steps':steps,'monitor_every':steps}
@@ -249,8 +254,8 @@ def main():
         identical('model SI snapshot',sr,repeated)
         # Production batch wrapper must retain exactly the same EXE for all 16 models.
         study=root/'study-models';script=repo/'scripts'/'parameter-study.py'
-        subprocess.run([sys.executable,str(script),'generate','--spec',str(repo/'configs'/'study-models.json'),'--output',str(study)],check=True)
-        subprocess.run([sys.executable,str(script),'run','--study',str(study),'--workspace-root',str(w),'--build-name',args.build_name,'--device',args.device],check=True)
+        subprocess.run([sys.executable,str(script),'generate','--spec',str(configs/'study-models.json'),'--output',str(study)],check=True)
+        subprocess.run([sys.executable,str(script),'run','--study',str(study),'--workspace-root',str(w),'--build-name',args.build_name,'--executable',str(exe),'--device',args.device],check=True)
         summary=read(next((study/'runs').glob('*/summary.json')))
         assert summary['status']=='succeeded' and len(summary['cases'])==16
         for row in summary['cases']:

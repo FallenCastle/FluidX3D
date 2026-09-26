@@ -3,7 +3,7 @@
 param(
     [string]$WorkspaceRoot = (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)),
     [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$')]
-    [string]$BuildName = 'baseline-original',
+    [string]$BuildName = 'solver-ibm-v1.0.0',
     [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$')]
     [string]$CaseName = 'benchmark',
     [ValidateRange(0, 2147483647)]
@@ -12,13 +12,14 @@ param(
     [int]$TimeoutSeconds = 900,
     [switch]$ExpectBenchmark,
     [string]$ConfigPath,
-    [switch]$PrepareOnly
+    [switch]$PrepareOnly,
+    [string]$ExecutablePath
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 if ($env:OS -ne 'Windows_NT') {
-    throw 'Run FluidX3D on the Windows NUC, not on the Mac.'
+    throw 'Run Solver-IBM on the Windows NUC, not on the Mac.'
 }
 foreach ($name in @($BuildName, $CaseName)) {
     if ($name.EndsWith('.') -or $name -match '^(?i:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)') {
@@ -28,11 +29,18 @@ foreach ($name in @($BuildName, $CaseName)) {
 
 $WorkspaceRoot = [IO.Path]::GetFullPath($WorkspaceRoot)
 $buildDirectory = Join-Path (Join-Path $WorkspaceRoot 'bin') $BuildName
+if ($ExecutablePath) {
+    $ExecutablePath = (Resolve-Path -LiteralPath $ExecutablePath -ErrorAction Stop).ProviderPath
+    if ([IO.Path]::GetFileName($ExecutablePath) -cne 'Solver-IBM.exe') {
+        throw 'ExecutablePath must select Solver-IBM.exe from a verified build or release package.'
+    }
+    $buildDirectory = Split-Path -Parent $ExecutablePath
+}
 $buildManifestPath = Join-Path $buildDirectory 'build.json'
-$buildExecutable = Join-Path $buildDirectory 'FluidX3D.exe'
+$buildExecutable = Join-Path $buildDirectory 'Solver-IBM.exe'
 $build = Get-Content -LiteralPath $buildManifestPath -Raw | ConvertFrom-Json
 foreach ($property in @('schemaVersion', 'status', 'gitCommit', 'sourceTree', 'executablePath',
-        'executableSha256', 'platformToolset', 'buildLog', 'completedAtUtc')) {
+        'executableSha256', 'platformToolset', 'buildLog', 'completedAtUtc', 'productName', 'productVersion')) {
     if ($build.PSObject.Properties.Name -notcontains $property) {
         throw "Build manifest is missing '$property': $buildManifestPath"
     }
@@ -43,7 +51,7 @@ if ($build.schemaVersion -ne 1 -or $build.status -ne 'succeeded') {
 if ($build.gitCommit -notmatch '^(?:[0-9a-f]{40}|[0-9a-f]{64})$') {
     throw 'Build manifest has an invalid Git commit.'
 }
-if ([IO.Path]::GetFullPath([string]$build.executablePath) -ine $buildExecutable) {
+if (-not $ExecutablePath -and [IO.Path]::GetFullPath([string]$build.executablePath) -ine $buildExecutable) {
     throw "Build manifest executablePath does not match $buildExecutable"
 }
 $executableHash = (Get-FileHash -LiteralPath $buildExecutable -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -60,7 +68,7 @@ $runtimeDirectory = Join-Path $runtimeCaseDirectory $runId
 $logsDirectory = Join-Path $runDirectory 'logs'
 $resultsDirectory = Join-Path $runDirectory 'results'
 $inputsDirectory = Join-Path $runDirectory 'inputs'
-$runtimeExecutable = Join-Path $runtimeDirectory 'FluidX3D.exe'
+$runtimeExecutable = Join-Path $runtimeDirectory 'Solver-IBM.exe'
 $exportJunction = Join-Path $runtimeDirectory 'export'
 $stdoutPath = Join-Path $logsDirectory 'stdout.log'
 $stderrPath = Join-Path $logsDirectory 'stderr.log'
@@ -109,9 +117,12 @@ $record = [ordered]@{
     deviceIdRequested = $requestedDevice
     build = [ordered]@{
         manifestPath = $buildManifestPath
+        productName = $build.productName
+        productVersion = $build.productVersion
         gitCommit = $build.gitCommit
         sourceTree = $build.sourceTree
         executablePath = $buildExecutable
+        originalExecutablePath = $build.executablePath
         executableSha256 = $executableHash
         platformToolset = $build.platformToolset
         buildLog = $build.buildLog
@@ -151,7 +162,7 @@ function Stop-RunProcessTree {
     param([Diagnostics.Process]$RunProcess)
     $RunProcess.Refresh()
     if ($RunProcess.HasExited) { return }
-    # Use the exact process we launched; never stop FluidX3D processes by name.
+    # Use the exact process we launched; never stop Solver-IBM processes by name.
     $killer = $null
     try {
         $killer = Start-Process -FilePath (Join-Path $env:SystemRoot 'System32\taskkill.exe') `
@@ -165,7 +176,7 @@ function Stop-RunProcessTree {
             throw 'taskkill did not finish within 15 seconds.'
         }
         if (-not $RunProcess.WaitForExit(15000)) {
-            throw "Could not confirm that FluidX3D process $($RunProcess.Id) exited."
+            throw "Could not confirm that Solver-IBM process $($RunProcess.Id) exited."
         }
         $RunProcess.WaitForExit()
     }
@@ -175,7 +186,7 @@ function Stop-RunProcessTree {
         if (-not $RunProcess.HasExited) {
             $RunProcess.Kill()
             if (-not $RunProcess.WaitForExit(15000)) {
-                throw "FluidX3D process $($RunProcess.Id) is still running; inspect it on NUC."
+                throw "Solver-IBM process $($RunProcess.Id) is still running; inspect it on NUC."
             }
         }
     }
@@ -219,13 +230,13 @@ try {
     if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
         $record.status = 'timed_out'
         Stop-RunProcessTree -RunProcess $process
-        throw "FluidX3D exceeded the $TimeoutSeconds second timeout."
+        throw "Solver-IBM exceeded the $TimeoutSeconds second timeout."
     }
     # Flush the redirected output after process termination before checking its contents.
     $process.WaitForExit()
     $record.exitCode = $process.ExitCode
     if ($process.ExitCode -ne 0) {
-        throw "FluidX3D exited with code $($process.ExitCode). See $stderrPath and $stdoutPath"
+        throw "Solver-IBM exited with code $($process.ExitCode). See $stderrPath and $stdoutPath"
     }
     if ($ConfigPath) {
         $completionPath = Join-Path $resultsDirectory 'completion.json'
@@ -266,7 +277,7 @@ try {
     }
     if (@(Select-String -LiteralPath @($stdoutPath, $stderrPath) `
             -Pattern '(?m)(?:^|\r)\s*(?:\|\s*)?Error\s*:' -List).Count -gt 0) {
-        throw 'FluidX3D printed an Error message. Inspect the run logs.'
+        throw 'Solver-IBM printed an Error message. Inspect the run logs.'
     }
     if ($ExpectBenchmark) {
         $peak = Select-String -LiteralPath $stdoutPath -Pattern 'Peak MLUPs/s\s*=\s*([0-9]+)' |

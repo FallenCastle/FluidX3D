@@ -32,18 +32,30 @@ def sha(path):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--workspace-root', type=Path, required=True)
-    parser.add_argument('--build-name', default='config-runner-p2')
+    parser.add_argument('--build-name', default='solver-ibm-v1.0.0')
     parser.add_argument('--diagnostic-build', default='config-runner-p2-fp32-diagnostic')
-    parser.add_argument('--fp16-reference', type=Path, required=True,
+    parser.add_argument('--reference-root', type=Path, help='Reference bundle containing fp16-reference and fp32-diagnostic-build')
+    parser.add_argument('--fp16-reference', type=Path,
                         help='Retained fixed-FP16 P2 validation directory containing geometry-force')
+    parser.add_argument('--repository-root', type=Path)
+    parser.add_argument('--configs-root', type=Path)
+    parser.add_argument('--executable', type=Path)
     parser.add_argument('--device', default='0')
     args = parser.parse_args()
     if os.name != 'nt':
         parser.error('Run on Windows NUC only')
-    workspace = args.workspace_root
-    repo = workspace / 'src'
-    exe = workspace / 'bin' / args.build_name / 'FluidX3D.exe'
-    diagnostic = workspace / 'bin' / args.diagnostic_build / 'FluidX3D.exe'
+    if args.reference_root:
+        args.reference_root = args.reference_root.resolve()
+        if args.fp16_reference is None:
+            args.fp16_reference = args.reference_root/'fp16-reference'
+    if args.fp16_reference is None:
+        parser.error('Provide --reference-root or --fp16-reference')
+    args.fp16_reference = args.fp16_reference.resolve()
+    workspace = args.workspace_root.resolve()
+    repo = (args.repository_root or workspace / 'src').resolve()
+    configs = (args.configs_root or repo/'configs').resolve()
+    exe = (args.executable or workspace / 'bin' / args.build_name / 'Solver-IBM.exe').resolve()
+    diagnostic = (args.reference_root/'fp32-diagnostic-build' if args.reference_root else workspace/'bin'/args.diagnostic_build)/'FluidX3D.exe'
     root = workspace / 'workingdir' / 'storage-validation' / datetime.datetime.now(
         datetime.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
     root.mkdir(parents=True)
@@ -112,7 +124,7 @@ def main():
         assert capabilities['default_storage'] == 'FP16S' and capabilities['arithmetic'] == 'FP32'
         assert capabilities['device_bytes_per_cell'] == {'FP16S': 67, 'FP32': 105}
         report['capabilities'] = capabilities
-        base = read(repo/'configs'/'probes-periodic.json')
+        base = read(configs/'probes-periodic.json')
         base['initial']['regions'] = [{'box_min': [0,0,0], 'box_max': [8,16,16],
                                        'rho': 1.001, 'velocity': [.01,0,0]}]
         outputs = []
@@ -133,7 +145,11 @@ def main():
             assert read(r/'resolved-config.json')['cells'] == cells
         reference = read(args.fp16_reference/'report.json')
         report['fixed_fp16_reference_build'] = reference['build']
-        c = read(args.fp16_reference/'geometry-force'/'case.json')
+        snapshot = args.fp16_reference/'geometry-force'/'results'/'effective-config.json'
+        input_path = snapshot if snapshot.is_file() else args.fp16_reference/'geometry-force'/'case.json'
+        c = read(input_path)
+        for geometry in c['geometry']:
+            geometry['file'] = str((input_path.parent/geometry['file']).resolve())
         c['solver'] = {'storage': 'FP16S'}
         r = invoke('fixed16-geometry-replay', c)
         compare('fixed FP16 geometry baseline', args.fp16_reference/'geometry-force'/'results', r)
@@ -141,7 +157,7 @@ def main():
         # Combined odd-step case exercises both streaming parities, voxelization,
         # body force, moving-wall correction and diagnostic kernels in FP32.
         mesh = root/'cube.stl'; p1.cube(mesh)
-        c = read(repo/'configs'/'couette.json')
+        c = read(configs/'couette.json')
         c['domain']['cells'] = [16,18,16]
         c['fluid']['body_force'] = [.0001,0,0]
         c['boundaries'][2]['velocity'] = [.03,0,0]
@@ -162,10 +178,10 @@ def main():
         compare('FP32 snapshot replay', r, repeated)
         study = root/'study-storage'
         script = repo/'scripts'/'parameter-study.py'
-        subprocess.run([sys.executable, str(script), 'generate', '--spec', str(repo/'configs'/'study-storage.json'),
+        subprocess.run([sys.executable, str(script), 'generate', '--spec', str(configs/'study-storage.json'),
                         '--output', str(study)], check=True)
         subprocess.run([sys.executable, str(script), 'run', '--study', str(study), '--workspace-root', str(workspace),
-                        '--build-name', args.build_name, '--device', args.device], check=True)
+                        '--build-name', args.build_name, '--executable', str(exe), '--device', args.device], check=True)
         summary = read(next((study/'runs').glob('*/summary.json')))
         assert summary['status'] == 'succeeded' and len(summary['cases']) == 2
         for row, storage in zip(summary['cases'], ['FP16S', 'FP32']):

@@ -51,14 +51,19 @@ def cube(path):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--workspace-root", required=True)
-    parser.add_argument("--build-name", default="config-runner")
+    parser.add_argument("--build-name", default="solver-ibm-v1.0.0")
+    parser.add_argument("--repository-root", type=Path)
+    parser.add_argument("--configs-root", type=Path)
+    parser.add_argument("--executable", type=Path)
+    parser.add_argument("--reference-root", type=Path, help="Reference bundle containing boeing-baseline/results")
     parser.add_argument("--device", default="0")
     args = parser.parse_args()
     if os.name != "nt":
         parser.error("Run integration and numerical tests on the Windows NUC only")
-    workspace = Path(args.workspace_root)
-    repo = workspace / "src"
-    exe = workspace / "bin" / args.build_name / "FluidX3D.exe"
+    workspace = Path(args.workspace_root).resolve()
+    repo = (args.repository_root or workspace / "src").resolve()
+    configs = (args.configs_root or repo / "configs").resolve()
+    exe = (args.executable or workspace / "bin" / args.build_name / "Solver-IBM.exe").resolve()
     now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     root = workspace / "workingdir" / "config-validation" / now
     root.mkdir(parents=True, exist_ok=False)
@@ -92,7 +97,7 @@ def main():
         return directory / "results"
 
     def example(name):
-        return json.loads((repo / "configs" / name).read_text(encoding="utf-8"))
+        return json.loads((configs / name).read_text(encoding="utf-8"))
 
     try:
         invoke("help", options=("--help",))
@@ -198,7 +203,7 @@ def main():
         for name, template in [("boeing","boeing-regression.json"),("ahmed","ahmed-smoke.json")]:
             cfg=example(template)
             for geometry in cfg["geometry"]:
-                geometry["file"]=str((repo/"configs"/geometry["file"]).resolve())
+                geometry["file"]=str((configs/geometry["file"]).resolve())
             result=invoke(name,cfg)
             resolved=json.loads((result/"resolved-config.json").read_text())
             done=json.loads((result/"completion.json").read_text())
@@ -206,10 +211,15 @@ def main():
             assert json.loads((result/"manifest.json").read_text())["executable_sha256"]==report["executable_sha256"]
             if name=="boeing":
                 assert resolved["cells"]==[170,339,85]
-                runs=sorted((workspace/"workingdir"/"config-baseline-boeing").glob("*/run.json"))
-                baseline_record=json.loads(runs[-1].read_text(encoding="utf-8-sig"))
+                if args.reference_root:
+                    baseline_run = args.reference_root.resolve()/"boeing-baseline"
+                else:
+                    runs=sorted((workspace/"workingdir"/"config-baseline-boeing").glob("*/run.json"))
+                    assert runs, "No Boeing baseline found; provide --reference-root"
+                    baseline_run=runs[-1].parent
+                baseline_record=json.loads((baseline_run/"run.json").read_text(encoding="utf-8-sig"))
                 assert baseline_record["status"]=="succeeded"
-                baseline=runs[-1].parent/"results"
+                baseline=baseline_run/"results"
                 comparisons=[]
                 for step in (0,1000):
                     for field in ("flags","rho","u"):
@@ -222,7 +232,7 @@ def main():
                         comparisons.append(comparison)
                         write_json(root/"baseline-comparison.json",comparisons)
                         assert equal, f"Boeing baseline differs: {comparison}"
-                report["baseline_run"]=str(runs[-1].parent)
+                report["baseline_run"]=str(baseline_run)
         report["status"]="succeeded"
     except Exception as exc:
         report["status"]="failed";report["error"]=str(exc)
