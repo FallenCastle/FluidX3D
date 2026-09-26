@@ -359,19 +359,24 @@ void LBM_Domain::reconcile_dynamic_object_mask(uchar* desired_object_id, float* 
 	Memory<uchar> desired(device, get_N(), 1u, desired_object_id);
 	Memory<float> desired_rho(device, get_N(), 1u, release_density);
 	Memory<float> desired_u(device, get_N(), 3u, release_velocity);
-	Kernel kernel(device, get_N(), "reconcile_dynamic_object_mask", fi, rho, u, flags, t+1ull, object_id, desired,
-	              desired_rho, desired_u, object,
-	              rotation_center.x, rotation_center.y, rotation_center.z,
-	              linear_velocity.x, linear_velocity.y, linear_velocity.z,
-	              rotational_velocity.x, rotational_velocity.y, rotational_velocity.z);
 #ifdef SURFACE
 	if(model.free_surface) {
 		Memory<float> desired_mass(device, get_N(), 1u, release_mass);
+		Kernel kernel(device, get_N(), "reconcile_dynamic_object_mask", fi, rho, u, flags, t+1ull, object_id, desired,
+		              desired_rho, desired_u, object,
+		              rotation_center.x, rotation_center.y, rotation_center.z,
+		              linear_velocity.x, linear_velocity.y, linear_velocity.z,
+		              rotational_velocity.x, rotational_velocity.y, rotational_velocity.z);
 		kernel.add_parameters(mass, massex, phi, desired_mass);
 		kernel.run();
 		return;
 	}
 #endif // SURFACE
+	Kernel kernel(device, get_N(), "reconcile_dynamic_object_mask", fi, rho, u, flags, t+1ull, object_id, desired,
+	              desired_rho, desired_u, object,
+	              rotation_center.x, rotation_center.y, rotation_center.z,
+	              linear_velocity.x, linear_velocity.y, linear_velocity.z,
+	              rotational_velocity.x, rotational_velocity.y, rotational_velocity.z);
 	kernel.run();
 }
 void LBM_Domain::refresh_dynamic_macroscopic_fields() {
