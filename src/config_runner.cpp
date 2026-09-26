@@ -1043,22 +1043,20 @@ static MonitorSnapshot monitor(LBM &lbm, const Config &c, std::ofstream &file,
     double mass = 0, umax = 0, rmin = std::numeric_limits<double>::infinity(), rmax = 0;
     double tmin = std::numeric_limits<double>::infinity(), tmax = -std::numeric_limits<double>::infinity(), energy = 0;
     ulong count = 0;
-    std::vector<float> dynamic_surface_mass(c.model.free_surface && c.model.dynamic_geometry
-                                                ? static_cast<size_t>(lbm.get_N())
-                                                : 0u);
-    if (!dynamic_surface_mass.empty())
-        lbm.lbm_domain[0]->read_dynamic_surface_mass(dynamic_surface_mass.data());
-    if (!dynamic_surface_mass.empty())
+    std::vector<float> surface_mass(c.model.free_surface ? static_cast<size_t>(lbm.get_N()) : 0u);
+    if (!surface_mass.empty())
+        lbm.lbm_domain[0]->settle_dynamic_surface_mass(surface_mass.data());
+    if (!surface_mass.empty())
         for (ulong n = 0; n < lbm.get_N(); n++)
             if (!is_solid(lbm.flags[n]))
-                mass += dynamic_surface_mass[static_cast<size_t>(n)];
+                mass += surface_mass[static_cast<size_t>(n)];
     for (ulong n = 0; n < lbm.get_N(); n++)
         if (!is_solid(lbm.flags[n]) &&
             (!c.model.free_surface || (lbm.flags[n] & (TYPE_F | TYPE_I)))) {
             double rho = lbm.rho[n], x = lbm.u.x[n], y = lbm.u.y[n], z = lbm.u.z[n];
             require(std::isfinite(rho) && rho > 0 && std::isfinite(x) && std::isfinite(y) && std::isfinite(z),
                     "Non-finite velocity or non-positive density at step " + std::to_string(lbm.get_t()));
-            if (dynamic_surface_mass.empty())
+            if (surface_mass.empty())
                 mass += c.model.free_surface ? rho * lbm.phi[n] : rho;
             rmin = std::min(rmin, rho);
             rmax = std::max(rmax, rho);
@@ -1602,7 +1600,7 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
     for (const auto &boundary : c.boundaries)
         closed_domain = closed_domain && (boundary.type == "no_slip" || boundary.type == "moving_wall" ||
                                           boundary.type == "periodic");
-    const bool conserve_mass = closed_domain && (c.model.dynamic_geometry || c.model.free_surface);
+    const bool conserve_mass = closed_domain && c.model.dynamic_geometry;
     if (conserve_mass) {
         dynamic_mass_target = 0;
         if (c.model.free_surface) {
