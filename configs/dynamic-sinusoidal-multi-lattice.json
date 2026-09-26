@@ -12,7 +12,7 @@
       "file": "assets/unit-cube-binary.stl",
       "transform": { "mode": "fit", "size": 5.0, "center": [13, 10, 12] },
       "motion": {
-        "translation": { "type": "sinusoidal", "amplitude": [2, 0, 0], "period": 160 }
+        "translation": { "type": "sinusoidal", "amplitude": [2, 0, 0], "period": 480 }
       }
     },
     {
@@ -20,12 +20,12 @@
       "file": "assets/rectangular-box-2x1x1-binary.stl",
       "transform": { "mode": "fit", "size": 8.0, "center": [34, 22, 12] },
       "motion": {
-        "translation": { "type": "sinusoidal", "amplitude": [0, 1, 0], "period": 160 },
+        "translation": { "type": "sinusoidal", "amplitude": [0, 1, 0], "period": 480 },
         "rotation": {
           "type": "sinusoidal",
           "axis": [0, 0, 1],
           "amplitude_degrees": 15,
-          "period": 160
+          "period": 480
         }
       }
     }
@@ -33,6 +33,6 @@
   "boundaries": [
     { "id": "walls", "faces": ["xmin", "xmax", "ymin", "ymax", "zmin", "zmax"], "type": "no_slip" }
   ],
-  "run": { "steps": 160, "monitor_every": 20 },
-  "output": { "vtk_fields": ["object", "flags", "u", "rho"], "vtk_every": 20, "initial": true }
+  "run": { "steps": 480, "monitor_every": 60 },
+  "output": { "vtk_fields": ["object", "flags", "u", "rho"], "vtk_every": 60, "initial": true }
 }

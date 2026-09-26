@@ -513,8 +513,9 @@ static void update_dynamic_geometry(LBM &lbm, Config &c, std::vector<DynamicBody
                                corner & 4 ? actual_max.z : actual_min.z);
             radius = std::max(radius, static_cast<double>(length(point - center)));
         }
-        require(length(linear) + length(angular) * radius < 0.57735027f,
-                "Dynamic STL surface velocity reaches the lattice speed of sound: " + body.geometry->id);
+        require(length(linear) + length(angular) * radius <= 0.05f,
+                "Dynamic STL surface velocity exceeds the validated low-Mach limit (0.05 lattice units/step): " +
+                    body.geometry->id);
         next->pmin = actual_min;
         next->pmax = actual_max;
         body.current = std::move(next);

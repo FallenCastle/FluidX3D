@@ -15,9 +15,9 @@
         "trajectory_axis": [0, 0, 1],
         "trajectory": [
           { "time": 0, "translation": [0, 0, 0], "degrees": 0 },
-          { "time": 40, "translation": [2, 0, 0], "degrees": 10 },
-          { "time": 80, "translation": [2, 1, 0], "degrees": -5 },
-          { "time": 120, "translation": [0, 0, 0], "degrees": 0 }
+          { "time": 120, "translation": [2, 0, 0], "degrees": 10 },
+          { "time": 240, "translation": [2, 1, 0], "degrees": -5 },
+          { "time": 360, "translation": [0, 0, 0], "degrees": 0 }
         ]
       }
     }
@@ -25,6 +25,6 @@
   "boundaries": [
     { "id": "walls", "faces": ["xmin", "xmax", "ymin", "ymax", "zmin", "zmax"], "type": "no_slip" }
   ],
-  "run": { "steps": 130, "monitor_every": 10 },
-  "output": { "vtk_fields": ["object", "flags", "u", "rho"], "vtk_every": 10, "initial": true }
+  "run": { "steps": 400, "monitor_every": 40 },
+  "output": { "vtk_fields": ["object", "flags", "u", "rho"], "vtk_every": 40, "initial": true }
 }

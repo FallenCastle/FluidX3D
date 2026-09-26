@@ -15,8 +15,8 @@
         "rotation": {
           "type": "constant_angular_velocity",
           "axis": [0, 0, 1],
-          "angular_velocity_degrees": 1.0,
-          "stop_time": 90
+          "angular_velocity_degrees": 0.25,
+          "stop_time": 360
         }
       }
     }
@@ -24,6 +24,6 @@
   "boundaries": [
     { "id": "walls", "faces": ["xmin", "xmax", "ymin", "ymax", "zmin", "zmax"], "type": "no_slip" }
   ],
-  "run": { "steps": 110, "monitor_every": 10 },
-  "output": { "vtk_fields": ["object", "flags", "u", "rho"], "vtk_every": 10, "initial": true }
+  "run": { "steps": 400, "monitor_every": 40 },
+  "output": { "vtk_fields": ["object", "flags", "u", "rho"], "vtk_every": 40, "initial": true }
 }
