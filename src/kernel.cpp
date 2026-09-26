@@ -1190,6 +1190,18 @@ string opencl_c_container() { return R( // ########################## begin of O
 	const float d = plic_cube_reduced(V, n1, n2, n3); // calculate PLIC with reduced symmetry
 	return l*copysign(0.5f-d, V0-0.5f); // rescale result and apply symmetry for V0>0.5
 }
+)+R(float plic_cube_inverse(const float offset, const float3 n) {
+	const float lower = plic_cube(0.0f, n), upper = plic_cube(1.0f, n);
+	if(offset<=lower) return 0.0f;
+	if(offset>=upper) return 1.0f;
+	float lo=0.0f, hi=1.0f;
+	for(uint iteration=0u; iteration<16u; iteration++) {
+		const float middle = 0.5f*(lo+hi);
+		if(plic_cube(middle, n)<offset) lo=middle;
+		else hi=middle;
+	}
+	return 0.5f*(lo+hi);
+}
 )+R(void get_remaining_neighbor_phij(const uxx n, const float* phit, const global float* phi, float* phij) { // get remaining phij for D3Q27 neighborhood
 )+"#ifndef D3Q27"+R(
 	uxx x0, xp, xm, y0, yp, ym, z0, zp, zm;
@@ -1242,6 +1254,7 @@ string opencl_c_container() { return R( // ########################## begin of O
 	float3 wall_to_fluid = (float3)(0.0f, 0.0f, 0.0f);
 	float theta = 0.0f;
 	uint wall_neighbors = 0u;
+	bool wall_contact = false;
 	for(uint i=1u; i<27u; i++) {
 		const uxx j = neighbor_D3Q27(n, i);
 		if((flags[j]&TYPE_BO)==TYPE_S) {
@@ -1261,13 +1274,23 @@ string opencl_c_container() { return R( // ########################## begin of O
 		tangent = normalize(tangent);
 		theta /= (float)wall_neighbors;
 		bz = normalize(sin(theta)*tangent+cos(theta)*nw);
+		wall_contact = true;
 	}
 	const float3 rn = (float3)(0.56270900f, 0.32704452f, 0.75921047f); // random normalized vector that is just by random chance not collinear with bz
 	const float3 by = normalize(cross(bz, rn)); // normalize() is necessary here because bz and rn are not perpendicular
 	const float3 bx = cross(by, bz);
 	uint number = 0; // number of neighboring interface points
-	float3 p[24]; // number of neighboring interface points is less or equal than than 26 minus 1 gas and minus 1 fluid point = 24
+	float3 p[26];
 	const float center_offset = plic_cube(phij[0], bz); // calculate z-offset PLIC of center point only once
+	if(wall_contact) { // extrapolate the prescribed interface plane into solid ghost cells for the curvature fit
+		for(uint i=1u; i<27u; i++) {
+			const uxx j = neighbor_D3Q27(n, i);
+			if((flags[j]&TYPE_BO)==TYPE_S) {
+				const float3 ei = (float3)(c_D3Q27(i), c_D3Q27(27u+i), c_D3Q27(54u+i));
+				phij[i] = plic_cube_inverse(center_offset-dot(ei, bz), bz);
+			}
+		}
+	}
 	for(uint i=1u; i<27u; i++) { // iterate over neighbors, no loop unrolling here (50% better perfoemance without loop unrolling)
 		if(phij[i]>0.0f&&phij[i]<1.0f) { // limit neighbors to interface cells
 			const float3 ei = (float3)(c_D3Q27(i), c_D3Q27(27u+i), c_D3Q27(2u*27u+i)); // assume neighbor normal vector is the same as center normal vector
