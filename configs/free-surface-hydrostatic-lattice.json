@@ -25,11 +25,11 @@
     }
   ],
   "analysis": {
-    "sample_every": 100,
+    "every": 100,
     "probes": [
-      { "id": "deep", "point": [10, 4, 4] },
-      { "id": "middle", "point": [10, 4, 10] },
-      { "id": "shallow", "point": [10, 4, 16] }
+      { "id": "deep", "position": [10, 4, 4] },
+      { "id": "middle", "position": [10, 4, 10] },
+      { "id": "shallow", "position": [10, 4, 16] }
     ]
   },
   "run": { "steps": 3000, "monitor_every": 100 },
