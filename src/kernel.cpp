@@ -2472,18 +2472,18 @@ string opencl_c_container() { return R( // ########################## begin of O
 } // voxelize_mesh()
 
 )+"#ifdef DYNAMIC_GEOMETRY"+R(
-kernel void reconcile_dynamic_object_mask(global fpxx* fi, global float* rho, global float* u,
+)+R(kernel void reconcile_dynamic_object_mask)+"("+R(global fpxx* fi, global float* rho, global float* u,
                                            global uchar* flags, const ulong t,
                                            global uchar* object_id, const global uchar* desired_object_id,
                                            const global float* release_density, const global float* release_velocity,
                                            const uchar object, const float cx, const float cy, const float cz,
                                            const float ux, const float uy, const float uz,
-                                           const float rx, const float ry, const float rz
+                                           const float rx, const float ry, const float rz // ) {
 )+"#ifdef SURFACE"+R(
                                            , global float* mass, global float* massex, global float* phi,
                                            const global float* release_mass
 )+"#endif"+R(
-                                           ) {
+)+") {"+R(
 	const uxx n = get_global_id(0);
 	if(n>=def_N) return;
 	const uchar previous_object = object_id[n];
