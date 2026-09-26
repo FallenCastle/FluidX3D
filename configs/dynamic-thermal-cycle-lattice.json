@@ -42,12 +42,12 @@
       "material": "moving-solid",
       "transform": { "mode": "fit", "size": 10.0, "center": [20, 14, 12] },
       "motion": {
-        "translation": { "type": "sinusoidal", "amplitude": [3, 0, 0], "period": 80 },
+        "translation": { "type": "sinusoidal", "amplitude": [1.5, 0, 0], "period": 200 },
         "rotation": {
           "type": "sinusoidal",
           "axis": [0, 0, 1],
-          "amplitude_degrees": 30,
-          "period": 80
+          "amplitude_degrees": 10,
+          "period": 200
         }
       }
     }
@@ -60,6 +60,6 @@
       "thermal": { "type": "adiabatic" }
     }
   ],
-  "run": { "steps": 80, "monitor_every": 10 },
+  "run": { "steps": 200, "monitor_every": 20 },
   "output": { "vtk_fields": ["object", "material", "T", "u", "rho", "flags"], "vtk_every": 20, "initial": true }
 }
