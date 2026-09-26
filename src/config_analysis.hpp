@@ -107,12 +107,13 @@ class Analysis {
         unsigned long long cells = 0;
         double volume = c.dx * c.dx * c.dx;
         for (ulong n = 0; n < lbm.get_N(); n++)
-            if (!is_solid(lbm.flags[n])) {
+            if (!is_solid(lbm.flags[n]) &&
+                (!c.model.free_surface || (lbm.flags[n] & (TYPE_F | TYPE_I)))) {
                 auto v = values(n);
                 cells++;
                 for (double x : v)
                     require(std::isfinite(x), "Non-finite fluid analysis value");
-                sums[0] += v[0] * volume;
+                sums[0] += v[0] * volume * (c.model.free_surface ? lbm.phi[n] : 1.0);
                 for (size_t i = 0; i < 6; i++)
                     sums[i + 1] += v[i];
                 sums[7] += 0.5 * v[0] * v[4] * v[4] * volume;

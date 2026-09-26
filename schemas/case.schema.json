@@ -91,6 +91,41 @@
         }
       ]
     },
+    "physics": {
+      "type": "object",
+      "properties": {
+        "gravity": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "thermal": {
+          "type": "object",
+          "properties": {
+            "reference_temperature": { "type": "number", "exclusiveMinimum": 0 },
+            "initial_temperature": { "type": "number", "exclusiveMinimum": 0 },
+            "specific_heat": { "type": "number", "exclusiveMinimum": 0 },
+            "conductivity": { "type": "number", "exclusiveMinimum": 0 },
+            "thermal_expansion": { "type": "number", "minimum": 0 },
+            "turbulent_prandtl": { "type": "number", "exclusiveMinimum": 0 }
+          },
+          "required": ["reference_temperature", "initial_temperature", "specific_heat", "conductivity"],
+          "additionalProperties": false
+        },
+        "free_surface": {
+          "type": "object",
+          "properties": {
+            "surface_tension": { "type": "number", "minimum": 0 },
+            "environment_pressure": { "type": "number", "minimum": 0 }
+          },
+          "required": ["surface_tension"],
+          "additionalProperties": false
+        }
+      },
+      "minProperties": 1,
+      "additionalProperties": false
+    },
     "units": {
       "type": "object",
       "properties": {
@@ -263,6 +298,10 @@
           "minItems": 3,
           "maxItems": 3
         },
+        "temperature": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
         "regions": {
           "type": "array",
           "items": {
@@ -295,6 +334,10 @@
                 },
                 "minItems": 3,
                 "maxItems": 3
+              },
+              "temperature": {
+                "type": "number",
+                "exclusiveMinimum": 0
               }
             },
             "required": [
@@ -303,6 +346,34 @@
               "rho",
               "velocity"
             ],
+            "additionalProperties": false
+          }
+        },
+        "liquid_regions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "properties": {
+              "box_min": {
+                "type": "array",
+                "items": { "type": "number" },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "box_max": {
+                "type": "array",
+                "items": { "type": "number" },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "fill": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 1
+              }
+            },
+            "required": ["box_min", "box_max"],
             "additionalProperties": false
           }
         }
@@ -654,7 +725,9 @@
               "u",
               "rho",
               "flags",
-              "p"
+              "p",
+              "T",
+              "phi"
             ]
           },
           "minItems": 1,

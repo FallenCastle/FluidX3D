@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "case": { "name": "thermal-diffusion-lattice" },
+  "solver": {
+    "lattice": "D3Q19",
+    "collision": "SRT",
+    "storage": "FP32",
+    "turbulence": "none"
+  },
+  "physics": {
+    "thermal": {
+      "reference_temperature": 1.0,
+      "initial_temperature": 1.0,
+      "specific_heat": 1.0,
+      "conductivity": 0.05
+    }
+  },
+  "units": { "mode": "lattice" },
+  "domain": { "cells": [24, 12, 12] },
+  "fluid": { "rho": 1.0, "nu": 0.05 },
+  "initial": {
+    "velocity": [0, 0, 0],
+    "regions": [
+      {
+        "box_min": [10, 0, 0],
+        "box_max": [13.999, 12, 12],
+        "rho": 1.0,
+        "velocity": [0, 0, 0],
+        "temperature": 1.1
+      }
+    ]
+  },
+  "geometry": [],
+  "boundaries": [
+    {
+      "id": "periodic",
+      "faces": ["xmin", "xmax", "ymin", "ymax", "zmin", "zmax"],
+      "type": "periodic"
+    }
+  ],
+  "run": { "steps": 20, "monitor_every": 10 },
+  "output": {
+    "vtk_fields": ["T", "u", "rho", "flags"],
+    "vtk_every": 20,
+    "initial": true
+  }
+}

@@ -30,6 +30,12 @@ struct Boundary {
 struct InitialRegion {
     Vec lower{}, upper{}, velocity{};
     double rho = 1;
+    bool has_temperature = false;
+    double temperature = 1;
+};
+struct LiquidRegion {
+    Vec lower{}, upper{};
+    double fill = 1;
 };
 struct Probe {
     std::string id;
@@ -40,7 +46,6 @@ struct Probe {
 struct ForceTarget {
     std::string id, target;
 };
-constexpr unsigned host_cell_bytes = 29;
 struct Config {
     Json source;
     fs::path path;
@@ -48,17 +53,26 @@ struct Config {
     bool si = false;
     SolverOptions model;
     DdfStorage storage = DdfStorage::Float16Scaled;
-    unsigned device_cell_bytes() const { return model.q * ddf_storage_bytes(storage) + host_cell_bytes; }
+    unsigned device_cell_bytes() const {
+        return model.q * ddf_storage_bytes(storage) + 29u + (model.free_surface ? 12u : 0u) +
+               (model.temperature ? 7u * ddf_storage_bytes(storage) + 4u : 0u);
+    }
+    unsigned host_cell_bytes() const { return 29u + (model.free_surface ? 4u : 0u) + (model.temperature ? 4u : 0u); }
     std::array<unsigned, 3> cells{};
     Vec origin{};
     double dx = 1, dt = 1, reference_density = 1, nu = 0, rho = 1;
     Vec velocity{}, body_force{};
+    double surface_tension = 0, environment_pressure = 0, environment_lattice_density = 1;
+    double temperature_scale = 1, initial_temperature = 1, thermal_diffusivity = 0, thermal_expansion = 0;
+    double fluid_specific_heat = 1, fluid_conductivity = 0, turbulent_prandtl = 0.9;
+    Vec gravity{};
     double pressure_rho = 1;
     bool analysis = false, statistics = true;
     unsigned long long sample_every = 100, sample_start = 0;
     std::vector<Probe> probes;
     std::vector<ForceTarget> forces;
     std::vector<InitialRegion> regions;
+    std::vector<LiquidRegion> liquid_regions;
     std::vector<Geometry> geometry;
     std::vector<Boundary> boundaries;
     std::array<bool, 3> periodic{};

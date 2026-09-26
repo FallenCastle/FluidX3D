@@ -47,7 +47,7 @@ void Info::print_initialize(LBM* lbm) {
 		cpu_mem_required = lbm->get_D()*lbm->lbm_domain[0]->get_device().info.memory_used;
 		gpu_mem_required = 0u;
 	} else {
-		cpu_mem_required = (uint)(lbm->get_N()*(ulong)bytes_per_cell_host()/1048576ull);
+		cpu_mem_required = (uint)(lbm->get_N()*(ulong)bytes_per_cell_host(lbm->get_model())/1048576ull);
 		gpu_mem_required = lbm->lbm_domain[0]->get_device().info.memory_used;
 	}
 	const float Re = lbm->get_Re_max();

@@ -1540,9 +1540,9 @@ string opencl_c_container() { return R( // ########################## begin of O
 			for(uint i=0u; i<7u; i++) ghn[i] = fma(1.0f-def_w_T, ghn[i], def_w_T*geq[i]); // perform collision
 		}
 		store_g(n, ghn, gi, j7, t); // perform streaming (part 1)
-		fxn -= fx*def_beta*(Tn-def_T_avg);
-		fyn -= fy*def_beta*(Tn-def_T_avg);
-		fzn -= fz*def_beta*(Tn-def_T_avg);
+		fxn -= def_gx*def_beta*(Tn-def_T_avg);
+		fyn -= def_gy*def_beta*(Tn-def_T_avg);
+		fzn -= def_gz*def_beta*(Tn-def_T_avg);
 	}
 )+"#endif"+R( // TEMPERATURE
 
@@ -1682,7 +1682,7 @@ string opencl_c_container() { return R( // ########################## begin of O
 		const float uxntmp = clamp(fma(fx, rho2tmp, uxn), -def_c, def_c); // limit velocity (for stability purposes)
 		const float uyntmp = clamp(fma(fy, rho2tmp, uyn), -def_c, def_c); // force term: F*dt/(2*rho)
 		const float uzntmp = clamp(fma(fz, rho2tmp, uzn), -def_c, def_c);
-		calculate_f_eq(1.0f-rho_laplace, uxntmp, uyntmp, uzntmp, feg); // calculate gas equilibrium DDFs with constant ambient pressure
+		calculate_f_eq(def_rho_air-rho_laplace, uxntmp, uyntmp, uzntmp, feg); // calculate gas equilibrium DDFs with constant ambient pressure
 		uchar flagsj_su[def_velocity_set]; // cache neighbor flags for multiple readings
 		for(uint i=1u; i<def_velocity_set; i++) flagsj_su[i] = flags[j[i]]&TYPE_SU;
 		for(uint i=1u; i<def_velocity_set; i+=2u) { // calculate mass exchange between current cell and fluid/interface cells

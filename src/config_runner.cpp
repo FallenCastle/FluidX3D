@@ -10,7 +10,7 @@
 #include <sstream>
 #if !defined(D3Q19) || !defined(SRT) || !defined(FP16S) || !defined(SUBGRID) || !defined(EQUILIBRIUM_BOUNDARIES) ||    \
     defined(GRAPHICS) || defined(TRT) || defined(D3Q27) || defined(D3Q15) || defined(D2Q9) || defined(FP16C) ||        \
-    !defined(VOLUME_FORCE) || !defined(FORCE_FIELD) || defined(SURFACE) || defined(TEMPERATURE) ||                     \
+    !defined(VOLUME_FORCE) || !defined(FORCE_FIELD) || !defined(SURFACE) || !defined(TEMPERATURE) ||                   \
     defined(PARTICLES) || !defined(MOVING_BOUNDARIES) || defined(BENCHMARK)
 #error The configuration runner requires its documented fixed headless solver profile.
 #endif
@@ -201,7 +201,12 @@ static void vtk(LBM &lbm, const Config &c, const fs::path &output, const std::st
             else {
                 float value = fieldname == "rho"
                                   ? lbm.rho[n] * static_cast<float>(c.reference_density)
-                                  : lbm.u[n + static_cast<ulong>(a) * lbm.get_N()] * static_cast<float>(c.dx / c.dt);
+                                  : fieldname == "T"
+                                        ? lbm.T[n] * static_cast<float>(c.temperature_scale)
+                                        : fieldname == "phi"
+                                              ? lbm.phi[n]
+                                              : lbm.u[n + static_cast<ulong>(a) * lbm.get_N()] *
+                                                    static_cast<float>(c.dx / c.dt);
                 if (fieldname == "p")
                     value = static_cast<float>(pressure(c, lbm.rho[n]));
                 require(std::isfinite(value), "Non-finite VTK value");
@@ -226,16 +231,21 @@ static void sync(LBM &lbm) {
     lbm.rho.read_from_device();
     lbm.u.read_from_device();
     lbm.flags.read_from_device();
+    if (lbm.get_model().free_surface)
+        lbm.phi.read_from_device();
+    if (lbm.get_model().temperature)
+        lbm.T.read_from_device();
 }
 static void monitor(LBM &lbm, const Config &c, std::ofstream &file) {
     double mass = 0, umax = 0, rmin = std::numeric_limits<double>::infinity(), rmax = 0;
     ulong count = 0;
     for (ulong n = 0; n < lbm.get_N(); n++)
-        if (!is_solid(lbm.flags[n])) {
+        if (!is_solid(lbm.flags[n]) &&
+            (!c.model.free_surface || (lbm.flags[n] & (TYPE_F | TYPE_I)))) {
             double rho = lbm.rho[n], x = lbm.u.x[n], y = lbm.u.y[n], z = lbm.u.z[n];
             require(std::isfinite(rho) && rho > 0 && std::isfinite(x) && std::isfinite(y) && std::isfinite(z),
                     "Non-finite velocity or non-positive density at step " + std::to_string(lbm.get_t()));
-            mass += rho;
+            mass += rho * (c.model.free_surface ? lbm.phi[n] : 1.0);
             rmin = std::min(rmin, rho);
             rmax = std::max(rmax, rho);
             umax = std::max(umax, std::sqrt(x * x + y * y + z * z));
@@ -272,10 +282,12 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
                 static_cast<unsigned long long>(selected.max_global_buffer) * 1048576,
             "Distribution buffer exceeds selected device allocation limit");
     c.resolved["estimated_device_peak_bytes"] = count * c.device_cell_bytes() + mesh_bytes + 64;
-    c.resolved["estimated_host_fields_union_and_mesh_bytes"] = count * (host_cell_bytes + 1) + mesh_bytes;
-    LBM lbm(c.cells[0], c.cells[1], c.cells[2], static_cast<float>(c.nu), c.storage,
+    c.resolved["estimated_host_fields_union_and_mesh_bytes"] = count * (c.host_cell_bytes() + 1) + mesh_bytes;
+    LBM lbm(c.cells[0], c.cells[1], c.cells[2], 1u, 1u, 1u, static_cast<float>(c.nu),
             static_cast<float>(c.body_force[0]), static_cast<float>(c.body_force[1]),
-            static_cast<float>(c.body_force[2]), c.model);
+            static_cast<float>(c.body_force[2]), static_cast<float>(c.surface_tension),
+            static_cast<float>(c.thermal_diffusivity), static_cast<float>(c.thermal_expansion), 0u, 1.0f, c.storage,
+            c.model);
     const auto actual_capacity = lbm.lbm_domain[0]->get_distribution_capacity();
     require(actual_capacity == count * c.model.q * ddf_storage_bytes(c.storage),
             "DDF allocation does not match requested storage");
@@ -327,11 +339,14 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
         auto p = point(c, x, y, z);
         double rho = c.rho;
         Vec velocity = c.velocity;
+        double temperature = c.initial_temperature;
         for (const auto &r : c.regions)
             if (p[0] >= r.lower[0] && p[0] <= r.upper[0] && p[1] >= r.lower[1] && p[1] <= r.upper[1] &&
                 p[2] >= r.lower[2] && p[2] <= r.upper[2]) {
                 rho = r.rho;
                 velocity = r.velocity;
+                if (r.has_temperature)
+                    temperature = r.temperature;
             }
         lbm.flags[n] = solid[static_cast<size_t>(n)];
         int b = boundary_at(c, x, y, z);
@@ -367,10 +382,22 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
                     force_groups[i].push_back(n);
             }
         }
+        if (c.model.free_surface && !(lbm.flags[n] & TYPE_S)) {
+            double fill = 0;
+            for (const auto &r : c.liquid_regions)
+                if (p[0] >= r.lower[0] && p[0] <= r.upper[0] && p[1] >= r.lower[1] && p[1] <= r.upper[1] &&
+                    p[2] >= r.lower[2] && p[2] <= r.upper[2])
+                    fill = std::max(fill, r.fill);
+            lbm.flags[n] = static_cast<uchar>((lbm.flags[n] & ~(TYPE_F | TYPE_I | TYPE_G)) |
+                                               (fill >= 1 ? TYPE_F : fill > 0 ? TYPE_I : TYPE_G));
+            lbm.phi[n] = static_cast<float>(fill);
+        }
         lbm.rho[n] = static_cast<float>(rho);
         lbm.u.x[n] = static_cast<float>(velocity[0]);
         lbm.u.y[n] = static_cast<float>(velocity[1]);
         lbm.u.z[n] = static_cast<float>(velocity[2]);
+        if (c.model.temperature)
+            lbm.T[n] = static_cast<float>(temperature);
     }
     c.resolved["geometry"] = geometries;
     c.resolved["solid_cells"] = solid_count;
@@ -447,6 +474,7 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
     require(bool(status), "Cannot write status report");
     save_json(output / "completion.json", {{"product", SOLVER_IBM_NAME},
                                            {"version", SOLVER_IBM_VERSION_STRING},
+                                           {"release_status", SOLVER_IBM_RELEASE_STATUS},
                                            {"status", prepare ? "prepared" : "succeeded"},
                                            {"storage", ddf_storage_name(c.storage)},
                                            {"solver", solver_description(c)},
@@ -553,6 +581,7 @@ int entry(int argc, char *argv[]) {
         require(Json::parse(copied_config) == c.source, "Config changed after validation");
         Json effective = c.source, manifest = {{"product", SOLVER_IBM_NAME},
                                                {"version", SOLVER_IBM_VERSION_STRING},
+                                               {"release_status", SOLVER_IBM_RELEASE_STATUS},
                                                {"config_sha256", sha256(original)},
                                                {"assets", Json::array()}};
         for (size_t i = 0; i < c.geometry.size(); i++) {
@@ -581,6 +610,7 @@ int entry(int argc, char *argv[]) {
         save_json(output / "manifest.json", manifest);
         save_json(output / "completion.json", {{"product", SOLVER_IBM_NAME},
                                                {"version", SOLVER_IBM_VERSION_STRING},
+                                               {"release_status", SOLVER_IBM_RELEASE_STATUS},
                                                {"status", "starting"},
                                                {"requested_steps", c.steps},
                                                {"steps", 0}});

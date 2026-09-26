@@ -8,7 +8,7 @@
 #include "units.hpp"
 #include "info.hpp"
 
-uint bytes_per_cell_host(); // returns the number of Bytes per cell allocated in host memory
+uint bytes_per_cell_host(const SolverOptions& model=SolverOptions{}); // returns the number of Bytes per cell allocated in host memory
 uint bytes_per_cell_device(const DdfStorage storage=DdfStorage::Float16Scaled, const SolverOptions& model=SolverOptions{}); // returns the number of Bytes per cell allocated in device memory
 uint bandwidth_bytes_per_cell_device(const DdfStorage storage=DdfStorage::Float16Scaled, const SolverOptions& model=SolverOptions{}); // returns the bandwidth in Bytes per cell per time step from/to device memory
 uint3 resolution(const float3 box_aspect_ratio, const uint memory); // input: simulation box aspect ratio and VRAM occupation in MB, output: grid resolution
@@ -63,7 +63,7 @@ private:
 	Memory<float> massex; // excess mass; used for mass conservation
 #endif // SURFACE
 #ifdef TEMPERATURE
-	Memory<fpxx> gi; // thermal DDFs
+	Memory<uchar> gi; // byte-addressed thermal DDF allocation; runtime profile currently requires FP32
 #endif // TEMPERATURE
 #ifdef PARTICLES
 	Kernel kernel_integrate_particles; // intgegrates particles forward in time and couples particles to fluid

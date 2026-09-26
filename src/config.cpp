@@ -113,6 +113,7 @@ std::string sha256(const fs::path &path) {
 Json capabilities() {
     return {{"product", SOLVER_IBM_NAME},
             {"version", SOLVER_IBM_VERSION_STRING},
+            {"release_status", SOLVER_IBM_RELEASE_STATUS},
             {"upstream", {{"product", SOLVER_IBM_UPSTREAM_NAME}, {"version", SOLVER_IBM_UPSTREAM_VERSION}}},
             {"schema_version", 1},
             {"lattice", {"D3Q19", "D3Q27"}},
@@ -123,7 +124,10 @@ Json capabilities() {
             {"turbulence", {"none", "smagorinsky"}},
             {"units", {"lattice", "si"}},
             {"boundaries", {"no_slip", "moving_wall", "equilibrium", "periodic"}},
-            {"geometry", "binary STL static union"},
+            {"physics",
+             {{"thermal", {{"storage", "FP32"}, {"model", "D3Q7 advection-diffusion with Boussinesq coupling"}}},
+              {"free_surface", {{"storage", "FP32"}, {"gas", "fixed environment pressure"}}}}},
+            {"geometry", "binary STL static union; prescribed motion is staged after M1"},
             {"outputs", {"VTK", "CSV", "JSON"}},
             {"body_force", "constant force density"},
             {"analysis", {"probes", "temporal statistics", "gauge force on solids"}},
@@ -150,6 +154,7 @@ Json solver_description(const Config &c) {
                    {"storage", ddf_storage_name(c.storage)},
                    {"turbulence", c.model.turbulence_name()},
                    {"base_even_relaxation_rate", even_rate}};
+    result["physics"] = {{"thermal", c.model.temperature}, {"free_surface", c.model.free_surface}};
     if (c.model.subgrid) {
         result["smagorinsky_constant"] = c.model.smagorinsky_constant;
         result["smagorinsky_coefficient_fp32"] = c.model.smagorinsky_coefficient();
@@ -185,8 +190,8 @@ Config read_config(const fs::path &path) {
     c.source = Json::parse(input, callback);
     const auto &j = c.source;
     keys(j,
-         {"schema_version", "case", "solver", "units", "domain", "fluid", "initial", "geometry", "boundaries", "run",
-          "output", "analysis"},
+         {"schema_version", "case", "solver", "physics", "units", "domain", "fluid", "initial", "geometry", "boundaries",
+          "run", "output", "analysis"},
          "config");
     require(integer(field(j, "schema_version"), "schema_version") == 1, "Unsupported schema_version");
     const auto &ca = field(j, "case");
@@ -224,6 +229,21 @@ Config read_config(const fs::path &path) {
             require(c.model.trt_magic_parameter > 0 && c.model.trt_magic_parameter <= 1,
                     "solver.trt_magic_parameter must be in (0,1]");
         }
+    }
+    const Json *physics = nullptr;
+    if (j.contains("physics")) {
+        physics = &j["physics"];
+        keys(*physics, {"gravity", "thermal", "free_surface"}, "physics");
+        if (physics->contains("thermal")) {
+            require((*physics)["thermal"].is_object(), "physics.thermal must be an object");
+            c.model.temperature = true;
+        }
+        if (physics->contains("free_surface")) {
+            require((*physics)["free_surface"].is_object(), "physics.free_surface must be an object");
+            c.model.free_surface = true;
+        }
+        require(!(c.model.temperature || c.model.free_surface) || c.storage == DdfStorage::Float32,
+                "Thermal and free-surface physics require solver.storage=FP32");
     }
     const auto &u = field(j, "units");
     keys(u, {"mode", "reference_density", "dt", "reference_velocity", "lattice_velocity"}, "units");
@@ -330,6 +350,62 @@ Config read_config(const fs::path &path) {
     finite_float(c.nu, "lattice viscosity", true);
     finite_float(0.5 + 3 * c.nu, "relaxation time", true);
     finite_float(c.rho, "lattice density", true);
+    if (c.model.free_surface) {
+        const auto &surface = (*physics)["free_surface"];
+        keys(surface, {"surface_tension", "environment_pressure"}, "physics.free_surface");
+        double sigma = number(field(surface, "surface_tension"), "physics.free_surface.surface_tension");
+        require(sigma >= 0, "physics.free_surface.surface_tension must be nonnegative");
+        c.surface_tension = c.si ? sigma * c.dt * c.dt /
+                                           (c.reference_density * c.dx * c.dx * c.dx)
+                                     : sigma;
+        require(c.surface_tension <= 0.1, "Lattice surface tension must not exceed 0.1");
+        finite_float(c.surface_tension, "lattice surface tension");
+        if (surface.contains("environment_pressure")) {
+            c.environment_pressure = number(surface["environment_pressure"], "physics.free_surface.environment_pressure");
+            require(c.environment_pressure >= 0, "environment pressure must be nonnegative");
+        }
+        const double pressure_scale = c.reference_density * (c.dx / c.dt) * (c.dx / c.dt);
+        const double lattice_pressure = c.si ? c.environment_pressure / pressure_scale : c.environment_pressure;
+        c.environment_lattice_density = c.pressure_rho + 3.0 * lattice_pressure;
+        require(c.environment_lattice_density > 0, "environment pressure produces non-positive lattice density");
+        finite_float(c.environment_lattice_density, "environment lattice density", true);
+        c.model.ambient_density = c.environment_lattice_density;
+    }
+    if (c.model.temperature) {
+        const auto &thermal = (*physics)["thermal"];
+        keys(thermal,
+             {"reference_temperature", "initial_temperature", "specific_heat", "conductivity", "thermal_expansion",
+              "turbulent_prandtl"},
+             "physics.thermal");
+        c.temperature_scale = positive(field(thermal, "reference_temperature"), "physics.thermal.reference_temperature");
+        c.initial_temperature =
+            positive(field(thermal, "initial_temperature"), "physics.thermal.initial_temperature") / c.temperature_scale;
+        c.fluid_specific_heat = positive(field(thermal, "specific_heat"), "physics.thermal.specific_heat");
+        c.fluid_conductivity = positive(field(thermal, "conductivity"), "physics.thermal.conductivity");
+        double alpha = c.fluid_conductivity / (density * c.fluid_specific_heat);
+        c.thermal_diffusivity = c.si ? alpha * c.dt / (c.dx * c.dx) : alpha;
+        require(c.thermal_diffusivity > 0 && c.thermal_diffusivity < 1.75,
+                "Lattice thermal diffusivity must be in (0,1.75)");
+        c.thermal_expansion = thermal.contains("thermal_expansion")
+                                  ? number(thermal["thermal_expansion"], "physics.thermal.thermal_expansion") *
+                                        c.temperature_scale
+                                  : 0.0;
+        require(c.thermal_expansion >= 0, "thermal expansion must be nonnegative");
+        c.model.reference_temperature = 1.0;
+        if (thermal.contains("turbulent_prandtl"))
+            c.turbulent_prandtl = positive(thermal["turbulent_prandtl"], "physics.thermal.turbulent_prandtl");
+        finite_float(c.initial_temperature, "initial lattice temperature", true);
+        finite_float(c.thermal_diffusivity, "lattice thermal diffusivity", true);
+        finite_float(c.thermal_expansion, "lattice thermal expansion");
+    }
+    c.gravity = physics && physics->contains("gravity") ? vec((*physics)["gravity"], "physics.gravity") : Vec{};
+    for (int a = 0; a < 3; a++) {
+        const double acceleration = c.si ? c.gravity[a] * c.dt * c.dt / c.dx : c.gravity[a];
+        c.model.gravity[a] = c.rho * acceleration;
+        c.body_force[a] += c.model.gravity[a];
+        finite_float(c.model.gravity[a], "lattice gravity force density");
+        finite_float(c.body_force[a], "combined lattice body force");
+    }
     auto velocity = [&](const Json &v, const std::string &at) {
         Vec out = vec(v, at);
         for (auto &x : out) {
@@ -339,26 +415,54 @@ Config read_config(const fs::path &path) {
         return out;
     };
     const auto &init = field(j, "initial");
-    keys(init, {"rho", "velocity", "regions"}, "initial");
+    keys(init, {"rho", "velocity", "temperature", "regions", "liquid_regions"}, "initial");
     c.velocity = velocity(field(init, "velocity"), "initial.velocity");
     if (init.contains("rho"))
         c.rho = positive(init["rho"], "initial.rho") / c.reference_density;
+    if (init.contains("temperature")) {
+        require(c.model.temperature, "initial.temperature requires physics.thermal");
+        c.initial_temperature = positive(init["temperature"], "initial.temperature") / c.temperature_scale;
+    }
     finite_float(c.rho, "initial lattice density", true);
     if (init.contains("regions")) {
         require(init["regions"].is_array(), "initial.regions must be an array");
         for (const auto &r : init["regions"]) {
-            keys(r, {"box_min", "box_max", "rho", "velocity"}, "initial region");
+            keys(r, {"box_min", "box_max", "rho", "velocity", "temperature"}, "initial region");
             InitialRegion region;
             region.lower = vec(field(r, "box_min"), "box_min");
             region.upper = vec(field(r, "box_max"), "box_max");
             region.rho = positive(field(r, "rho"), "region.rho") / c.reference_density;
             finite_float(region.rho, "region.rho", true);
             region.velocity = velocity(field(r, "velocity"), "region.velocity");
+            if (r.contains("temperature")) {
+                require(c.model.temperature, "region.temperature requires physics.thermal");
+                region.has_temperature = true;
+                region.temperature = positive(r["temperature"], "region.temperature") / c.temperature_scale;
+                finite_float(region.temperature, "region.temperature", true);
+            }
             for (int a = 0; a < 3; a++)
                 require(region.lower[a] <= region.upper[a], "Reversed initial region");
             c.regions.push_back(region);
         }
     }
+    if (init.contains("liquid_regions")) {
+        require(c.model.free_surface, "initial.liquid_regions requires physics.free_surface");
+        require(init["liquid_regions"].is_array() && !init["liquid_regions"].empty(),
+                "initial.liquid_regions must be a nonempty array");
+        for (const auto &r : init["liquid_regions"]) {
+            keys(r, {"box_min", "box_max", "fill"}, "liquid region");
+            LiquidRegion region;
+            region.lower = vec(field(r, "box_min"), "liquid region.box_min");
+            region.upper = vec(field(r, "box_max"), "liquid region.box_max");
+            region.fill = r.contains("fill") ? number(r["fill"], "liquid region.fill") : 1.0;
+            require(region.fill > 0 && region.fill <= 1, "liquid region.fill must be in (0,1]");
+            for (int a = 0; a < 3; a++)
+                require(region.lower[a] <= region.upper[a], "Reversed liquid region");
+            c.liquid_regions.push_back(region);
+        }
+    }
+    require(!c.model.free_surface || !c.liquid_regions.empty(),
+            "Free-surface physics requires initial.liquid_regions");
     const auto &gs = field(j, "geometry");
     require(gs.is_array(), "geometry must be an array");
     std::set<std::string> ids;
@@ -492,7 +596,9 @@ Config read_config(const fs::path &path) {
             std::set<std::string> unique;
             for (const auto &item : out["vtk_fields"]) {
                 auto name = string_value(item, "vtk_fields");
-                require(name == "u" || name == "rho" || name == "flags" || name == "p", "Unknown output field");
+                require(name == "u" || name == "rho" || name == "flags" || name == "p" ||
+                            (name == "T" && c.model.temperature) || (name == "phi" && c.model.free_surface),
+                        "Unknown or unavailable output field");
                 require(unique.insert(name).second, "Duplicate output field");
                 c.vtk_fields.push_back(name);
             }
@@ -574,6 +680,7 @@ Config read_config(const fs::path &path) {
             "Viscosity is too small to represent a relaxation time above 0.5");
     c.resolved = {{"product", SOLVER_IBM_NAME},
                   {"version", SOLVER_IBM_VERSION_STRING},
+                  {"release_status", SOLVER_IBM_RELEASE_STATUS},
                   {"schema_version", 1},
                   {"case", c.name},
                   {"capabilities", capabilities()},
@@ -597,8 +704,20 @@ Config read_config(const fs::path &path) {
                   {"steps", c.steps},
                   {"actual_duration", c.steps * c.dt},
                   {"device_field_bytes", count * c.device_cell_bytes()},
-                  {"host_field_and_union_bytes", count * (host_cell_bytes + 1)},
+                  {"host_field_and_union_bytes", count * (c.host_cell_bytes() + 1)},
                   {"actual_domain_length", {c.cells[0] * c.dx, c.cells[1] * c.dx, c.cells[2] * c.dx}}};
+    if (c.model.free_surface)
+        c.resolved["free_surface"] = {{"lattice_surface_tension", c.surface_tension},
+                                       {"environment_pressure", c.environment_pressure},
+                                       {"environment_lattice_density", c.environment_lattice_density},
+                                       {"initial_liquid_regions", c.liquid_regions.size()}};
+    if (c.model.temperature)
+        c.resolved["thermal"] = {{"temperature_scale", c.temperature_scale},
+                                  {"initial_lattice_temperature", c.initial_temperature},
+                                  {"lattice_diffusivity", c.thermal_diffusivity},
+                                  {"lattice_expansion", c.thermal_expansion},
+                                  {"lattice_gravity_force_density", c.model.gravity},
+                                  {"turbulent_prandtl", c.turbulent_prandtl}};
     if (c.analysis) {
         c.resolved["analysis"] = {{"every", c.sample_every},
                                   {"start_step", c.sample_start},

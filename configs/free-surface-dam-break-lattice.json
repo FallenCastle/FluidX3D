@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "case": { "name": "free-surface-dam-break-lattice" },
+  "solver": {
+    "lattice": "D3Q19",
+    "collision": "SRT",
+    "storage": "FP32",
+    "turbulence": "none"
+  },
+  "physics": {
+    "gravity": [0, 0, -0.0001],
+    "free_surface": {
+      "surface_tension": 0.0001,
+      "environment_pressure": 0
+    }
+  },
+  "units": { "mode": "lattice" },
+  "domain": { "cells": [32, 12, 20] },
+  "fluid": { "rho": 1.0, "nu": 0.02 },
+  "initial": {
+    "velocity": [0, 0, 0],
+    "liquid_regions": [
+      { "box_min": [1, 1, 1], "box_max": [10.999, 10.999, 15.999] }
+    ]
+  },
+  "geometry": [],
+  "boundaries": [
+    {
+      "id": "walls",
+      "faces": ["xmin", "xmax", "ymin", "ymax", "zmin", "zmax"],
+      "type": "no_slip"
+    }
+  ],
+  "run": { "steps": 20, "monitor_every": 10 },
+  "output": {
+    "vtk_fields": ["phi", "u", "rho", "flags"],
+    "vtk_every": 20,
+    "initial": true
+  }
+}

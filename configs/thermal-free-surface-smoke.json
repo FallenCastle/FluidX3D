@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "case": { "name": "thermal-free-surface-smoke" },
+  "solver": {
+    "lattice": "D3Q27",
+    "collision": "TRT",
+    "storage": "FP32",
+    "turbulence": "smagorinsky"
+  },
+  "physics": {
+    "gravity": [0, 0, -0.0001],
+    "thermal": {
+      "reference_temperature": 1.0,
+      "initial_temperature": 1.0,
+      "specific_heat": 1.0,
+      "conductivity": 0.04,
+      "thermal_expansion": 0.01,
+      "turbulent_prandtl": 0.9
+    },
+    "free_surface": {
+      "surface_tension": 0.0001,
+      "environment_pressure": 0
+    }
+  },
+  "units": { "mode": "lattice" },
+  "domain": { "cells": [20, 12, 16] },
+  "fluid": { "rho": 1.0, "nu": 0.04 },
+  "initial": {
+    "velocity": [0, 0, 0],
+    "regions": [
+      {
+        "box_min": [1, 1, 1],
+        "box_max": [6.999, 10.999, 10.999],
+        "rho": 1.0,
+        "velocity": [0, 0, 0],
+        "temperature": 1.05
+      }
+    ],
+    "liquid_regions": [
+      { "box_min": [1, 1, 1], "box_max": [18.999, 10.999, 10.999] }
+    ]
+  },
+  "geometry": [],
+  "boundaries": [
+    {
+      "id": "walls",
+      "faces": ["xmin", "xmax", "ymin", "ymax", "zmin", "zmax"],
+      "type": "no_slip"
+    }
+  ],
+  "run": { "steps": 12, "monitor_every": 6 },
+  "output": {
+    "vtk_fields": ["T", "phi", "u", "rho", "flags"],
+    "vtk_every": 12,
+    "initial": true
+  }
+}

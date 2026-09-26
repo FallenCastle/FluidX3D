@@ -4,8 +4,9 @@
 // Authoritative release version, shared by C++, Windows resources and packaging.
 // Solver-IBM is an altered version of FluidX3D; preserve the upstream attribution.
 #define SOLVER_IBM_VERSION_MAJOR 1
-#define SOLVER_IBM_VERSION_MINOR 0
+#define SOLVER_IBM_VERSION_MINOR 1
 #define SOLVER_IBM_VERSION_PATCH 0
+#define SOLVER_IBM_RELEASE_STATUS "development"
 
 #define SOLVER_IBM_STRINGIFY_IMPL(value) #value
 #define SOLVER_IBM_STRINGIFY(value) SOLVER_IBM_STRINGIFY_IMPL(value)
