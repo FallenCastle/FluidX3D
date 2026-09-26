@@ -474,8 +474,9 @@ static void update_dynamic_geometry(LBM &lbm, Config &c, std::vector<DynamicBody
     lbm.rho.read_from_device();
     lbm.u.read_from_device();
     lbm.flags.read_from_device();
+    std::vector<float> old_surface_mass(c.model.free_surface ? static_cast<size_t>(lbm.get_N()) : 0u);
     if (c.model.free_surface)
-        lbm.phi.read_from_device();
+        domain->settle_dynamic_surface_mass(old_surface_mass.data());
     std::vector<uchar> old_objects(static_cast<size_t>(lbm.get_N()));
     for (ulong n = 0; n < lbm.get_N(); n++)
         old_objects[static_cast<size_t>(n)] = domain->object_id[n];
@@ -583,8 +584,8 @@ static void update_dynamic_geometry(LBM &lbm, Config &c, std::vector<DynamicBody
             release_velocity[static_cast<size_t>(lbm.get_N() + destination)] = lbm.u.y[source];
             release_velocity[static_cast<size_t>(2u * lbm.get_N() + destination)] = lbm.u.z[source];
             if (c.model.free_surface) {
-                const float liquid_mass = lbm.rho[source] * std::clamp(lbm.phi[source], 0.0f, 1.0f);
-                require(std::isfinite(liquid_mass) && liquid_mass >= 0.0f,
+                const float liquid_mass = old_surface_mass[static_cast<size_t>(source)];
+                require(std::isfinite(liquid_mass),
                         "Prescribed STL remap encountered invalid free-surface mass");
                 release_mass[static_cast<size_t>(destination)] = liquid_mass;
             }
@@ -898,13 +899,23 @@ static void monitor(LBM &lbm, const Config &c, std::ofstream &file,
     double mass = 0, umax = 0, rmin = std::numeric_limits<double>::infinity(), rmax = 0;
     double tmin = std::numeric_limits<double>::infinity(), tmax = -std::numeric_limits<double>::infinity(), energy = 0;
     ulong count = 0;
+    std::vector<float> dynamic_surface_mass(c.model.free_surface && c.model.dynamic_geometry
+                                                ? static_cast<size_t>(lbm.get_N())
+                                                : 0u);
+    if (!dynamic_surface_mass.empty())
+        lbm.lbm_domain[0]->read_dynamic_surface_mass(dynamic_surface_mass.data());
+    if (!dynamic_surface_mass.empty())
+        for (ulong n = 0; n < lbm.get_N(); n++)
+            if (!is_solid(lbm.flags[n]))
+                mass += dynamic_surface_mass[static_cast<size_t>(n)];
     for (ulong n = 0; n < lbm.get_N(); n++)
         if (!is_solid(lbm.flags[n]) &&
             (!c.model.free_surface || (lbm.flags[n] & (TYPE_F | TYPE_I)))) {
             double rho = lbm.rho[n], x = lbm.u.x[n], y = lbm.u.y[n], z = lbm.u.z[n];
             require(std::isfinite(rho) && rho > 0 && std::isfinite(x) && std::isfinite(y) && std::isfinite(z),
                     "Non-finite velocity or non-positive density at step " + std::to_string(lbm.get_t()));
-            mass += rho * (c.model.free_surface ? lbm.phi[n] : 1.0);
+            if (dynamic_surface_mass.empty())
+                mass += c.model.free_surface ? rho * lbm.phi[n] : rho;
             rmin = std::min(rmin, rho);
             rmax = std::max(rmax, rho);
             umax = std::max(umax, std::sqrt(x * x + y * y + z * z));

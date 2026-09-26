@@ -137,7 +137,7 @@ void LBM_Domain::allocate(Device& device) {
 	if(model.free_surface) {
 		phi = Memory<float>(device, N);
 		contact_angle = Memory<float>(device, N, 1u, true, true, 1.5707963267948966f);
-		mass = Memory<float>(device, N, 1u, false);
+		mass = Memory<float>(device, N, 1u, model.dynamic_geometry);
 		massex = Memory<float>(device, N, 1u, false);
 		kernel_initialize.add_parameters(mass, massex, phi);
 		kernel_stream_collide.add_parameters(mass);
@@ -146,6 +146,13 @@ void LBM_Domain::allocate(Device& device) {
 		kernel_surface_1 = Kernel(device, N, "surface_1", flags);
 		kernel_surface_2 = Kernel(device, N, "surface_2", fi, rho, u, flags, t);
 		kernel_surface_3 = Kernel(device, N, "surface_3", rho, flags, mass, massex, phi);
+		if(model.dynamic_geometry) {
+			dynamic_surface_mass = Memory<float>(device, N, 1u, false);
+			kernel_stage_dynamic_surface_mass = Kernel(device, N, "stage_dynamic_surface_mass", flags, mass, massex,
+			                                           dynamic_surface_mass);
+			kernel_apply_dynamic_surface_mass = Kernel(device, N, "apply_dynamic_surface_mass", mass, massex,
+			                                           dynamic_surface_mass);
+		}
 	}
 #endif // SURFACE
 
@@ -344,6 +351,27 @@ void LBM_Domain::voxelize_mesh_on_device(const Mesh* mesh, const uchar flag, con
 	p2.write_to_device();
 	bounding_box_and_velocity.write_to_device();
 	kernel_voxelize_mesh.run();
+}
+void LBM_Domain::settle_dynamic_surface_mass(float* values) {
+#ifdef SURFACE
+	if(model.free_surface&&model.dynamic_geometry) {
+		kernel_stage_dynamic_surface_mass.run();
+		kernel_apply_dynamic_surface_mass.run();
+		read_dynamic_surface_mass(values);
+		return;
+	}
+#endif // SURFACE
+	(void)values;
+}
+void LBM_Domain::read_dynamic_surface_mass(float* values) {
+#ifdef SURFACE
+	if(model.free_surface&&model.dynamic_geometry) {
+		mass.read_from_device();
+		for(ulong n=0ull; n<get_N(); n++) values[n] = mass[n];
+		return;
+	}
+#endif // SURFACE
+	(void)values;
 }
 void LBM_Domain::reconcile_dynamic_object_mask(uchar* desired_object_id, float* release_density, float* release_velocity, float* release_mass, const uchar object, const float3& rotation_center, const float3& linear_velocity, const float3& rotational_velocity) { // reconcile a prescribed moving object to a host-selected constant-volume mask
 	Memory<uchar> desired(device, get_N(), 1u, desired_object_id);

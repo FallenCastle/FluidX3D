@@ -61,6 +61,9 @@ private:
 	Kernel kernel_surface_3; // additional kernel for flag handling and mass conservation
 	Memory<float> mass; // fluid mass; phi=mass/rho
 	Memory<float> massex; // excess mass; used for mass conservation
+	Memory<float> dynamic_surface_mass; // settled mass used while reconciling prescribed moving solids
+	Kernel kernel_stage_dynamic_surface_mass;
+	Kernel kernel_apply_dynamic_surface_mass;
 #endif // SURFACE
 #ifdef TEMPERATURE
 	Memory<float> T_next; // device-only second buffer for conservative finite-volume heat transport
@@ -169,6 +172,8 @@ public:
 	void set_f(const float fx, const float fy, const float fz) { set_fx(fx); set_fy(fy); set_fz(fz); } // set global froce per volume
 
 	void voxelize_mesh_on_device(const Mesh* mesh, const uchar flag=TYPE_S, const float3& rotation_center=float3(0.0f), const float3& linear_velocity=float3(0.0f), const float3& rotational_velocity=float3(0.0f), const uchar object=0u); // voxelize mesh
+	void settle_dynamic_surface_mass(float* values); // apply pending free-surface excess mass and copy the settled mass to host
+	void read_dynamic_surface_mass(float* values); // copy settled free-surface mass to host for diagnostics
 	void reconcile_dynamic_object_mask(uchar* desired_object_id, float* release_density, float* release_velocity, float* release_mass, const uchar object, const float3& rotation_center, const float3& linear_velocity, const float3& rotational_velocity); // reconcile a prescribed moving object to a host-selected constant-volume mask
 	void refresh_dynamic_macroscopic_fields(); // refresh rho/u after prescribed-geometry remapping
 	void correct_dynamic_mass(const float density_delta); // apply a uniform closed-domain density correction while preserving velocity

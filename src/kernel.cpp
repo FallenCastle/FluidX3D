@@ -2501,6 +2501,11 @@ string opencl_c_container() { return R( // ########################## begin of O
 		flags[n] = (flags[n]&~TYPE_BO)|TYPE_S;
 		store3(u, n, u_set);
 		object_id[n] = object;
+)+"#ifdef SURFACE"+R(
+		mass[n] = 0.0f;
+		massex[n] = 0.0f;
+		phi[n] = 0.0f;
+)+"#endif"+R(
 	} else if(!wanted&&previous_object==object) {
 		const float rhon = release_density[n];
 		const float3 un = load3(release_velocity, n);
@@ -2510,9 +2515,9 @@ string opencl_c_container() { return R( // ########################## begin of O
 		calculate_f_eq(rhon, un.x, un.y, un.z, feq);
 		store_f(n, feq, fi, j, t);
 )+"#ifdef SURFACE"+R(
-		const float liquid_mass = fmax(release_mass[n], 0.0f);
+		const float liquid_mass = release_mass[n];
 		const float fill = clamp(liquid_mass/rhon, 0.0f, 1.0f);
-		const uchar surface_flag = fill>=1.0f ? TYPE_F : fill>0.0f ? TYPE_I : TYPE_G;
+		const uchar surface_flag = liquid_mass>=rhon ? TYPE_F : liquid_mass>0.0f ? TYPE_I : TYPE_G;
 		flags[n] = (flags[n]&~(TYPE_S|TYPE_SU))|surface_flag;
 		mass[n] = liquid_mass;
 		massex[n] = 0.0f;
@@ -2525,6 +2530,28 @@ string opencl_c_container() { return R( // ########################## begin of O
 		object_id[n] = 0u;
 	}
 }
+)+"#if defined(SURFACE)"+R(
+kernel void stage_dynamic_surface_mass(const global uchar* flags, const global float* mass,
+                                       const global float* massex, global float* settled) {
+	const uxx n = get_global_id(0);
+	if(n>=def_N) return;
+	float value = mass[n];
+	const uchar state = flags[n]&(TYPE_SU|TYPE_S);
+	if(state==TYPE_F||state==TYPE_I) {
+		uxx j[def_velocity_set];
+		neighbors(n, j);
+		for(uint i=1u; i<def_velocity_set; i++) value += massex[j[i]];
+	}
+	settled[n] = value;
+}
+kernel void apply_dynamic_surface_mass(global float* mass, global float* massex,
+                                       const global float* settled) {
+	const uxx n = get_global_id(0);
+	if(n>=def_N) return;
+	mass[n] = settled[n];
+	massex[n] = 0.0f;
+}
+)+"#endif"+R(
 kernel void refresh_dynamic_macroscopic_fields(const global fpxx* fi, global float* rho, global float* u,
                                                const global uchar* flags, const ulong t) {
 	const uxx n = get_global_id(0);
