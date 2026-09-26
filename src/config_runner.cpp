@@ -467,7 +467,8 @@ static double sample_object_temperature(const Config &c, const std::vector<float
             }
     return nearest;
 }
-static void update_dynamic_geometry(LBM &lbm, Config &c, std::vector<DynamicBody> &bodies, double time) {
+static void update_dynamic_geometry(LBM &lbm, Config &c, std::vector<DynamicBody> &bodies, double time,
+                                    const double mass_target) {
     auto *domain = lbm.lbm_domain[0];
     domain->object_id.read_from_device();
     lbm.rho.read_from_device();
@@ -590,7 +591,9 @@ static void update_dynamic_geometry(LBM &lbm, Config &c, std::vector<DynamicBody
                                               angular);
     }
     lbm.update_moving_boundaries();
+    domain->refresh_dynamic_macroscopic_fields();
     domain->object_id.read_from_device();
+    lbm.rho.read_from_device();
     lbm.flags.read_from_device();
     lbm.u.read_from_device();
     for (ulong n = 0; n < lbm.get_N(); n++)
@@ -602,6 +605,21 @@ static void update_dynamic_geometry(LBM &lbm, Config &c, std::vector<DynamicBody
         for (ulong n = 0; n < lbm.get_N(); n++)
             cells += domain->object_id[n] == object;
         require(cells == body.target_cells, "Prescribed STL volume reconciliation failed: " + body.geometry->id);
+    }
+    if (std::isfinite(mass_target)) {
+        double current_mass = 0, minimum_density = std::numeric_limits<double>::infinity();
+        ulong fluid_cells = 0;
+        for (ulong n = 0; n < lbm.get_N(); n++)
+            if (!is_solid(lbm.flags[n])) {
+                current_mass += lbm.rho[n];
+                minimum_density = std::min(minimum_density, static_cast<double>(lbm.rho[n]));
+                fluid_cells++;
+            }
+        require(fluid_cells > 0, "Dynamic mass correction has no fluid cells");
+        const double density_delta = (mass_target - current_mass) / static_cast<double>(fluid_cells);
+        require(std::isfinite(density_delta) && minimum_density + density_delta > 0,
+                "Dynamic mass correction would produce a non-positive density");
+        domain->correct_dynamic_mass(static_cast<float>(density_delta));
     }
     if (c.model.free_surface) {
         for (ulong n = 0; n < lbm.get_N(); n++) {
@@ -1275,6 +1293,18 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
                      static_cast<float>(c.dt));
     lbm.run(0, c.steps);
     sync(lbm);
+    double dynamic_mass_target = std::numeric_limits<double>::quiet_NaN();
+    bool closed_single_phase = c.model.dynamic_geometry && !c.model.free_surface;
+    for (const auto &boundary : c.boundaries)
+        closed_single_phase = closed_single_phase &&
+                              (boundary.type == "no_slip" || boundary.type == "moving_wall" ||
+                               boundary.type == "periodic");
+    if (closed_single_phase) {
+        dynamic_mass_target = 0;
+        for (ulong n = 0; n < lbm.get_N(); n++)
+            if (!is_solid(lbm.flags[n]))
+                dynamic_mass_target += lbm.rho[n];
+    }
     auto advance_to = [&](ulong target) {
         if (!c.model.dynamic_geometry) {
             lbm.run(target - lbm.get_t(), c.steps);
@@ -1282,7 +1312,8 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
         }
         while (lbm.get_t() < target) {
             lbm.run(1, c.steps);
-            update_dynamic_geometry(lbm, c, dynamic_bodies, static_cast<double>(lbm.get_t()));
+            update_dynamic_geometry(lbm, c, dynamic_bodies, static_cast<double>(lbm.get_t()),
+                                    dynamic_mass_target);
         }
     };
     std::ofstream stats(output / "monitor.csv", std::ios::binary);

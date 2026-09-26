@@ -356,6 +356,14 @@ void LBM_Domain::reconcile_dynamic_object_mask(uchar* desired_object_id, float* 
 	              rotational_velocity.x, rotational_velocity.y, rotational_velocity.z);
 	kernel.run();
 }
+void LBM_Domain::refresh_dynamic_macroscopic_fields() {
+	Kernel kernel(device, get_N(), "refresh_dynamic_macroscopic_fields", fi, rho, u, flags, t+1ull);
+	kernel.run();
+}
+void LBM_Domain::correct_dynamic_mass(const float density_delta) {
+	Kernel kernel(device, get_N(), "correct_dynamic_mass", fi, rho, u, flags, t+1ull, density_delta);
+	kernel.run();
+}
 void LBM_Domain::enqueue_unvoxelize_mesh_on_device(const Mesh* mesh, const uchar flag) { // remove voxelized triangle mesh from LBM grid
 	const float x0=mesh->pmin.x, y0=mesh->pmin.y, z0=mesh->pmin.z, x1=mesh->pmax.x, y1=mesh->pmax.y, z1=mesh->pmax.z; // remove all flags in bounding box of mesh
 	Kernel kernel_unvoxelize_mesh(device, get_N(), "unvoxelize_mesh", flags, flag, x0, y0, z0, x1, y1, z1);

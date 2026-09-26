@@ -2503,6 +2503,40 @@ kernel void reconcile_dynamic_object_mask(global fpxx* fi, global float* rho, gl
 		object_id[n] = 0u;
 	}
 }
+kernel void refresh_dynamic_macroscopic_fields(const global fpxx* fi, global float* rho, global float* u,
+                                               const global uchar* flags, const ulong t) {
+	const uxx n = get_global_id(0);
+	if(n>=def_N||(flags[n]&TYPE_BO)==TYPE_S) return;
+	uxx j[def_velocity_set];
+	neighbors(n, j);
+	float fhn[def_velocity_set];
+	load_f(n, fhn, fi, j, t);
+)+"#ifdef MOVING_BOUNDARIES"+R(
+	if((flags[n]&TYPE_BO)==TYPE_MS) apply_moving_boundaries(fhn, j, u, flags);
+)+"#endif"+R( // MOVING_BOUNDARIES
+	float rhon, ux, uy, uz;
+	calculate_rho_u(fhn, &rhon, &ux, &uy, &uz);
+	rho[n] = rhon;
+	store3(u, n, (float3)(ux, uy, uz));
+}
+kernel void correct_dynamic_mass(global fpxx* fi, global float* rho, global float* u,
+                                 const global uchar* flags, const ulong t, const float density_delta) {
+	const uxx n = get_global_id(0);
+	if(n>=def_N||(flags[n]&TYPE_BO)==TYPE_S) return;
+	uxx j[def_velocity_set];
+	neighbors(n, j);
+	float fhn[def_velocity_set];
+	load_f(n, fhn, fi, j, t);
+	float rhon, ux, uy, uz;
+	calculate_rho_u(fhn, &rhon, &ux, &uy, &uz);
+	float old_equilibrium[def_velocity_set], new_equilibrium[def_velocity_set];
+	calculate_f_eq(rhon, ux, uy, uz, old_equilibrium);
+	calculate_f_eq(rhon+density_delta, ux, uy, uz, new_equilibrium);
+	for(uint i=0u; i<def_velocity_set; i++) fhn[i] += new_equilibrium[i]-old_equilibrium[i];
+	store_f(n, fhn, fi, j, t);
+	rho[n] = rhon+density_delta;
+	store3(u, n, (float3)(ux, uy, uz));
+}
 )+"#endif"+R( // DYNAMIC_GEOMETRY
 
 )+R(kernel void unvoxelize_mesh(global uchar* flags, const uchar flag, float x0, float y0, float z0, float x1, float y1, float z1) { // remove voxelized triangle mesh
