@@ -1858,7 +1858,9 @@ string opencl_c_container() { return R( // ########################## begin of O
 			const float um = u[(ulong)axis*def_N+(ulong)m];
 			const float velocity = 0.5f*(un[axis]+um)*sign;
 			const float energy = velocity>=0.0f ? Cn*Tn : capacity[m]*T_src[m];
-			rhs -= velocity*energy;
+			// Subtract the local constant-state flux. This is the upwind form of C*u.grad(T),
+			// which preserves a uniform temperature even when the sampled face velocity has small divergence error.
+			rhs -= velocity*(energy-Cn*Tn);
 		}
 	}
 	T_dst[n] = Tn+def_thermal_dt*rhs/Cn;

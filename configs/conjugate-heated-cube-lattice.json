@@ -19,7 +19,7 @@
           "density": 2.0,
           "specific_heat": 500.0,
           "conductivity": 1.2,
-          "heat_source": 0.0006,
+          "heat_source": 30.0,
           "initial_temperature": 300.0
         }
       ]
