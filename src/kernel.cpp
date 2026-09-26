@@ -1390,6 +1390,13 @@ string opencl_c_container() { return R( // ########################## begin of O
 		store(fi, index_f(n   , t%2ul ? i    : i+1u), fhn[i+1u]);
 	}
 }
+)+R(void store_f_incoming(const uxx n, const float* fhn, global fpxx* fi, const uxx* j, const ulong t) {
+	store(fi, index_f(n, 0u), fhn[0]); // preserve the current Esoteric-Pull state without streaming
+	for(uint i=1u; i<def_velocity_set; i+=2u) {
+		store(fi, index_f(n   , t%2ul ? i    : i+1u), fhn[i   ]);
+		store(fi, index_f(j[i], t%2ul ? i+1u : i   ), fhn[i+1u]);
+	}
+}
 
 )+"#ifdef SURFACE"+R(
 )+R(void load_f_outgoing(const uxx n, float* fon, const global fpxx* fi, const uxx* j, const ulong t) { // load outgoing DDFs, even: 1:1 like stream-out odd, odd: 1:1 like stream-out even
@@ -2527,15 +2534,14 @@ kernel void correct_dynamic_mass(global fpxx* fi, global float* rho, global floa
 	neighbors(n, j);
 	float fhn[def_velocity_set];
 	load_f(n, fhn, fi, j, t);
-	float rhon, ux, uy, uz;
-	calculate_rho_u(fhn, &rhon, &ux, &uy, &uz);
+	const float rhon = rho[n];
+	const float3 un = load3(u, n);
 	float old_equilibrium[def_velocity_set], new_equilibrium[def_velocity_set];
-	calculate_f_eq(rhon, ux, uy, uz, old_equilibrium);
-	calculate_f_eq(rhon+density_delta, ux, uy, uz, new_equilibrium);
+	calculate_f_eq(rhon, un.x, un.y, un.z, old_equilibrium);
+	calculate_f_eq(rhon+density_delta, un.x, un.y, un.z, new_equilibrium);
 	for(uint i=0u; i<def_velocity_set; i++) fhn[i] += new_equilibrium[i]-old_equilibrium[i];
-	store_f(n, fhn, fi, j, t);
+	store_f_incoming(n, fhn, fi, j, t);
 	rho[n] = rhon+density_delta;
-	store3(u, n, (float3)(ux, uy, uz));
 }
 )+"#endif"+R( // DYNAMIC_GEOMETRY
 
