@@ -429,57 +429,52 @@ struct DynamicBody {
     std::unique_ptr<Mesh> base, current;
     MotionState state;
     ulong target_cells = 0;
+    std::vector<float3> thermal_material_positions;
+    std::vector<ulong> thermal_cells;
+    std::vector<float> thermal_material_temperature;
 };
 static std::string quote_csv_field(const std::string &value);
 static float3x3 motion_rotation(const MotionState &state) {
     return float3x3(f3(state.axis), radians(static_cast<float>(state.degrees)));
 }
-static double sample_object_temperature(const Config &c, const std::vector<float> &temperature,
-                                        const std::vector<uchar> &objects, uchar object, const float3 &position,
-                                        double fallback) {
-    const int x0 = static_cast<int>(std::floor(position.x)), y0 = static_cast<int>(std::floor(position.y)),
-              z0 = static_cast<int>(std::floor(position.z));
-    double weighted = 0, weights = 0;
-    for (int dz = 0; dz <= 1; dz++)
-        for (int dy = 0; dy <= 1; dy++)
-            for (int dx = 0; dx <= 1; dx++) {
-                const int x = x0 + dx, y = y0 + dy, z = z0 + dz;
-                if (x < 0 || y < 0 || z < 0 || x >= static_cast<int>(c.cells[0]) ||
-                    y >= static_cast<int>(c.cells[1]) || z >= static_cast<int>(c.cells[2]))
-                    continue;
-                const ulong n = static_cast<ulong>(x) +
-                                (static_cast<ulong>(y) + static_cast<ulong>(z) * c.cells[1]) * c.cells[0];
-                if (objects[static_cast<size_t>(n)] != object)
-                    continue;
-                const double wx = dx ? position.x - x0 : 1.0 - (position.x - x0);
-                const double wy = dy ? position.y - y0 : 1.0 - (position.y - y0);
-                const double wz = dz ? position.z - z0 : 1.0 - (position.z - z0);
-                const double weight = std::max(0.0, wx * wy * wz);
-                weighted += weight * temperature[static_cast<size_t>(n)];
-                weights += weight;
+static void assign_thermal_material_cells(LBM &lbm, DynamicBody &body) {
+    auto *domain = lbm.lbm_domain[0];
+    const uchar object = static_cast<uchar>(body.geometry->object_index);
+    std::vector<ulong> targets;
+    targets.reserve(static_cast<size_t>(body.target_cells));
+    for (ulong n = 0; n < lbm.get_N(); n++)
+        if (domain->object_id[n] == object)
+            targets.push_back(n);
+    require(targets.size() == body.thermal_material_positions.size(),
+            "Dynamic thermal material-cell count changed: " + body.geometry->id);
+    std::vector<uchar> used(targets.size(), 0u);
+    body.thermal_cells.assign(targets.size(), 0u);
+    const float3 pivot = f3(body.pivot), shift = f3(body.state.translation);
+    const float3x3 rotation = motion_rotation(body.state);
+    for (size_t sample = 0; sample < body.thermal_material_positions.size(); sample++) {
+        const float3 expected =
+            pivot + rotation * (body.thermal_material_positions[sample] - pivot) + shift;
+        size_t nearest = targets.size();
+        double nearest_distance = std::numeric_limits<double>::infinity();
+        for (size_t candidate = 0; candidate < targets.size(); candidate++) {
+            if (used[candidate])
+                continue;
+            uint x, y, z;
+            lbm.coordinates(targets[candidate], x, y, z);
+            const double dx = static_cast<double>(x) - expected.x;
+            const double dy = static_cast<double>(y) - expected.y;
+            const double dz = static_cast<double>(z) - expected.z;
+            const double distance = dx * dx + dy * dy + dz * dz;
+            if (distance < nearest_distance ||
+                (distance == nearest_distance && targets[candidate] < targets[nearest])) {
+                nearest = candidate;
+                nearest_distance = distance;
             }
-    if (weights > 1e-12)
-        return weighted / weights;
-    int nearest_distance = 100;
-    double nearest = fallback;
-    const int cx = static_cast<int>(std::round(position.x)), cy = static_cast<int>(std::round(position.y)),
-              cz = static_cast<int>(std::round(position.z));
-    for (int dz = -2; dz <= 2; dz++)
-        for (int dy = -2; dy <= 2; dy++)
-            for (int dx = -2; dx <= 2; dx++) {
-                const int x = cx + dx, y = cy + dy, z = cz + dz, distance = dx * dx + dy * dy + dz * dz;
-                if (distance >= nearest_distance || x < 0 || y < 0 || z < 0 ||
-                    x >= static_cast<int>(c.cells[0]) || y >= static_cast<int>(c.cells[1]) ||
-                    z >= static_cast<int>(c.cells[2]))
-                    continue;
-                const ulong n = static_cast<ulong>(x) +
-                                (static_cast<ulong>(y) + static_cast<ulong>(z) * c.cells[1]) * c.cells[0];
-                if (objects[static_cast<size_t>(n)] == object) {
-                    nearest_distance = distance;
-                    nearest = temperature[static_cast<size_t>(n)];
-                }
-            }
-    return nearest;
+        }
+        require(nearest < targets.size(), "Dynamic thermal material assignment failed: " + body.geometry->id);
+        used[nearest] = 1u;
+        body.thermal_cells[sample] = targets[nearest];
+    }
 }
 static void project_closed_surface_mass(LBM &lbm, const double target, const std::string &context) {
     auto *domain = lbm.lbm_domain[0];
@@ -602,6 +597,16 @@ static void update_dynamic_geometry(LBM &lbm, Config &c, std::vector<DynamicBody
                                                    : 1.0;
                 energy_before_remap +=
                     liquid_fraction * static_cast<double>(domain->thermal_capacity[n]) * domain->T[n];
+            }
+        }
+        for (auto &body : bodies) {
+            require(body.thermal_cells.size() == body.thermal_material_temperature.size(),
+                    "Dynamic thermal material state is invalid: " + body.geometry->id);
+            for (size_t sample = 0; sample < body.thermal_cells.size(); sample++) {
+                const ulong cell = body.thermal_cells[sample];
+                require(old_objects[static_cast<size_t>(cell)] == body.geometry->object_index,
+                        "Dynamic thermal material left its object: " + body.geometry->id);
+                body.thermal_material_temperature[sample] = old_temperature[static_cast<size_t>(cell)];
             }
         }
     }
@@ -759,40 +764,9 @@ static void update_dynamic_geometry(LBM &lbm, Config &c, std::vector<DynamicBody
     }
     if (c.model.temperature) {
         for (auto &body : bodies) {
-            const uchar object = static_cast<uchar>(body.geometry->object_index);
-            double fallback = 0, old_energy = 0;
-            ulong old_count = 0;
-            const auto &material = c.thermal_materials[static_cast<size_t>(body.geometry->material_index - 1)];
-            for (ulong n = 0; n < lbm.get_N(); n++)
-                if (old_objects[static_cast<size_t>(n)] == object) {
-                    fallback += old_temperature[static_cast<size_t>(n)];
-                    old_energy += material.capacity_lattice * old_temperature[static_cast<size_t>(n)];
-                    old_count++;
-                }
-            require(old_count > 0, "Dynamic STL lost all thermal cells: " + body.geometry->id);
-            fallback /= static_cast<double>(old_count);
-            const MotionState old_state = motion_state(*body.geometry, time - 1.0);
-            const float3x3 old_rotation = motion_rotation(old_state), new_rotation = motion_rotation(body.state);
-            const float3 pivot = f3(body.pivot), old_shift = f3(old_state.translation),
-                         new_shift = f3(body.state.translation);
-            std::vector<std::pair<ulong, double>> mapped;
-            double mapped_energy = 0;
-            for (ulong n = 0; n < lbm.get_N(); n++)
-                if (domain->object_id[n] == object) {
-                    uint x, y, z;
-                    lbm.coordinates(n, x, y, z);
-                    const float3 current(static_cast<float>(x), static_cast<float>(y), static_cast<float>(z));
-                    const float3 base_position = pivot + (current - pivot - new_shift) * new_rotation;
-                    const float3 old_position = pivot + old_rotation * (base_position - pivot) + old_shift;
-                    const double value = sample_object_temperature(c, old_temperature, old_objects, object,
-                                                                   old_position, fallback);
-                    mapped.push_back({n, value});
-                    mapped_energy += material.capacity_lattice * value;
-                }
-            require(!mapped.empty() && mapped_energy > 0, "Dynamic STL voxelized to zero thermal cells: " + body.geometry->id);
-            const double correction = old_energy / mapped_energy;
-            for (const auto &entry : mapped)
-                domain->T[entry.first] = static_cast<float>(entry.second * correction);
+            assign_thermal_material_cells(lbm, body);
+            for (size_t sample = 0; sample < body.thermal_cells.size(); sample++)
+                domain->T[body.thermal_cells[sample]] = body.thermal_material_temperature[sample];
         }
         for (ulong n = 0; n < lbm.get_N(); n++) {
             const uchar old_object = old_objects[static_cast<size_t>(n)], object = domain->object_id[n];
@@ -1646,6 +1620,29 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
                 lbm.T[n] = domain->thermal_boundary_value[n];
                 lbm.flags[n] = static_cast<uchar>(lbm.flags[n] | TYPE_T);
             }
+        }
+    }
+    if (c.model.dynamic_geometry && c.model.temperature) {
+        auto *domain = lbm.lbm_domain[0];
+        for (auto &body : dynamic_bodies) {
+            const uchar object = static_cast<uchar>(body.geometry->object_index);
+            const float3 pivot = f3(body.pivot), shift = f3(body.state.translation);
+            const float3x3 rotation = motion_rotation(body.state);
+            body.thermal_material_positions.reserve(static_cast<size_t>(body.target_cells));
+            body.thermal_cells.reserve(static_cast<size_t>(body.target_cells));
+            body.thermal_material_temperature.reserve(static_cast<size_t>(body.target_cells));
+            for (ulong n = 0; n < lbm.get_N(); n++)
+                if (domain->object_id[n] == object) {
+                    uint x, y, z;
+                    lbm.coordinates(n, x, y, z);
+                    const float3 current(static_cast<float>(x), static_cast<float>(y), static_cast<float>(z));
+                    body.thermal_material_positions.push_back(
+                        pivot + (current - pivot - shift) * rotation);
+                    body.thermal_cells.push_back(n);
+                    body.thermal_material_temperature.push_back(lbm.T[n]);
+                }
+            require(body.thermal_cells.size() == static_cast<size_t>(body.target_cells),
+                    "Dynamic STL thermal material initialization failed: " + body.geometry->id);
         }
     }
     c.resolved["geometry"] = geometries;
