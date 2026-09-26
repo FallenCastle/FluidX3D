@@ -41,7 +41,7 @@
       "contact_angle": 75,
       "transform": { "mode": "fit", "size": 5.0, "center": [24, 12, 14] },
       "motion": {
-        "translation": { "type": "sinusoidal", "amplitude": [0, 0, 1.5], "period": 200 },
+        "translation": { "type": "sinusoidal", "amplitude": [0, 0, 1.0], "period": 200 },
         "rotation": {
           "type": "sinusoidal",
           "axis": [0, 1, 0],

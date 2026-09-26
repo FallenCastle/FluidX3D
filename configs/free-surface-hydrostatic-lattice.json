@@ -32,6 +32,6 @@
       { "id": "shallow", "position": [10, 4, 16] }
     ]
   },
-  "run": { "steps": 3000, "monitor_every": 100 },
-  "output": { "vtk_fields": ["p", "phi", "u"], "vtk_every": 3000, "initial": true }
+  "run": { "steps": 1500, "monitor_every": 100 },
+  "output": { "vtk_fields": ["p", "phi", "u"], "vtk_every": 1500, "initial": true }
 }
