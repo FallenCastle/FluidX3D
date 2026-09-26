@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "case": { "name": "thermal-free-surface-dynamic-fill-drain-lattice" },
+  "solver": { "lattice": "D3Q27", "collision": "TRT", "storage": "FP32", "turbulence": "smagorinsky" },
+  "physics": {
+    "gravity": [0, 0, -0.00005],
+    "thermal": {
+      "reference_temperature": 1.0,
+      "initial_temperature": 1.0,
+      "specific_heat": 1.0,
+      "conductivity": 0.02,
+      "thermal_expansion": 0.005,
+      "turbulent_prandtl": 0.9,
+      "materials": [
+        {
+          "id": "heated-solid",
+          "density": 2.0,
+          "specific_heat": 1.0,
+          "conductivity": 0.04,
+          "heat_source": 0.0002,
+          "initial_temperature": 1.3
+        }
+      ]
+    },
+    "free_surface": { "surface_tension": 0.0001, "environment_pressure": 0.0 }
+  },
+  "units": { "mode": "lattice" },
+  "domain": { "cells": [48, 24, 28] },
+  "fluid": { "rho": 1.0, "nu": 0.08 },
+  "initial": {
+    "velocity": [0, 0, 0],
+    "liquid_regions": [
+      { "box_min": [1, 1, 1], "box_max": [47.999, 22.999, 14.0] }
+    ]
+  },
+  "geometry": [
+    {
+      "id": "heated-oscillator",
+      "file": "assets/unit-cube-binary.stl",
+      "material": "heated-solid",
+      "contact_angle": 75,
+      "transform": { "mode": "fit", "size": 5.0, "center": [24, 12, 14] },
+      "motion": {
+        "translation": { "type": "sinusoidal", "amplitude": [0, 0, 1.5], "period": 200 },
+        "rotation": {
+          "type": "sinusoidal",
+          "axis": [0, 1, 0],
+          "amplitude_degrees": 4,
+          "period": 200
+        }
+      }
+    }
+  ],
+  "boundaries": [
+    {
+      "id": "hot-inlet",
+      "faces": ["xmin"],
+      "type": "liquid_inlet",
+      "priority": 20,
+      "region": { "min": [8, 2], "max": [16, 10] },
+      "rho": 1.0,
+      "velocity": [0.015, 0, 0],
+      "thermal": { "type": "fixed_temperature", "temperature": 1.2 }
+    },
+    {
+      "id": "outlet",
+      "faces": ["xmax"],
+      "type": "open_outlet",
+      "priority": 20,
+      "region": { "min": [8, 2], "max": [16, 10] },
+      "rho": 1.0,
+      "velocity": [0.015, 0, 0],
+      "thermal": { "type": "adiabatic" }
+    },
+    {
+      "id": "walls",
+      "faces": ["xmin", "xmax", "ymin", "ymax", "zmin", "zmax"],
+      "type": "no_slip",
+      "contact_angle": 90,
+      "thermal": { "type": "adiabatic" }
+    }
+  ],
+  "run": { "steps": 200, "monitor_every": 20 },
+  "output": {
+    "vtk_fields": ["object", "material", "T", "phi", "flags", "u", "rho"],
+    "vtk_every": 200,
+    "initial": true
+  }
+}

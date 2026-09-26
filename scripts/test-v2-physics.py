@@ -295,6 +295,34 @@ def main():
         assert nu_error <= report["thresholds"]["natural_convection_nusselt_relative"], entry
         check_budget(entry, result, energy=True)
 
+        conductive_wall = read(configs / "thermal-natural-convection-conductive-wall-lattice.json")
+        result, entry = invoke("natural-convection-conductive-wall", conductive_wall)
+        temperature = config_tests.vtk(result / "T-000001000.vtk")
+        material = config_tests.vtk(result / "material-000001000.vtk")
+        solid_temperature = [temperature["values"][n] for n, value in enumerate(material["values"]) if value == 1]
+        assert solid_temperature, entry
+        entry.update(solid_cells=len(solid_temperature), solid_temperature_min=min(solid_temperature),
+                     solid_temperature_max=max(solid_temperature))
+        assert max(solid_temperature) > 1.0001, entry
+        check_budget(entry, result, energy=True)
+
+        hydrostatic = read(configs / "free-surface-hydrostatic-lattice.json")
+        result, entry = invoke("hydrostatic-column", hydrostatic)
+        probe_rows = rows(result / "probes.csv")
+        final_probes = {row["id"]: row for row in probe_rows if int(row["step"]) == hydrostatic["run"]["steps"]}
+        assert set(final_probes) == {"deep", "middle", "shallow"}, final_probes
+        deep = float(final_probes["deep"]["p"])
+        shallow = float(final_probes["shallow"]["p"])
+        height = float(final_probes["shallow"]["z"]) - float(final_probes["deep"]["z"])
+        expected_difference = abs(hydrostatic["physics"]["gravity"][2]) * height
+        measured_difference = deep - shallow
+        pressure_error = abs(measured_difference - expected_difference) / expected_difference
+        entry.update(expected_pressure_difference_lattice=expected_difference,
+                     measured_pressure_difference_lattice=measured_difference,
+                     relative_error=pressure_error)
+        assert pressure_error <= report["thresholds"]["laplace_pressure_relative"], entry
+        check_budget(entry, result, mass=True)
+
         droplet = read(configs / "free-surface-static-droplet-lattice.json")
         result, entry = invoke("static-droplet", droplet)
         pressure = config_tests.vtk(result / "p-000001000.vtk")

@@ -192,6 +192,21 @@ def main():
         budget = check_budget(result, entry, mass=True)
         assert budget["mass_current_lattice"] > budget["mass_initial_lattice"]
 
+        heated_channel = read(configs / "conjugate-heated-cube-lattice.json")
+        heated_channel["run"] = {"steps": 200, "monitor_every": 20}
+        heated_channel["output"] = {"vtk_fields": ["T", "material", "u"], "vtk_every": 200,
+                                      "initial": True}
+        result, entry = invoke("conjugate-heated-solid-channel", heated_channel)
+        budget = check_budget(result, entry, energy=True)
+        resolved = read(result / "resolved-config.json")
+        solid_cells = resolved["geometry"][0]["solid_cells"]
+        expected_source = solid_cells * 0.0001 * 200
+        source_error = abs(budget["cumulative_heat_source_in_lattice"] - expected_source) / expected_source
+        entry.update(solid_cells=solid_cells, expected_source_heat_lattice=expected_source,
+                     measured_source_heat_lattice=budget["cumulative_heat_source_in_lattice"],
+                     relative_error=source_error)
+        assert source_error <= report["thresholds"]["known_flux_relative"], entry
+
         heat_flux = {
             "schema_version": 1, "case": {"name": "thermal-known-heat-flux"},
             "solver": {"lattice": "D3Q19", "collision": "TRT", "storage": "FP32", "turbulence": "none"},
@@ -295,6 +310,33 @@ def main():
         assert max(abs(float(final[f"translation_{axis}_lattice"])) for axis in "xyz") <= tolerance
         assert abs(float(final["degrees"])) <= tolerance
         check_budget(result, entry, mass=True, energy=True)
+
+        combined = read(configs / "thermal-free-surface-dynamic-fill-drain-lattice.json")
+        result, entry = invoke("heated-moving-temperature-fill-drain", combined)
+        motion = finite_table(result / "object-motion.csv", {"geometry_id"})
+        final = row_at(motion, 200, "heated-oscillator")
+        assert max(abs(float(final[f"translation_{axis}_lattice"])) for axis in "xyz") <= tolerance
+        assert abs(float(final["degrees"])) <= tolerance
+        flux = finite_table(result / "boundary-flux.csv", {"boundary_id", "boundary_type"})
+        inlet = [row for row in flux if row["boundary_id"] == "hot-inlet"]
+        assert inlet
+        inlet_temperature = [float(row["sensible_enthalpy_flow_outward_lattice"]) /
+                             float(row["mass_flow_outward_lattice"]) for row in inlet
+                             if abs(float(row["mass_flow_outward_lattice"])) > 1e-12]
+        maximum_temperature_error = max(abs(value - 1.2) for value in inlet_temperature)
+        entry.update(inlet_enthalpy_temperature_min=min(inlet_temperature),
+                     inlet_enthalpy_temperature_max=max(inlet_temperature),
+                     maximum_inlet_temperature_error=maximum_temperature_error)
+        assert maximum_temperature_error <= report["thresholds"]["known_flux_relative"], entry
+        budget = check_budget(result, entry, mass=True, energy=True)
+        resolved = read(result / "resolved-config.json")
+        solid_cells = resolved["geometry"][0]["solid_cells"]
+        expected_source = solid_cells * 0.0002 * 200
+        source_error = abs(budget["cumulative_heat_source_in_lattice"] - expected_source) / expected_source
+        entry.update(solid_cells=solid_cells, expected_source_heat_lattice=expected_source,
+                     measured_source_heat_lattice=budget["cumulative_heat_source_in_lattice"],
+                     source_relative_error=source_error)
+        assert source_error <= report["thresholds"]["known_flux_relative"], entry
 
         finite_slosh = read(configs / "free-surface-sloshing-lattice.json")
         for i, region in enumerate(finite_slosh["initial"]["liquid_regions"]):

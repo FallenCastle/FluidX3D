@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "case": { "name": "free-surface-hydrostatic-lattice" },
+  "solver": { "lattice": "D3Q27", "collision": "TRT", "storage": "FP32", "turbulence": "none" },
+  "physics": {
+    "gravity": [0, 0, -0.0002],
+    "free_surface": { "surface_tension": 0.0, "environment_pressure": 0.0 }
+  },
+  "units": { "mode": "lattice" },
+  "domain": { "cells": [20, 8, 28] },
+  "fluid": { "rho": 1.0, "nu": 0.04 },
+  "initial": {
+    "velocity": [0, 0, 0],
+    "liquid_regions": [
+      { "box_min": [1, 1, 1], "box_max": [18.999, 6.999, 19.0] }
+    ]
+  },
+  "geometry": [],
+  "boundaries": [
+    {
+      "id": "tank",
+      "faces": ["xmin", "xmax", "ymin", "ymax", "zmin", "zmax"],
+      "type": "no_slip",
+      "contact_angle": 90
+    }
+  ],
+  "analysis": {
+    "sample_every": 100,
+    "probes": [
+      { "id": "deep", "point": [10, 4, 4] },
+      { "id": "middle", "point": [10, 4, 10] },
+      { "id": "shallow", "point": [10, 4, 16] }
+    ]
+  },
+  "run": { "steps": 3000, "monitor_every": 100 },
+  "output": { "vtk_fields": ["p", "phi", "u"], "vtk_every": 3000, "initial": true }
+}
