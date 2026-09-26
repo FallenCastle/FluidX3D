@@ -94,12 +94,12 @@ struct Config {
     SolverOptions model;
     DdfStorage storage = DdfStorage::Float16Scaled;
     unsigned device_cell_bytes() const {
-        return model.q * ddf_storage_bytes(storage) + 29u + (model.free_surface ? 16u : 0u) +
+        return model.q * ddf_storage_bytes(storage) + 29u + (model.free_surface ? 20u : 0u) +
                (model.dynamic_geometry ? 1u : 0u) +
                (model.temperature ? 30u : 0u);
     }
     unsigned host_cell_bytes() const {
-        return 29u + (model.free_surface ? 8u : 0u) + (model.dynamic_geometry ? 1u : 0u) +
+        return 29u + (model.free_surface ? 12u : 0u) + (model.dynamic_geometry ? 1u : 0u) +
                (model.temperature ? 26u : 0u);
     }
     std::array<unsigned, 3> cells{};

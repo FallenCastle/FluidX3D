@@ -11,7 +11,7 @@ uint bytes_per_cell_host(const SolverOptions& model) { // returns the number of 
 	bytes_per_cell += 12u; // F
 #endif // FORCE_FIELD
 #ifdef SURFACE
-	if(model.free_surface) bytes_per_cell += 8u; // phi, contact_angle
+	if(model.free_surface) bytes_per_cell += 12u; // phi, contact_angle, host-visible mass
 #endif // SURFACE
 #ifdef TEMPERATURE
 	if(model.temperature) bytes_per_cell += 26u; // T, material properties and thermal boundary data
@@ -26,7 +26,7 @@ uint bytes_per_cell_device(const DdfStorage storage, const SolverOptions& model)
 	bytes_per_cell += 12u; // F
 #endif // FORCE_FIELD
 #ifdef SURFACE
-	if(model.free_surface) bytes_per_cell += 16u; // phi, mass, massex, contact_angle
+	if(model.free_surface) bytes_per_cell += 20u; // phi, mass, massex, contact_angle, settled-mass staging
 #endif // SURFACE
 	if(model.dynamic_geometry) bytes_per_cell += 1u; // object_id
 #ifdef TEMPERATURE
@@ -137,7 +137,7 @@ void LBM_Domain::allocate(Device& device) {
 	if(model.free_surface) {
 		phi = Memory<float>(device, N);
 		contact_angle = Memory<float>(device, N, 1u, true, true, 1.5707963267948966f);
-		mass = Memory<float>(device, N, 1u, model.dynamic_geometry);
+		mass = Memory<float>(device, N, 1u, true);
 		massex = Memory<float>(device, N, 1u, false);
 		kernel_initialize.add_parameters(mass, massex, phi);
 		kernel_stream_collide.add_parameters(mass);
@@ -146,13 +146,11 @@ void LBM_Domain::allocate(Device& device) {
 		kernel_surface_1 = Kernel(device, N, "surface_1", flags);
 		kernel_surface_2 = Kernel(device, N, "surface_2", fi, rho, u, flags, t);
 		kernel_surface_3 = Kernel(device, N, "surface_3", rho, flags, mass, massex, phi);
-		if(model.dynamic_geometry) {
-			dynamic_surface_mass = Memory<float>(device, N, 1u, false);
-			kernel_stage_dynamic_surface_mass = Kernel(device, N, "stage_dynamic_surface_mass", flags, mass, massex,
-			                                           dynamic_surface_mass);
-			kernel_apply_dynamic_surface_mass = Kernel(device, N, "apply_dynamic_surface_mass", mass, massex,
-			                                           dynamic_surface_mass);
-		}
+		dynamic_surface_mass = Memory<float>(device, N, 1u, false);
+		kernel_stage_dynamic_surface_mass = Kernel(device, N, "stage_dynamic_surface_mass", flags, mass, massex,
+		                                           dynamic_surface_mass);
+		kernel_apply_dynamic_surface_mass = Kernel(device, N, "apply_dynamic_surface_mass", mass, massex,
+		                                           dynamic_surface_mass);
 	}
 #endif // SURFACE
 
@@ -354,7 +352,7 @@ void LBM_Domain::voxelize_mesh_on_device(const Mesh* mesh, const uchar flag, con
 }
 void LBM_Domain::settle_dynamic_surface_mass(float* values) {
 #ifdef SURFACE
-	if(model.free_surface&&model.dynamic_geometry) {
+	if(model.free_surface) {
 		kernel_stage_dynamic_surface_mass.run();
 		kernel_apply_dynamic_surface_mass.run();
 		read_dynamic_surface_mass(values);
@@ -365,7 +363,7 @@ void LBM_Domain::settle_dynamic_surface_mass(float* values) {
 }
 void LBM_Domain::read_dynamic_surface_mass(float* values) {
 #ifdef SURFACE
-	if(model.free_surface&&model.dynamic_geometry) {
+	if(model.free_surface) {
 		mass.read_from_device();
 		for(ulong n=0ull; n<get_N(); n++) values[n] = mass[n];
 		return;
@@ -375,7 +373,7 @@ void LBM_Domain::read_dynamic_surface_mass(float* values) {
 }
 void LBM_Domain::write_dynamic_surface_mass(const float* values) {
 #ifdef SURFACE
-	if(model.free_surface&&model.dynamic_geometry) {
+	if(model.free_surface) {
 		for(ulong n=0ull; n<get_N(); n++) mass[n] = values[n];
 		mass.write_to_device();
 		return;

@@ -481,6 +481,87 @@ static double sample_object_temperature(const Config &c, const std::vector<float
             }
     return nearest;
 }
+static void project_closed_surface_mass(LBM &lbm, const double target, const std::string &context) {
+    auto *domain = lbm.lbm_domain[0];
+    std::vector<float> mass(static_cast<size_t>(lbm.get_N()));
+    domain->settle_dynamic_surface_mass(mass.data());
+    lbm.rho.read_from_device();
+    lbm.flags.read_from_device();
+    lbm.phi.read_from_device();
+    double current = 0;
+    for (ulong n = 0; n < lbm.get_N(); n++)
+        if (!is_solid(lbm.flags[n]))
+            current += mass[static_cast<size_t>(n)];
+    const double correction = target - current;
+    double capacity = 0;
+    for (ulong n = 0; n < lbm.get_N(); n++)
+        if (!is_solid(lbm.flags[n]) && (lbm.flags[n] & TYPE_I)) {
+            const double cell_mass = mass[static_cast<size_t>(n)];
+            capacity += correction >= 0 ? std::max(0.0, static_cast<double>(lbm.rho[n]) - cell_mass)
+                                        : std::max(0.0, cell_mass);
+        }
+    require(std::isfinite(correction) && capacity + 1.0e-9 >= std::abs(correction),
+            context + " free-surface mass correction exceeds interface capacity");
+    if (std::abs(correction) > 1.0e-9)
+        for (ulong n = 0; n < lbm.get_N(); n++)
+            if (!is_solid(lbm.flags[n]) && (lbm.flags[n] & TYPE_I)) {
+                const double cell_mass = mass[static_cast<size_t>(n)];
+                const double available = correction >= 0
+                                             ? std::max(0.0, static_cast<double>(lbm.rho[n]) - cell_mass)
+                                             : std::max(0.0, cell_mass);
+                mass[static_cast<size_t>(n)] =
+                    static_cast<float>(cell_mass + correction * available / capacity);
+            }
+    for (ulong n = 0; n < lbm.get_N(); n++)
+        if (!is_solid(lbm.flags[n])) {
+            const uchar state = lbm.flags[n] & (TYPE_F | TYPE_I | TYPE_G);
+            lbm.phi[n] = state == TYPE_F ? 1.0f
+                         : state == TYPE_I ? std::clamp(mass[static_cast<size_t>(n)] / lbm.rho[n], 0.0f, 1.0f)
+                                           : 0.0f;
+        }
+    domain->write_dynamic_surface_mass(mass.data());
+    lbm.phi.write_to_device();
+}
+static void project_closed_sensible_energy(LBM &lbm, const Config &c, const double target,
+                                           const std::string &context) {
+    auto *domain = lbm.lbm_domain[0];
+    domain->T.read_from_device();
+    lbm.flags.read_from_device();
+    if (c.model.free_surface)
+        lbm.phi.read_from_device();
+    double current = 0, fluid_capacity = 0, all_capacity = 0;
+    for (ulong n = 0; n < lbm.get_N(); n++) {
+        const bool active = domain->material[n] != 255u &&
+                            (!c.model.free_surface || domain->material[n] > 0u ||
+                             (lbm.flags[n] & (TYPE_F | TYPE_I)));
+        if (!active)
+            continue;
+        const double fraction = c.model.free_surface && domain->material[n] == 0u
+                                    ? std::clamp(static_cast<double>(lbm.phi[n]), 0.0, 1.0)
+                                    : 1.0;
+        const double heat_capacity = fraction * domain->thermal_capacity[n];
+        current += heat_capacity * domain->T[n];
+        all_capacity += heat_capacity;
+        if (domain->material[n] == 0u)
+            fluid_capacity += heat_capacity;
+    }
+    const bool correct_all = fluid_capacity <= 0;
+    const double capacity = correct_all ? all_capacity : fluid_capacity;
+    require(std::isfinite(current) && std::isfinite(target) && capacity > 0,
+            context + " sensible-energy projection has no active heat capacity");
+    const double delta = (target - current) / capacity;
+    for (ulong n = 0; n < lbm.get_N(); n++) {
+        const bool active = domain->material[n] != 255u &&
+                            (!c.model.free_surface || domain->material[n] > 0u ||
+                             (lbm.flags[n] & (TYPE_F | TYPE_I)));
+        if (active && (correct_all || domain->material[n] == 0u)) {
+            domain->T[n] = static_cast<float>(domain->T[n] + delta);
+            require(std::isfinite(domain->T[n]) && domain->T[n] > 0,
+                    context + " sensible-energy correction produced an invalid temperature");
+        }
+    }
+    domain->T.enqueue_write_to_device();
+}
 static void update_dynamic_geometry(LBM &lbm, Config &c, std::vector<DynamicBody> &bodies, double time,
                                     const double mass_target, const double energy_target) {
     auto *domain = lbm.lbm_domain[0];
@@ -639,37 +720,7 @@ static void update_dynamic_geometry(LBM &lbm, Config &c, std::vector<DynamicBody
     }
     if (std::isfinite(mass_target)) {
         if (c.model.free_surface) {
-            std::vector<float> current_surface_mass(static_cast<size_t>(lbm.get_N()));
-            domain->read_dynamic_surface_mass(current_surface_mass.data());
-            double current_mass = 0;
-            for (ulong n = 0; n < lbm.get_N(); n++)
-                if (!is_solid(lbm.flags[n]))
-                    current_mass += current_surface_mass[static_cast<size_t>(n)];
-            const double correction = mass_target - current_mass;
-            double capacity = 0;
-            for (ulong n = 0; n < lbm.get_N(); n++)
-                if (!is_solid(lbm.flags[n]) && (lbm.flags[n] & TYPE_I)) {
-                    const double cell_mass = current_surface_mass[static_cast<size_t>(n)];
-                    capacity += correction >= 0 ? std::max(0.0, static_cast<double>(lbm.rho[n]) - cell_mass)
-                                                : std::max(0.0, cell_mass);
-                }
-            require(std::isfinite(correction) && capacity + 1.0e-9 >= std::abs(correction),
-                    "Dynamic free-surface mass correction exceeds interface capacity");
-            if (std::abs(correction) > 1.0e-9) {
-                for (ulong n = 0; n < lbm.get_N(); n++)
-                    if (!is_solid(lbm.flags[n]) && (lbm.flags[n] & TYPE_I)) {
-                        const double cell_mass = current_surface_mass[static_cast<size_t>(n)];
-                        const double available = correction >= 0
-                                                     ? std::max(0.0, static_cast<double>(lbm.rho[n]) - cell_mass)
-                                                     : std::max(0.0, cell_mass);
-                        current_surface_mass[static_cast<size_t>(n)] =
-                            static_cast<float>(cell_mass + correction * available / capacity);
-                        lbm.phi[n] = std::clamp(current_surface_mass[static_cast<size_t>(n)] / lbm.rho[n],
-                                               0.0f, 1.0f);
-                    }
-                domain->write_dynamic_surface_mass(current_surface_mass.data());
-                lbm.phi.write_to_device();
-            }
+            project_closed_surface_mass(lbm, mass_target, "Dynamic");
         } else {
             double current_mass = 0, minimum_density = std::numeric_limits<double>::infinity();
             ulong fluid_cells = 0;
@@ -1401,18 +1452,17 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
     c.resolved["force_group_host_bytes"] = group_bytes;
     c.resolved["geometry_owner_peak_host_bytes"] = owner.capacity() * sizeof(int);
     std::vector<int>().swap(owner);
-    save_json(output / "resolved-config.json", c.resolved);
     units.set_m_kg_s(static_cast<float>(c.dx), static_cast<float>(c.reference_density * c.dx * c.dx * c.dx),
                      static_cast<float>(c.dt));
     lbm.run(0, c.steps);
     sync(lbm);
     double dynamic_mass_target = std::numeric_limits<double>::quiet_NaN();
-    bool closed_dynamic_domain = c.model.dynamic_geometry;
+    bool closed_domain = true;
     for (const auto &boundary : c.boundaries)
-        closed_dynamic_domain = closed_dynamic_domain &&
-                                (boundary.type == "no_slip" || boundary.type == "moving_wall" ||
-                                 boundary.type == "periodic");
-    if (closed_dynamic_domain) {
+        closed_domain = closed_domain && (boundary.type == "no_slip" || boundary.type == "moving_wall" ||
+                                          boundary.type == "periodic");
+    const bool conserve_mass = closed_domain && (c.model.dynamic_geometry || c.model.free_surface);
+    if (conserve_mass) {
         dynamic_mass_target = 0;
         if (c.model.free_surface) {
             std::vector<float> initial_surface_mass(static_cast<size_t>(lbm.get_N()));
@@ -1428,7 +1478,8 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
     }
     double dynamic_energy_target = std::numeric_limits<double>::quiet_NaN();
     double dynamic_energy_source_per_step = 0;
-    bool closed_adiabatic_thermal = closed_dynamic_domain && c.model.temperature;
+    bool closed_adiabatic_thermal = closed_domain && c.model.temperature &&
+                                    (c.model.dynamic_geometry || c.model.free_surface);
     for (const auto &boundary : c.boundaries)
         closed_adiabatic_thermal = closed_adiabatic_thermal &&
                                    (!boundary.thermal || boundary.thermal_type == "adiabatic");
@@ -1449,17 +1500,33 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
             dynamic_energy_source_per_step += liquid_fraction * domain->thermal_source[n];
         }
     }
+    c.resolved["conservation"] = {{"closed_domain", closed_domain},
+                                  {"mass_projection", conserve_mass},
+                                  {"sensible_energy_projection", closed_adiabatic_thermal}};
+    if (std::isfinite(dynamic_mass_target))
+        c.resolved["conservation"]["initial_mass_lattice"] = dynamic_mass_target;
+    if (std::isfinite(dynamic_energy_target))
+        c.resolved["conservation"]["initial_sensible_energy_lattice"] = dynamic_energy_target;
+    save_json(output / "resolved-config.json", c.resolved);
     auto advance_to = [&](ulong target) {
-        if (!c.model.dynamic_geometry) {
+        if (!c.model.dynamic_geometry && !(c.model.free_surface && std::isfinite(dynamic_mass_target))) {
             lbm.run(target - lbm.get_t(), c.steps);
             return;
         }
         while (lbm.get_t() < target) {
             lbm.run(1, c.steps);
-            if (std::isfinite(dynamic_energy_target))
-                dynamic_energy_target += dynamic_energy_source_per_step;
-            update_dynamic_geometry(lbm, c, dynamic_bodies, static_cast<double>(lbm.get_t()),
-                                    dynamic_mass_target, dynamic_energy_target);
+            if (c.model.dynamic_geometry) {
+                if (std::isfinite(dynamic_energy_target))
+                    dynamic_energy_target += dynamic_energy_source_per_step;
+                update_dynamic_geometry(lbm, c, dynamic_bodies, static_cast<double>(lbm.get_t()),
+                                        dynamic_mass_target, dynamic_energy_target);
+            } else {
+                project_closed_surface_mass(lbm, dynamic_mass_target, "Closed-domain");
+                if (std::isfinite(dynamic_energy_target)) {
+                    dynamic_energy_target += dynamic_energy_source_per_step;
+                    project_closed_sensible_energy(lbm, c, dynamic_energy_target, "Closed-domain");
+                }
+            }
         }
     };
     std::ofstream stats(output / "monitor.csv", std::ios::binary);
