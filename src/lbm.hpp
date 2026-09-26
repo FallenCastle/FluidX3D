@@ -84,6 +84,7 @@ public:
 #endif // FORCE_FIELD
 #ifdef SURFACE
 	Memory<float> phi; // fill level of every cell
+	Memory<float> contact_angle; // static solid-wall contact angle in radians
 #endif // SURFACE
 #ifdef TEMPERATURE
 	Memory<float> T; // temperature of every cell

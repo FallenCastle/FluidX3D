@@ -324,6 +324,9 @@
           "items": {
             "type": "object",
             "properties": {
+              "shape": {
+                "enum": ["box", "sphere"]
+              },
               "box_min": {
                 "type": "array",
                 "items": {
@@ -339,6 +342,16 @@
                 },
                 "minItems": 3,
                 "maxItems": 3
+              },
+              "center": {
+                "type": "array",
+                "items": { "type": "number" },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "radius": {
+                "type": "number",
+                "exclusiveMinimum": 0
               },
               "rho": {
                 "type": "number",
@@ -368,7 +381,6 @@
         },
         "liquid_regions": {
           "type": "array",
-          "minItems": 1,
           "items": {
             "type": "object",
             "properties": {
@@ -390,8 +402,18 @@
                 "maximum": 1
               }
             },
-            "required": ["box_min", "box_max"],
-            "additionalProperties": false
+            "additionalProperties": false,
+            "oneOf": [
+              {
+                "required": ["box_min", "box_max"],
+                "not": { "anyOf": [{"required": ["center"]}, {"required": ["radius"]}] }
+              },
+              {
+                "properties": {"shape": {"const": "sphere"}},
+                "required": ["shape", "center", "radius"],
+                "not": { "anyOf": [{"required": ["box_min"]}, {"required": ["box_max"]}] }
+              }
+            ]
           }
         }
       },
@@ -416,6 +438,11 @@
           "material": {
             "type": "string",
             "minLength": 1
+          },
+          "contact_angle": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 180
           },
           "transform": {
             "type": "object",
@@ -570,7 +597,9 @@
               "no_slip",
               "equilibrium",
               "periodic",
-              "moving_wall"
+              "moving_wall",
+              "liquid_inlet",
+              "open_outlet"
             ]
           },
           "priority": {
@@ -608,6 +637,11 @@
             "type": "number",
             "exclusiveMinimum": 0
           },
+          "contact_angle": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 180
+          },
           "velocity": {
             "type": "array",
             "items": {
@@ -642,7 +676,7 @@
             "if": {
               "properties": {
                 "type": {
-                  "const": "equilibrium"
+                  "enum": ["equilibrium", "liquid_inlet", "open_outlet"]
                 }
               }
             },

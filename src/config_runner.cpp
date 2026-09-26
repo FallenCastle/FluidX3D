@@ -26,7 +26,8 @@ static Vec point(const Config &c, unsigned x, unsigned y, unsigned z) {
     return {c.origin[0] + (x + 0.5) * c.dx, c.origin[1] + (y + 0.5) * c.dx, c.origin[2] + (z + 0.5) * c.dx};
 }
 static bool same(const Boundary &a, const Boundary &b) {
-    return a.type == b.type && (a.type == "no_slip" || (a.rho == b.rho && a.velocity == b.velocity));
+    return a.type == b.type && a.contact_angle == b.contact_angle &&
+           (a.type == "no_slip" || (a.rho == b.rho && a.velocity == b.velocity));
 }
 static int boundary_at(const Config &c, unsigned x, unsigned y, unsigned z) {
     unsigned xyz[3]{x, y, z};
@@ -237,7 +238,25 @@ static void sync(LBM &lbm) {
     if (lbm.get_model().temperature)
         lbm.T.read_from_device();
 }
-static void monitor(LBM &lbm, const Config &c, std::ofstream &file) {
+struct BoundaryFluxLink {
+    ulong cell = 0;
+    Vec outward_normal{};
+};
+struct BoundaryFluxSurface {
+    std::string id, type;
+    std::vector<BoundaryFluxLink> links;
+};
+static std::string csv_string(const std::string &value) {
+    std::string out = "\"";
+    for (char c : value) {
+        out.push_back(c);
+        if (c == '"')
+            out.push_back(c);
+    }
+    return out + '"';
+}
+static void monitor(LBM &lbm, const Config &c, std::ofstream &file,
+                    const std::vector<BoundaryFluxSurface> &flux_surfaces, std::ofstream *flux_file) {
     double mass = 0, umax = 0, rmin = std::numeric_limits<double>::infinity(), rmax = 0;
     double tmin = std::numeric_limits<double>::infinity(), tmax = -std::numeric_limits<double>::infinity(), energy = 0;
     ulong count = 0;
@@ -274,6 +293,30 @@ static void monitor(LBM &lbm, const Config &c, std::ofstream &file) {
     file << '\n';
     file.flush();
     require(bool(file), "Monitor write failed");
+    if (flux_file) {
+        for (const auto &surface : flux_surfaces) {
+            double mass_flow = 0, enthalpy_flow = 0;
+            for (const auto &link : surface.links) {
+                const ulong n = link.cell;
+                if (is_solid(lbm.flags[n]) || !(lbm.flags[n] & (TYPE_F | TYPE_I)))
+                    continue;
+                const double normal_velocity = lbm.u.x[n] * link.outward_normal[0] +
+                                               lbm.u.y[n] * link.outward_normal[1] +
+                                               lbm.u.z[n] * link.outward_normal[2];
+                const double cell_mass_flow = lbm.rho[n] * lbm.phi[n] * normal_velocity;
+                mass_flow += cell_mass_flow;
+                if (c.model.temperature)
+                    enthalpy_flow += cell_mass_flow * lbm.T[n];
+            }
+            *flux_file << std::setprecision(17) << lbm.get_t() << ',' << lbm.get_t() * c.dt << ','
+                       << csv_string(surface.id) << ',' << surface.type << ',' << mass_flow;
+            if (c.model.temperature)
+                *flux_file << ',' << enthalpy_flow;
+            *flux_file << '\n';
+        }
+        flux_file->flush();
+        require(bool(*flux_file), "Boundary flux monitor write failed");
+    }
     std::cout << "Step " << lbm.get_t() << "/" << c.steps << "; lattice rho=[" << rmin << "," << rmax
               << "]; max speed=" << umax << std::endl;
 }
@@ -316,7 +359,7 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
     std::vector<uchar> solid(static_cast<size_t>(lbm.get_N()), 0);
     std::vector<std::vector<ulong>> force_groups(c.forces.size());
     std::vector<int> owner;
-    bool need_owner = c.model.temperature && !c.geometry.empty();
+    bool need_owner = (c.model.temperature || c.model.free_surface) && !c.geometry.empty();
     for (const auto &f : c.forces)
         need_owner = need_owner || f.target.rfind("geometry:", 0) == 0;
     if (need_owner)
@@ -337,6 +380,7 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
                     int id = static_cast<int>(&g - c.geometry.data());
                     if (o != -1) {
                         require(!c.model.temperature, "Thermal geometries overlap: " + g.id);
+                        require(!c.model.free_surface, "Free-surface geometries overlap: " + g.id);
                         for (const auto &f : c.forces)
                             require(f.target != "geometry:" + g.id &&
                                         (o < 0 || f.target != "geometry:" + c.geometry[o].id),
@@ -348,9 +392,19 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
                 count++;
             }
         require(count > 0, "STL voxelized to zero solid cells: " + g.id);
-        geometries.push_back({{"id", g.id}, {"solid_cells", count}, {"material", g.material.empty() ? Json(nullptr) : Json(g.material)}});
+        geometries.push_back({{"id", g.id},
+                              {"solid_cells", count},
+                              {"material", g.material.empty() ? Json(nullptr) : Json(g.material)},
+                              {"contact_angle_degrees", c.model.free_surface ? Json(g.contact_angle) : Json(nullptr)}});
     }
     std::vector<unsigned long long> coverage(c.boundaries.size(), 0);
+    std::vector<BoundaryFluxSurface> flux_surfaces;
+    std::vector<int> flux_surface_for_boundary(c.boundaries.size(), -1);
+    for (size_t i = 0; i < c.boundaries.size(); i++)
+        if (c.boundaries[i].type == "liquid_inlet" || c.boundaries[i].type == "open_outlet") {
+            flux_surface_for_boundary[i] = static_cast<int>(flux_surfaces.size());
+            flux_surfaces.push_back({c.boundaries[i].id, c.boundaries[i].type, {}});
+        }
     ulong solid_count = 0;
     for (ulong n = 0; n < lbm.get_N(); n++) {
         uint x, y, z;
@@ -374,6 +428,29 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
         if (b >= 0) {
             const auto &rule = c.boundaries[b];
             coverage[b]++;
+            if (flux_surface_for_boundary[static_cast<size_t>(b)] >= 0) {
+                const unsigned xyz[3]{x, y, z};
+                for (int face : rule.faces) {
+                    const int axis = face / 2;
+                    if (xyz[axis] != (face % 2 ? c.cells[axis] - 1 : 0))
+                        continue;
+                    bool in_region = true;
+                    if (rule.region) {
+                        int k = 0;
+                        for (int a = 0; a < 3; a++)
+                            if (a != axis) {
+                                in_region = in_region && p[a] >= rule.lower[k] && p[a] <= rule.upper[k];
+                                k++;
+                            }
+                    }
+                    if (in_region) {
+                        Vec normal{};
+                        normal[axis] = face % 2 ? 1.0 : -1.0;
+                        flux_surfaces[static_cast<size_t>(flux_surface_for_boundary[static_cast<size_t>(b)])]
+                            .links.push_back({n, normal});
+                    }
+                }
+            }
             if (rule.type == "no_slip" || rule.type == "moving_wall") {
                 require(rule.type != "moving_wall" || !solid[static_cast<size_t>(n)],
                         "Geometry intersects moving_wall: " + rule.id);
@@ -384,8 +461,12 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
                 lbm.flags[n] = TYPE_S;
                 velocity = rule.velocity;
             } else {
-                require(!(lbm.flags[n] & TYPE_S), "Geometry intersects equilibrium boundary: " + rule.id);
+                require(!(lbm.flags[n] & TYPE_S), "Geometry intersects open boundary: " + rule.id);
                 lbm.flags[n] = TYPE_E;
+                if (rule.type == "liquid_inlet")
+                    lbm.flags[n] = static_cast<uchar>(lbm.flags[n] | TYPE_X);
+                else if (rule.type == "open_outlet")
+                    lbm.flags[n] = static_cast<uchar>(lbm.flags[n] | TYPE_Y);
                 rho = rule.rho;
                 velocity = rule.velocity;
             }
@@ -403,12 +484,28 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
                     force_groups[i].push_back(n);
             }
         }
+        if (c.model.free_surface && (lbm.flags[n] & TYPE_S)) {
+            double angle = 90.0;
+            const int geometry_owner = owner.empty() ? -1 : owner[static_cast<size_t>(n)];
+            if (geometry_owner >= 0)
+                angle = c.geometry[static_cast<size_t>(geometry_owner)].contact_angle;
+            if (b >= 0 && (c.boundaries[b].type == "no_slip" || c.boundaries[b].type == "moving_wall"))
+                angle = c.boundaries[b].contact_angle;
+            lbm.lbm_domain[0]->contact_angle[n] = static_cast<float>(angle * 0.017453292519943295769);
+        }
         if (c.model.free_surface && !(lbm.flags[n] & TYPE_S)) {
             double fill = 0;
             for (const auto &r : c.liquid_regions)
-                if (p[0] >= r.lower[0] && p[0] <= r.upper[0] && p[1] >= r.lower[1] && p[1] <= r.upper[1] &&
-                    p[2] >= r.lower[2] && p[2] <= r.upper[2])
+                if ((r.shape == "box" && p[0] >= r.lower[0] && p[0] <= r.upper[0] && p[1] >= r.lower[1] &&
+                     p[1] <= r.upper[1] && p[2] >= r.lower[2] && p[2] <= r.upper[2]) ||
+                    (r.shape == "sphere" &&
+                     (p[0] - r.center[0]) * (p[0] - r.center[0]) +
+                             (p[1] - r.center[1]) * (p[1] - r.center[1]) +
+                             (p[2] - r.center[2]) * (p[2] - r.center[2]) <=
+                         r.radius * r.radius))
                     fill = std::max(fill, r.fill);
+            if (b >= 0 && c.boundaries[b].type == "liquid_inlet")
+                fill = 1.0;
             lbm.flags[n] = static_cast<uchar>((lbm.flags[n] & ~(TYPE_F | TYPE_I | TYPE_G)) |
                                                (fill >= 1 ? TYPE_F : fill > 0 ? TYPE_I : TYPE_G));
             lbm.phi[n] = static_cast<float>(fill);
@@ -463,6 +560,11 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
     c.resolved["solid_cells"] = solid_count;
     for (size_t i = 0; i < c.boundaries.size(); i++)
         c.resolved["boundary_coverage"].push_back({{"id", c.boundaries[i].id}, {"winning_cells", coverage[i]}});
+    for (const auto &surface : flux_surfaces) {
+        require(!surface.links.empty(), "Open free-surface boundary has no active face links: " + surface.id);
+        c.resolved["boundary_flux_surfaces"].push_back(
+            {{"id", surface.id}, {"type", surface.type}, {"face_links", surface.links.size()}});
+    }
     unsigned long long group_bytes = 0;
     for (size_t i = 0; i < force_groups.size(); i++) {
         require(!force_groups[i].empty(), "Empty force target: " + c.forces[i].id);
@@ -486,7 +588,18 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
     if (c.model.temperature)
         stats << ",temperature_min_lattice,temperature_max_lattice,sensible_energy_lattice";
     stats << '\n';
-    monitor(lbm, c, stats);
+    std::ofstream flux;
+    std::ofstream *flux_file = nullptr;
+    if (!flux_surfaces.empty()) {
+        flux.open(output / "boundary-flux.csv", std::ios::binary);
+        require(bool(flux), "Cannot create boundary-flux.csv");
+        flux << "step,time,boundary_id,boundary_type,mass_flow_outward_lattice";
+        if (c.model.temperature)
+            flux << ",sensible_enthalpy_flow_outward_lattice";
+        flux << '\n';
+        flux_file = &flux;
+    }
+    monitor(lbm, c, stats, flux_surfaces, flux_file);
     Analysis analysis(c, output, std::move(force_groups));
     auto next_sample = c.sample_start;
     if (!prepare && c.analysis && next_sample == 0) {
@@ -514,7 +627,7 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
             next_sample = next + c.sample_every; // both <= 2^53; sum fits uint64
         }
         if (next == next_monitor || next == c.steps) {
-            monitor(lbm, c, stats);
+            monitor(lbm, c, stats, flux_surfaces, flux_file);
             next_monitor = next > c.steps - std::min(c.monitor_every, c.steps) ? c.steps : next + c.monitor_every;
         }
         if ((c.vtk_every && next == next_vtk) || next == c.steps) {

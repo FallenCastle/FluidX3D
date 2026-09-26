@@ -11,7 +11,7 @@ uint bytes_per_cell_host(const SolverOptions& model) { // returns the number of 
 	bytes_per_cell += 12u; // F
 #endif // FORCE_FIELD
 #ifdef SURFACE
-	if(model.free_surface) bytes_per_cell += 4u; // phi
+	if(model.free_surface) bytes_per_cell += 8u; // phi, contact_angle
 #endif // SURFACE
 #ifdef TEMPERATURE
 	if(model.temperature) bytes_per_cell += 26u; // T, material properties and thermal boundary data
@@ -25,7 +25,7 @@ uint bytes_per_cell_device(const DdfStorage storage, const SolverOptions& model)
 	bytes_per_cell += 12u; // F
 #endif // FORCE_FIELD
 #ifdef SURFACE
-	if(model.free_surface) bytes_per_cell += 12u; // phi, mass, massex
+	if(model.free_surface) bytes_per_cell += 16u; // phi, mass, massex, contact_angle
 #endif // SURFACE
 #ifdef TEMPERATURE
 	if(model.temperature) bytes_per_cell += 30u; // T buffers, material properties and thermal boundary data
@@ -133,11 +133,13 @@ void LBM_Domain::allocate(Device& device) {
 #ifdef SURFACE
 	if(model.free_surface) {
 		phi = Memory<float>(device, N);
+		contact_angle = Memory<float>(device, N, 1u, true, true, 1.5707963267948966f);
 		mass = Memory<float>(device, N, 1u, false);
 		massex = Memory<float>(device, N, 1u, false);
 		kernel_initialize.add_parameters(mass, massex, phi);
 		kernel_stream_collide.add_parameters(mass);
-		kernel_surface_0 = Kernel(device, N, "surface_0", fi, rho, u, flags, mass, massex, phi, t, fx, fy, fz);
+		kernel_surface_0 = Kernel(device, N, "surface_0", fi, rho, u, flags, mass, massex, phi, contact_angle,
+			t, fx, fy, fz);
 		kernel_surface_1 = Kernel(device, N, "surface_1", flags);
 		kernel_surface_2 = Kernel(device, N, "surface_2", fi, rho, u, flags, t);
 		kernel_surface_3 = Kernel(device, N, "surface_3", rho, flags, mass, massex, phi);
@@ -192,7 +194,7 @@ void LBM_Domain::enqueue_update_fields() { // update fields (rho, u, T) manually
 }
 #ifdef SURFACE
 void LBM_Domain::enqueue_surface_0() {
-	kernel_surface_0.set_parameters(7u, t, fx, fy, fz).enqueue_run();
+	kernel_surface_0.set_parameters(8u, t, fx, fy, fz).enqueue_run();
 }
 void LBM_Domain::enqueue_surface_1() {
 	kernel_surface_1.enqueue_run();
@@ -891,7 +893,10 @@ void LBM::initialize() { // write all data fields to device and call kernel_init
 	communicate_F();
 #endif // FORCE_FIELD
 #ifdef SURFACE
-	if(model.free_surface) for(uint d=0u; d<get_D(); d++) lbm_domain[d]->phi.enqueue_write_to_device();
+	if(model.free_surface) for(uint d=0u; d<get_D(); d++) {
+		lbm_domain[d]->phi.enqueue_write_to_device();
+		lbm_domain[d]->contact_angle.enqueue_write_to_device();
+	}
 #endif // SURFACE
 #ifdef TEMPERATURE
 	if(model.temperature) for(uint d=0u; d<get_D(); d++) {

@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "case": { "name": "free-surface-fill-drain-lattice" },
+  "solver": { "lattice": "D3Q27", "collision": "TRT", "storage": "FP32", "turbulence": "none" },
+  "physics": {
+    "gravity": [0, 0, -0.00005],
+    "free_surface": { "surface_tension": 0.0001, "environment_pressure": 0 }
+  },
+  "units": { "mode": "lattice" },
+  "domain": { "cells": [48, 24, 24] },
+  "fluid": { "rho": 1.0, "nu": 0.04 },
+  "initial": { "velocity": [0, 0, 0], "liquid_regions": [] },
+  "geometry": [],
+  "boundaries": [
+    {
+      "id": "inlet",
+      "faces": ["xmin"],
+      "type": "liquid_inlet",
+      "priority": 20,
+      "region": { "min": [8, 1], "max": [16, 9] },
+      "rho": 1.0,
+      "velocity": [0.03, 0, 0]
+    },
+    {
+      "id": "outlet",
+      "faces": ["xmax"],
+      "type": "open_outlet",
+      "priority": 20,
+      "region": { "min": [8, 1], "max": [16, 9] },
+      "rho": 1.0,
+      "velocity": [0.03, 0, 0]
+    },
+    {
+      "id": "walls",
+      "faces": ["xmin", "xmax", "ymin", "ymax", "zmin", "zmax"],
+      "type": "no_slip",
+      "contact_angle": 90
+    }
+  ],
+  "run": { "steps": 200, "monitor_every": 10 },
+  "output": { "vtk_fields": ["phi", "rho", "u", "flags"], "vtk_every": 50, "initial": true }
+}

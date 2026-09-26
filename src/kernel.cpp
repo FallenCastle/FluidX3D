@@ -1226,11 +1226,42 @@ string opencl_c_container() { return R( // ########################## begin of O
 	};
 	return c[i];
 }
-)+R(float calculate_curvature(const uxx n, const float* phit, const global float* phi) { // calculate surface curvature, always use D3Q27 stencil here, source: https://doi.org/10.3390/computation10020021
+)+R(uxx neighbor_D3Q27(const uxx n, const uint i) {
+	uxx x0, xp, xm, y0, yp, ym, z0, zp, zm;
+	calculate_indices(n, &x0, &xp, &xm, &y0, &yp, &ym, &z0, &zp, &zm);
+	const float ex=c_D3Q27(i), ey=c_D3Q27(27u+i), ez=c_D3Q27(54u+i);
+	return (ex>0.0f ? xp : ex<0.0f ? xm : x0) +
+	       (ey>0.0f ? yp : ey<0.0f ? ym : y0) +
+	       (ez>0.0f ? zp : ez<0.0f ? zm : z0);
+}
+)+R(float calculate_curvature(const uxx n, const float* phit, const global float* phi, const global uchar* flags, const global float* contact_angle) { // calculate surface curvature, always use D3Q27 stencil here, source: https://doi.org/10.3390/computation10020021
 )+"#ifndef D2Q9"+R(
 	float phij[27];
 	get_remaining_neighbor_phij(n, phit, phi, phij); // complete neighborhood from whatever velocity set is selected to D3Q27
-	const float3 bz = calculate_normal_py(phij); // new coordinate system: bz is normal to surface, bx and by are tangent to surface
+	float3 bz = calculate_normal_py(phij); // new coordinate system: bz is normal to surface, bx and by are tangent to surface
+	float3 wall_to_fluid = (float3)(0.0f, 0.0f, 0.0f);
+	float theta = 0.0f;
+	uint wall_neighbors = 0u;
+	for(uint i=1u; i<27u; i++) {
+		const uxx j = neighbor_D3Q27(n, i);
+		if((flags[j]&TYPE_BO)==TYPE_S) {
+			const float3 ei = (float3)(c_D3Q27(i), c_D3Q27(27u+i), c_D3Q27(54u+i));
+			wall_to_fluid -= ei;
+			theta += contact_angle[j];
+			wall_neighbors++;
+		}
+	}
+	if(wall_neighbors>0u && dot(wall_to_fluid, wall_to_fluid)>1.0E-12f) {
+		const float3 nw = normalize(wall_to_fluid);
+		float3 tangent = bz-nw*dot(bz, nw);
+		if(dot(tangent, tangent)<=1.0E-12f) {
+			const float3 fallback = fabs(nw.x)<0.8f ? (float3)(1.0f, 0.0f, 0.0f) : (float3)(0.0f, 1.0f, 0.0f);
+			tangent = cross(nw, fallback);
+		}
+		tangent = normalize(tangent);
+		theta /= (float)wall_neighbors;
+		bz = normalize(sin(theta)*tangent+cos(theta)*nw);
+	}
 	const float3 rn = (float3)(0.56270900f, 0.32704452f, 0.75921047f); // random normalized vector that is just by random chance not collinear with bz
 	const float3 by = normalize(cross(bz, rn)); // normalize() is necessary here because bz and rn are not perpendicular
 	const float3 bx = cross(by, bz);
@@ -1601,7 +1632,7 @@ string opencl_c_container() { return R( // ########################## begin of O
 } // stream_collide()
 
 )+"#ifdef SURFACE"+R(
-)+R(kernel void surface_0(global fpxx* fi, const global float* rho, const global float* u, const global uchar* flags, global float* mass, const global float* massex, const global float* phi, const ulong t, const float fx, const float fy, const float fz) { // capture outgoing DDFs before streaming
+)+R(kernel void surface_0(global fpxx* fi, const global float* rho, const global float* u, const global uchar* flags, global float* mass, const global float* massex, const global float* phi, const global float* contact_angle, const ulong t, const float fx, const float fy, const float fz) { // capture outgoing DDFs before streaming
 	const uxx n = get_global_id(0); // n = x+(y+z*Ny)*Nx
 	if(n>=(uxx)def_N||is_halo(n)) return; // don't execute surface_0() on halo
 	const uchar flagsn = flags[n]; // cache flags[n] for multiple readings
@@ -1642,7 +1673,7 @@ string opencl_c_container() { return R( // ########################## begin of O
 		uyn = clamp(uyn, -def_c, def_c);
 		uzn = clamp(uzn, -def_c, def_c);
 		phij[0] = calculate_phi(rhon, massn, flagsn); // don't load phi[n] from memory, instead recalculate it with mass corrected by excess mass
-		rho_laplace = def_6_sigma==0.0f ? 0.0f : def_6_sigma*calculate_curvature(n, phij, phi); // surface tension least squares fit (PLIC, most accurate)
+		rho_laplace = def_6_sigma==0.0f ? 0.0f : def_6_sigma*calculate_curvature(n, phij, phi, flags, contact_angle); // surface tension least squares fit with static wall contact angle
 		float feg[def_velocity_set]; // reconstruct f from neighbor gas lattice points
 		const float rho2tmp = 0.5f/rhon; // apply external volume force (Guo forcing, Krueger p.233f)
 		const float uxntmp = clamp(fma(fx, rho2tmp, uxn), -def_c, def_c); // limit velocity (for stability purposes)
@@ -1710,6 +1741,13 @@ string opencl_c_container() { return R( // ########################## begin of O
 	const uchar flagsn_sus = flags[n]&(TYPE_SU|TYPE_S); // extract SURFACE flags
 	if(flagsn_sus&TYPE_S) return;
 	const float rhon = rho[n]; // density of cell n
+	if(flags[n]&TYPE_X) { // prescribed liquid reservoir at a liquid_inlet boundary
+		flags[n] = (flags[n]&~TYPE_SU)|TYPE_F;
+		mass[n] = rhon;
+		massex[n] = 0.0f;
+		phi[n] = 1.0f;
+		return;
+	}
 	float massn = mass[n]; // mass of cell n
 	float massexn = 0.0f; // excess mass of cell n
 	float phin = 0.0f;

@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "case": { "name": "free-surface-contact-angle-60-lattice" },
+  "solver": { "lattice": "D3Q19", "collision": "SRT", "storage": "FP32", "turbulence": "none" },
+  "physics": {
+    "gravity": [0, 0, 0],
+    "free_surface": { "surface_tension": 0.01, "environment_pressure": 0 }
+  },
+  "units": { "mode": "lattice" },
+  "domain": { "cells": [40, 40, 24] },
+  "fluid": { "rho": 1.0, "nu": 0.1 },
+  "initial": {
+    "velocity": [0, 0, 0],
+    "liquid_regions": [
+      { "shape": "sphere", "center": [20, 20, -3.5], "radius": 8 }
+    ]
+  },
+  "geometry": [],
+  "boundaries": [
+    { "id": "floor", "faces": ["zmin"], "type": "no_slip", "priority": 10, "contact_angle": 60 },
+    { "id": "walls", "faces": ["xmin", "xmax", "ymin", "ymax", "zmin", "zmax"], "type": "no_slip" }
+  ],
+  "run": { "steps": 400, "monitor_every": 20 },
+  "output": { "vtk_fields": ["phi", "rho", "u", "flags"], "vtk_every": 100, "initial": true }
+}

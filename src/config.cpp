@@ -123,11 +123,17 @@ Json capabilities() {
             {"arithmetic", "FP32"},
             {"turbulence", {"none", "smagorinsky"}},
             {"units", {"lattice", "si"}},
-            {"boundaries", {"no_slip", "moving_wall", "equilibrium", "periodic"}},
+            {"boundaries", {"no_slip", "moving_wall", "equilibrium", "periodic", "liquid_inlet", "open_outlet"}},
             {"physics",
              {{"thermal", {{"storage", "FP32"}, {"model", "conservative finite-volume energy transport with Boussinesq coupling"}}},
-              {"free_surface", {{"storage", "FP32"}, {"gas", "fixed environment pressure"}}}}},
-            {"geometry", "binary STL static union; prescribed motion is staged after M1"},
+              {"free_surface",
+               {{"storage", "FP32"},
+                {"gas", "fixed environment pressure"},
+                {"surface_tension", true},
+                {"static_contact_angle", "per solid wall in degrees"},
+                {"initial_liquid_regions", {"box", "sphere"}},
+                {"open_boundaries", {"liquid_inlet", "open_outlet"}}}}}},
+            {"geometry", "binary STL solid union"},
             {"outputs", {"VTK", "CSV", "JSON"}},
             {"body_force", "constant force density"},
             {"analysis", {"probes", "temporal statistics", "gauge force on solids"}},
@@ -490,27 +496,35 @@ Config read_config(const fs::path &path) {
     }
     if (init.contains("liquid_regions")) {
         require(c.model.free_surface, "initial.liquid_regions requires physics.free_surface");
-        require(init["liquid_regions"].is_array() && !init["liquid_regions"].empty(),
-                "initial.liquid_regions must be a nonempty array");
+        require(init["liquid_regions"].is_array(), "initial.liquid_regions must be an array");
         for (const auto &r : init["liquid_regions"]) {
-            keys(r, {"box_min", "box_max", "fill"}, "liquid region");
+            keys(r, {"shape", "box_min", "box_max", "center", "radius", "fill"}, "liquid region");
             LiquidRegion region;
-            region.lower = vec(field(r, "box_min"), "liquid region.box_min");
-            region.upper = vec(field(r, "box_max"), "liquid region.box_max");
+            region.shape = r.contains("shape") ? string_value(r["shape"], "liquid region.shape") : "box";
+            if (region.shape == "box") {
+                require(!r.contains("center") && !r.contains("radius"),
+                        "box liquid region accepts box_min and box_max only");
+                region.lower = vec(field(r, "box_min"), "liquid region.box_min");
+                region.upper = vec(field(r, "box_max"), "liquid region.box_max");
+                for (int a = 0; a < 3; a++)
+                    require(region.lower[a] <= region.upper[a], "Reversed liquid region");
+            } else {
+                require(region.shape == "sphere", "liquid region.shape must be box or sphere");
+                require(!r.contains("box_min") && !r.contains("box_max"),
+                        "sphere liquid region accepts center and radius only");
+                region.center = vec(field(r, "center"), "liquid region.center");
+                region.radius = positive(field(r, "radius"), "liquid region.radius");
+            }
             region.fill = r.contains("fill") ? number(r["fill"], "liquid region.fill") : 1.0;
             require(region.fill > 0 && region.fill <= 1, "liquid region.fill must be in (0,1]");
-            for (int a = 0; a < 3; a++)
-                require(region.lower[a] <= region.upper[a], "Reversed liquid region");
             c.liquid_regions.push_back(region);
         }
     }
-    require(!c.model.free_surface || !c.liquid_regions.empty(),
-            "Free-surface physics requires initial.liquid_regions");
     const auto &gs = field(j, "geometry");
     require(gs.is_array(), "geometry must be an array");
     std::set<std::string> ids;
     for (const auto &g : gs) {
-        keys(g, {"id", "file", "transform", "material"}, "geometry");
+        keys(g, {"id", "file", "transform", "material", "contact_angle"}, "geometry");
         Geometry geo;
         geo.id = string_value(field(g, "id"), "geometry.id");
         require(!geo.id.empty() && ids.insert(geo.id).second, "Empty/duplicate geometry ID");
@@ -522,6 +536,12 @@ Config read_config(const fs::path &path) {
             geo.material_index = 1 + static_cast<int>(material - c.thermal_materials.begin());
         } else {
             require(!g.contains("material"), "geometry.material requires physics.thermal");
+        }
+        if (g.contains("contact_angle")) {
+            require(c.model.free_surface, "geometry.contact_angle requires physics.free_surface");
+            geo.contact_angle = number(g["contact_angle"], "geometry.contact_angle");
+            require(geo.contact_angle > 0 && geo.contact_angle < 180,
+                    "geometry.contact_angle must be in (0,180) degrees");
         }
         geo.file = fs::absolute(c.path.parent_path() / fs::u8path(string_value(field(g, "file"), "geometry.file")));
         const auto &t = field(g, "transform");
@@ -556,14 +576,17 @@ Config read_config(const fs::path &path) {
     const std::array<std::string, 6> names{"xmin", "xmax", "ymin", "ymax", "zmin", "zmax"};
     std::array<int, 6> topology{};
     for (const auto &b : bs) {
-        keys(b, {"id", "faces", "type", "priority", "region", "rho", "velocity", "thermal"}, "boundary");
+        keys(b, {"id", "faces", "type", "priority", "region", "rho", "velocity", "thermal", "contact_angle"},
+             "boundary");
         Boundary bound;
         bound.id = string_value(field(b, "id"), "boundary.id");
         require(!bound.id.empty() && ids.insert(bound.id).second, "Empty/duplicate boundary ID");
         bound.type = string_value(field(b, "type"), "boundary.type");
         require(bound.type == "periodic" || bound.type == "equilibrium" || bound.type == "no_slip" ||
-                    bound.type == "moving_wall",
+                    bound.type == "moving_wall" || bound.type == "liquid_inlet" || bound.type == "open_outlet",
                 "Unsupported boundary type");
+        require((bound.type != "liquid_inlet" && bound.type != "open_outlet") || c.model.free_surface,
+                bound.type + " requires physics.free_surface");
         if (b.contains("priority")) {
             require(b["priority"].is_number_integer(), "priority must be integer");
             double p = number(b["priority"], "priority");
@@ -596,7 +619,7 @@ Config read_config(const fs::path &path) {
             }
             bound.region = true;
         }
-        if (bound.type == "equilibrium") {
+        if (bound.type == "equilibrium" || bound.type == "liquid_inlet" || bound.type == "open_outlet") {
             bound.rho = positive(field(b, "rho"), "boundary.rho") / c.reference_density;
             finite_float(bound.rho, "boundary.rho", true);
             bound.velocity = velocity(field(b, "velocity"), "boundary.velocity");
@@ -606,7 +629,16 @@ Config read_config(const fs::path &path) {
             for (int face : bound.faces)
                 require(bound.velocity[face / 2] == 0, "moving_wall velocity must be tangential");
         } else
-            require(!b.contains("rho") && !b.contains("velocity"), "Only equilibrium/moving_wall accept velocity");
+            require(!b.contains("rho") && !b.contains("velocity"),
+                    "Only equilibrium/liquid_inlet/open_outlet/moving_wall accept velocity");
+        if (b.contains("contact_angle")) {
+            require(c.model.free_surface, "boundary.contact_angle requires physics.free_surface");
+            require(bound.type == "no_slip" || bound.type == "moving_wall",
+                    "boundary.contact_angle requires a solid wall");
+            bound.contact_angle = number(b["contact_angle"], "boundary.contact_angle");
+            require(bound.contact_angle > 0 && bound.contact_angle < 180,
+                    "boundary.contact_angle must be in (0,180) degrees");
+        }
         if (b.contains("thermal")) {
             require(c.model.temperature, "boundary.thermal requires physics.thermal");
             require(bound.type != "periodic", "Periodic boundaries do not accept thermal conditions");
@@ -646,6 +678,10 @@ Config read_config(const fs::path &path) {
         }
         c.boundaries.push_back(bound);
     }
+    require(!c.model.free_surface || !c.liquid_regions.empty() ||
+                std::any_of(c.boundaries.begin(), c.boundaries.end(),
+                            [](const Boundary &b) { return b.type == "liquid_inlet"; }),
+            "Free-surface physics requires initial liquid or a liquid_inlet boundary");
     for (int a = 0; a < 3; a++) {
         require(topology[2 * a] && topology[2 * a + 1], "All six faces must be declared");
         require(topology[2 * a] != 3 && topology[2 * a + 1] != 3, "Periodic face conflicts with boundary rules");
