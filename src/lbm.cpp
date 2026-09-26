@@ -1112,7 +1112,7 @@ void LBM::voxelize_mesh_on_device(const Mesh* mesh, const uchar flag, const floa
 	if(!initialized) {
 		flags.read_from_device();
 		u.read_from_device();
-		if(model.dynamic_geometry) object_id.read_from_device();
+		if(model.dynamic_geometry) for(uint d=0u; d<get_D(); d++) lbm_domain[d]->object_id.read_from_device();
 	}
 }
 void LBM::unvoxelize_mesh_on_device(const Mesh* mesh, const uchar flag) { // remove voxelized triangle mesh from LBM grid by removing all flags in mesh bounding box (only required when bounding box size changes during re-voxelization)
