@@ -474,6 +474,8 @@ static void update_dynamic_geometry(LBM &lbm, Config &c, std::vector<DynamicBody
     lbm.rho.read_from_device();
     lbm.u.read_from_device();
     lbm.flags.read_from_device();
+    if (c.model.free_surface)
+        domain->mass.read_from_device();
     std::vector<uchar> old_objects(static_cast<size_t>(lbm.get_N()));
     for (ulong n = 0; n < lbm.get_N(); n++)
         old_objects[static_cast<size_t>(n)] = domain->object_id[n];
@@ -543,6 +545,7 @@ static void update_dynamic_geometry(LBM &lbm, Config &c, std::vector<DynamicBody
                               desired_objects, &current_flags);
     std::vector<float> release_density(static_cast<size_t>(lbm.get_N()), 1.0f);
     std::vector<float> release_velocity(static_cast<size_t>(3u * lbm.get_N()), 0.0f);
+    std::vector<float> release_mass(c.model.free_surface ? static_cast<size_t>(lbm.get_N()) : 1u, 0.0f);
     for (const auto &body : bodies) {
         const uchar object = static_cast<uchar>(body.geometry->object_index);
         std::vector<ulong> occupied, released;
@@ -579,6 +582,12 @@ static void update_dynamic_geometry(LBM &lbm, Config &c, std::vector<DynamicBody
             release_velocity[static_cast<size_t>(destination)] = lbm.u.x[source];
             release_velocity[static_cast<size_t>(lbm.get_N() + destination)] = lbm.u.y[source];
             release_velocity[static_cast<size_t>(2u * lbm.get_N() + destination)] = lbm.u.z[source];
+            if (c.model.free_surface) {
+                const float liquid_mass = domain->mass[source];
+                require(std::isfinite(liquid_mass) && liquid_mass >= 0.0f,
+                        "Prescribed STL remap encountered invalid free-surface mass");
+                release_mass[static_cast<size_t>(destination)] = liquid_mass;
+            }
         }
     }
     for (const auto &body : bodies) {
@@ -586,7 +595,7 @@ static void update_dynamic_geometry(LBM &lbm, Config &c, std::vector<DynamicBody
         const float3 linear = f3(body.state.linear_velocity);
         const float3 angular = f3(body.state.axis) * static_cast<float>(body.state.angular_velocity_radians);
         domain->reconcile_dynamic_object_mask(desired_objects.data(), release_density.data(),
-                                              release_velocity.data(),
+                                              release_velocity.data(), release_mass.data(),
                                               static_cast<uchar>(body.geometry->object_index), center, linear,
                                               angular);
     }

@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "case": { "name": "dynamic-water-entry-lattice" },
+  "solver": { "lattice": "D3Q27", "collision": "TRT", "storage": "FP32", "turbulence": "none" },
+  "physics": {
+    "gravity": [0, 0, -0.0001],
+    "free_surface": { "surface_tension": 0.0005, "environment_pressure": 0 }
+  },
+  "units": { "mode": "lattice" },
+  "domain": { "cells": [40, 24, 32] },
+  "fluid": { "rho": 1.0, "nu": 0.06 },
+  "initial": {
+    "velocity": [0, 0, 0],
+    "liquid_regions": [
+      { "box_min": [1, 1, 1], "box_max": [38.999, 22.999, 14.0] }
+    ]
+  },
+  "geometry": [
+    {
+      "id": "entering-cube",
+      "file": "assets/unit-cube-binary.stl",
+      "contact_angle": 90,
+      "transform": { "mode": "fit", "size": 5.0, "center": [20, 12, 22] },
+      "motion": {
+        "translation": {
+          "type": "constant_velocity",
+          "velocity": [0, 0, -0.02],
+          "stop_time": 300
+        }
+      }
+    }
+  ],
+  "boundaries": [
+    {
+      "id": "walls",
+      "faces": ["xmin", "xmax", "ymin", "ymax", "zmin", "zmax"],
+      "type": "no_slip",
+      "contact_angle": 90
+    }
+  ],
+  "run": { "steps": 350, "monitor_every": 25 },
+  "output": { "vtk_fields": ["object", "phi", "flags", "u", "rho"], "vtk_every": 50, "initial": true }
+}

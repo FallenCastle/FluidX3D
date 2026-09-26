@@ -345,7 +345,7 @@ void LBM_Domain::voxelize_mesh_on_device(const Mesh* mesh, const uchar flag, con
 	bounding_box_and_velocity.write_to_device();
 	kernel_voxelize_mesh.run();
 }
-void LBM_Domain::reconcile_dynamic_object_mask(uchar* desired_object_id, float* release_density, float* release_velocity, const uchar object, const float3& rotation_center, const float3& linear_velocity, const float3& rotational_velocity) { // reconcile a prescribed moving object to a host-selected constant-volume mask
+void LBM_Domain::reconcile_dynamic_object_mask(uchar* desired_object_id, float* release_density, float* release_velocity, float* release_mass, const uchar object, const float3& rotation_center, const float3& linear_velocity, const float3& rotational_velocity) { // reconcile a prescribed moving object to a host-selected constant-volume mask
 	Memory<uchar> desired(device, get_N(), 1u, desired_object_id);
 	Memory<float> desired_rho(device, get_N(), 1u, release_density);
 	Memory<float> desired_u(device, get_N(), 3u, release_velocity);
@@ -354,6 +354,14 @@ void LBM_Domain::reconcile_dynamic_object_mask(uchar* desired_object_id, float* 
 	              rotation_center.x, rotation_center.y, rotation_center.z,
 	              linear_velocity.x, linear_velocity.y, linear_velocity.z,
 	              rotational_velocity.x, rotational_velocity.y, rotational_velocity.z);
+#ifdef SURFACE
+	if(model.free_surface) {
+		Memory<float> desired_mass(device, get_N(), 1u, release_mass);
+		kernel.add_parameters(mass, massex, phi, desired_mass);
+		kernel.run();
+		return;
+	}
+#endif // SURFACE
 	kernel.run();
 }
 void LBM_Domain::refresh_dynamic_macroscopic_fields() {

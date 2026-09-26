@@ -2478,7 +2478,12 @@ kernel void reconcile_dynamic_object_mask(global fpxx* fi, global float* rho, gl
                                            const global float* release_density, const global float* release_velocity,
                                            const uchar object, const float cx, const float cy, const float cz,
                                            const float ux, const float uy, const float uz,
-                                           const float rx, const float ry, const float rz) {
+                                           const float rx, const float ry, const float rz
+)+"#ifdef SURFACE"+R(
+                                           , global float* mass, global float* massex, global float* phi,
+                                           const global float* release_mass
+)+"#endif"+R(
+                                           ) {
 	const uxx n = get_global_id(0);
 	if(n>=def_N) return;
 	const uchar previous_object = object_id[n];
@@ -2504,7 +2509,17 @@ kernel void reconcile_dynamic_object_mask(global fpxx* fi, global float* rho, gl
 		float feq[def_velocity_set];
 		calculate_f_eq(rhon, un.x, un.y, un.z, feq);
 		store_f(n, feq, fi, j, t);
+)+"#ifdef SURFACE"+R(
+		const float liquid_mass = fmax(release_mass[n], 0.0f);
+		const float fill = clamp(liquid_mass/rhon, 0.0f, 1.0f);
+		const uchar surface_flag = fill>=1.0f ? TYPE_F : fill>0.0f ? TYPE_I : TYPE_G;
+		flags[n] = (flags[n]&~(TYPE_S|TYPE_SU))|surface_flag;
+		mass[n] = liquid_mass;
+		massex[n] = 0.0f;
+		phi[n] = fill;
+)+"#else"+R(
 		flags[n] &= ~TYPE_S;
+)+"#endif"+R(
 		rho[n] = rhon;
 		store3(u, n, un);
 		object_id[n] = 0u;
