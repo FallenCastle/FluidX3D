@@ -474,8 +474,9 @@ static void update_dynamic_geometry(LBM &lbm, Config &c, std::vector<DynamicBody
     lbm.rho.read_from_device();
     lbm.u.read_from_device();
     lbm.flags.read_from_device();
+    std::vector<float> old_surface_mass(c.model.free_surface ? static_cast<size_t>(lbm.get_N()) : 0u);
     if (c.model.free_surface)
-        domain->mass.read_from_device();
+        domain->read_surface_mass(old_surface_mass.data());
     std::vector<uchar> old_objects(static_cast<size_t>(lbm.get_N()));
     for (ulong n = 0; n < lbm.get_N(); n++)
         old_objects[static_cast<size_t>(n)] = domain->object_id[n];
@@ -583,7 +584,7 @@ static void update_dynamic_geometry(LBM &lbm, Config &c, std::vector<DynamicBody
             release_velocity[static_cast<size_t>(lbm.get_N() + destination)] = lbm.u.y[source];
             release_velocity[static_cast<size_t>(2u * lbm.get_N() + destination)] = lbm.u.z[source];
             if (c.model.free_surface) {
-                const float liquid_mass = domain->mass[source];
+                const float liquid_mass = old_surface_mass[static_cast<size_t>(source)];
                 require(std::isfinite(liquid_mass) && liquid_mass >= 0.0f,
                         "Prescribed STL remap encountered invalid free-surface mass");
                 release_mass[static_cast<size_t>(destination)] = liquid_mass;
