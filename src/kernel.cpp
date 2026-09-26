@@ -2556,6 +2556,7 @@ string opencl_c_container() { return R( // ########################## begin of O
 		object_id[n] = 0u;
 	}
 }
+)+"#endif"+R( // DYNAMIC_GEOMETRY
 )+"#if defined(SURFACE)"+R(
 kernel void stage_dynamic_surface_mass(const global uchar* flags, const global float* mass,
                                        const global float* massex, global float* settled) {
@@ -2578,6 +2579,7 @@ kernel void apply_dynamic_surface_mass(global float* mass, global float* massex,
 	massex[n] = 0.0f;
 }
 )+"#endif"+R(
+)+"#ifdef DYNAMIC_GEOMETRY"+R(
 kernel void refresh_dynamic_macroscopic_fields(const global fpxx* fi, global float* rho, global float* u,
                                                const global uchar* flags, const ulong t) {
 	const uxx n = get_global_id(0);
