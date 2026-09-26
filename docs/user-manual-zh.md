@@ -118,7 +118,7 @@ $exe = "$root\bin\solver-ibm-v1.0.0\Solver-IBM.exe"
 $devices = powershell.exe -NoProfile -ExecutionPolicy Bypass `
   -File .\scripts\get-opencl-devices.ps1 | ConvertFrom-Json
 $devices | Format-Table id, platform, name, driver
-$gpu = @($devices | Where-Object { $_.name -eq 'NVIDIA GeForce RTX 3060' })
+$gpu = @($devices | Where-Object { $_.name -eq 'NVIDIA GeForce RTX 3060' -and $_.platform -eq 'NVIDIA CUDA' })
 if ($gpu.Count -ne 1) { throw 'Inspect the device list and select the intended OpenCL device.' }
 $deviceId = [int]$gpu[0].id
 ```
