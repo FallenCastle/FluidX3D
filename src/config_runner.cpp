@@ -246,7 +246,7 @@ struct BoundaryFluxSurface {
     std::string id, type;
     std::vector<BoundaryFluxLink> links;
 };
-static std::string csv_string(const std::string &value) {
+static std::string quote_csv_field(const std::string &value) {
     std::string out = "\"";
     for (char c : value) {
         out.push_back(c);
@@ -309,7 +309,7 @@ static void monitor(LBM &lbm, const Config &c, std::ofstream &file,
                     enthalpy_flow += cell_mass_flow * lbm.T[n];
             }
             *flux_file << std::setprecision(17) << lbm.get_t() << ',' << lbm.get_t() * c.dt << ','
-                       << csv_string(surface.id) << ',' << surface.type << ',' << mass_flow;
+                       << quote_csv_field(surface.id) << ',' << surface.type << ',' << mass_flow;
             if (c.model.temperature)
                 *flux_file << ',' << enthalpy_flow;
             *flux_file << '\n';
