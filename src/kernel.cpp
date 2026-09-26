@@ -1920,7 +1920,8 @@ string opencl_c_container() { return R( // ########################## begin of O
 )+R(kernel void thermal_step(const global float* T_src, global float* T_dst, const global float* u,
 		const global uchar* flags, const global float* capacity, const global float* conductivity,
 		const global float* source, const global uchar* material, const global uchar* boundary_type,
-		const global float* boundary_value, const global float* boundary_coefficient) {
+		const global float* boundary_value, const global float* boundary_coefficient,
+		global float* boundary_exchange) {
 	const uxx n = get_global_id(0);
 	if(n>=(uxx)def_N||is_halo(n)) return;
 	const uchar mn = material[n];
@@ -1931,16 +1932,19 @@ string opencl_c_container() { return R( // ########################## begin of O
 	if(!(Cn>0.0f)||!(kn>=0.0f)) { T_dst[n] = Tn; return; }
 	uxx j[7];
 	neighbors_temperature(n, j);
-	float rhs = source[n];
+	float rhs = source[n], boundary_rhs = 0.0f;
 	const float3 un = mn==0u ? load3(u, n) : (float3)(0.0f);
 	for(uint face=0u; face<6u; face++) {
 		const uxx m = j[face+1u];
 		const uchar mm = material[m], fm = flags[m];
 		if(mm==255u) {
 			const uchar bc = boundary_type[m];
-			if(bc==1u) rhs += 2.0f*kn*(boundary_value[m]-Tn);
-			else if(bc==2u) rhs += boundary_value[m];
-			else if(bc==3u) rhs += boundary_coefficient[m]*(boundary_value[m]-Tn);
+			float face_rhs = 0.0f;
+			if(bc==1u) face_rhs = 2.0f*kn*(boundary_value[m]-Tn);
+			else if(bc==2u) face_rhs = boundary_value[m];
+			else if(bc==3u) face_rhs = boundary_coefficient[m]*(boundary_value[m]-Tn);
+			rhs += face_rhs;
+			boundary_rhs += face_rhs;
 			continue;
 		}
 		if((fm&TYPE_SU)==TYPE_G) continue;
@@ -1957,7 +1961,12 @@ string opencl_c_container() { return R( // ########################## begin of O
 			rhs -= velocity*(energy-Cn*Tn);
 		}
 	}
+	boundary_exchange[n] += def_thermal_dt*boundary_rhs;
 	T_dst[n] = Tn+def_thermal_dt*rhs/Cn;
+}
+)+R(kernel void reset_thermal_exchange(global float* boundary_exchange) {
+	const uxx n = get_global_id(0);
+	if(n<(uxx)def_N) boundary_exchange[n] = 0.0f;
 }
 )+"#endif"+R( // TEMPERATURE
 

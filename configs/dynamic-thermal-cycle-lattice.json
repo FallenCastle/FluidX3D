@@ -24,22 +24,16 @@
   "domain": { "cells": [40, 28, 24] },
   "fluid": { "rho": 1.0, "nu": 0.08 },
   "initial": {
-    "velocity": [0, 0, 0],
-    "regions": [
-      {
-        "box_min": [15, 10, 8],
-        "box_max": [19.999, 18, 16],
-        "rho": 1,
-        "velocity": [0, 0, 0],
-        "temperature": 360
-      }
-    ]
+    "velocity": [0, 0, 0]
   },
   "geometry": [
     {
       "id": "thermal-box",
       "file": "assets/rectangular-box-2x1x1-binary.stl",
       "material": "moving-solid",
+      "thermal_regions": [
+        { "box_min": [-5, -3, -3], "box_max": [0, 3, 3], "temperature": 360 }
+      ],
       "transform": { "mode": "fit", "size": 10.0, "center": [20, 14, 12] },
       "motion": {
         "translation": { "type": "sinusoidal", "amplitude": [1.5, 0, 0], "period": 600 },

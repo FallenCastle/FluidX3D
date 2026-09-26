@@ -165,14 +165,16 @@ void LBM_Domain::allocate(Device& device) {
 		thermal_boundary_type = Memory<uchar>(device, N);
 		thermal_boundary_value = Memory<float>(device, N);
 		thermal_boundary_coefficient = Memory<float>(device, N);
+		thermal_boundary_exchange = Memory<float>(device, N);
 		kernel_stream_collide.add_parameters(T);
 		kernel_update_fields.add_parameters(T);
 		kernel_thermal_forward = Kernel(device, N, "thermal_step", T, T_next, u, flags, thermal_capacity,
 			thermal_conductivity, thermal_source, material, thermal_boundary_type, thermal_boundary_value,
-			thermal_boundary_coefficient);
+			thermal_boundary_coefficient, thermal_boundary_exchange);
 		kernel_thermal_reverse = Kernel(device, N, "thermal_step", T_next, T, u, flags, thermal_capacity,
 			thermal_conductivity, thermal_source, material, thermal_boundary_type, thermal_boundary_value,
-			thermal_boundary_coefficient);
+			thermal_boundary_coefficient, thermal_boundary_exchange);
+		kernel_reset_thermal_exchange = Kernel(device, N, "reset_thermal_exchange", thermal_boundary_exchange);
 	}
 #endif // TEMPERATURE
 
@@ -216,6 +218,7 @@ void LBM_Domain::enqueue_surface_3() {
 #endif // SURFACE
 #ifdef TEMPERATURE
 void LBM_Domain::enqueue_thermal() {
+	kernel_reset_thermal_exchange.enqueue_run();
 	for(uint substep=0u; substep<model.thermal_substeps; substep+=2u) {
 		kernel_thermal_forward.enqueue_run();
 		kernel_thermal_reverse.enqueue_run();
@@ -986,6 +989,7 @@ void LBM::initialize() { // write all data fields to device and call kernel_init
 		lbm_domain[d]->thermal_boundary_type.enqueue_write_to_device();
 		lbm_domain[d]->thermal_boundary_value.enqueue_write_to_device();
 		lbm_domain[d]->thermal_boundary_coefficient.enqueue_write_to_device();
+		lbm_domain[d]->thermal_boundary_exchange.enqueue_write_to_device();
 	}
 #endif // TEMPERATURE
 #ifdef PARTICLES

@@ -1020,6 +1020,15 @@ struct BoundaryFluxSurface {
     std::string id, type;
     std::vector<BoundaryFluxLink> links;
 };
+struct MonitorSnapshot {
+    double mass = 0;
+    double sensible_energy = 0;
+};
+struct BudgetTotals {
+    double initial_mass = 0, initial_energy = 0;
+    double cumulative_mass_outward = 0, cumulative_enthalpy_outward = 0, cumulative_source_in = 0;
+    double cumulative_boundary_heat_in = 0;
+};
 static std::string quote_csv_field(const std::string &value) {
     std::string out = "\"";
     for (char c : value) {
@@ -1029,8 +1038,8 @@ static std::string quote_csv_field(const std::string &value) {
     }
     return out + '"';
 }
-static void monitor(LBM &lbm, const Config &c, std::ofstream &file,
-                    const std::vector<BoundaryFluxSurface> &flux_surfaces, std::ofstream *flux_file) {
+static MonitorSnapshot monitor(LBM &lbm, const Config &c, std::ofstream &file,
+                               const std::vector<BoundaryFluxSurface> &flux_surfaces, std::ofstream *flux_file) {
     double mass = 0, umax = 0, rmin = std::numeric_limits<double>::infinity(), rmax = 0;
     double tmin = std::numeric_limits<double>::infinity(), tmax = -std::numeric_limits<double>::infinity(), energy = 0;
     ulong count = 0;
@@ -1106,6 +1115,109 @@ static void monitor(LBM &lbm, const Config &c, std::ofstream &file,
     }
     std::cout << "Step " << lbm.get_t() << "/" << c.steps << "; lattice rho=[" << rmin << "," << rmax
               << "]; max speed=" << umax << std::endl;
+    return {mass, energy};
+}
+static std::pair<double, double> boundary_flow(const LBM &lbm, const Config &c,
+                                               const std::vector<BoundaryFluxSurface> &surfaces) {
+    double mass_flow = 0, enthalpy_flow = 0;
+    for (const auto &surface : surfaces)
+        for (const auto &link : surface.links) {
+            const ulong n = link.cell;
+            if (is_solid(lbm.flags[n]) || !(lbm.flags[n] & (TYPE_F | TYPE_I)))
+                continue;
+            const double normal_velocity = lbm.u.x[n] * link.outward_normal[0] +
+                                           lbm.u.y[n] * link.outward_normal[1] +
+                                           lbm.u.z[n] * link.outward_normal[2];
+            const double cell_flow = lbm.rho[n] * lbm.phi[n] * normal_velocity;
+            mass_flow += cell_flow;
+            if (c.model.temperature)
+                enthalpy_flow += cell_flow * lbm.T[n];
+        }
+    return {mass_flow, enthalpy_flow};
+}
+static double thermal_boundary_heat(LBM &lbm) {
+    auto *domain = lbm.lbm_domain[0];
+    domain->thermal_boundary_exchange.read_from_device();
+    double heat = 0;
+    for (ulong n = 0; n < lbm.get_N(); n++) {
+        require(std::isfinite(domain->thermal_boundary_exchange[n]),
+                "Non-finite thermal boundary exchange at step " + std::to_string(lbm.get_t()));
+        heat += domain->thermal_boundary_exchange[n];
+    }
+    return heat;
+}
+static void write_free_surface_metrics(LBM &lbm, const Config &c, const MonitorSnapshot &snapshot,
+                                       std::ofstream &file) {
+    double volume = 0, centroid_x = 0, centroid_y = 0, centroid_z = 0;
+    double level_min = std::numeric_limits<double>::infinity(), level_max = -std::numeric_limits<double>::infinity();
+    double wet_area = 0, dry_area = 0;
+    for (ulong n = 0; n < lbm.get_N(); n++) {
+        if (is_solid(lbm.flags[n]))
+            continue;
+        uint x, y, z;
+        lbm.coordinates(n, x, y, z);
+        const double fill = std::clamp(static_cast<double>(lbm.phi[n]), 0.0, 1.0);
+        volume += fill;
+        centroid_x += fill * (static_cast<double>(x) + 0.5);
+        centroid_y += fill * (static_cast<double>(y) + 0.5);
+        centroid_z += fill * (static_cast<double>(z) + 0.5);
+        if (fill > 0.5) {
+            level_min = std::min(level_min, static_cast<double>(z) + 0.5);
+            level_max = std::max(level_max, static_cast<double>(z) + 0.5);
+        }
+    }
+    const int directions[6][3]{{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
+    for (ulong n = 0; n < lbm.get_N(); n++) {
+        if (!is_solid(lbm.flags[n]))
+            continue;
+        uint x, y, z;
+        lbm.coordinates(n, x, y, z);
+        for (const auto &direction : directions) {
+            const int nx = static_cast<int>(x) + direction[0], ny = static_cast<int>(y) + direction[1],
+                      nz = static_cast<int>(z) + direction[2];
+            if (nx < 0 || ny < 0 || nz < 0 || nx >= static_cast<int>(c.cells[0]) ||
+                ny >= static_cast<int>(c.cells[1]) || nz >= static_cast<int>(c.cells[2]))
+                continue;
+            const ulong neighbor = static_cast<ulong>(nx) +
+                                   (static_cast<ulong>(ny) + static_cast<ulong>(nz) * c.cells[1]) * c.cells[0];
+            if (is_solid(lbm.flags[neighbor]))
+                continue;
+            if ((lbm.flags[neighbor] & (TYPE_F | TYPE_I)) && lbm.phi[neighbor] > 0.5f)
+                wet_area += 1.0;
+            else
+                dry_area += 1.0;
+        }
+    }
+    if (volume > 0) {
+        centroid_x /= volume;
+        centroid_y /= volume;
+        centroid_z /= volume;
+    } else
+        centroid_x = centroid_y = centroid_z = level_min = level_max = std::numeric_limits<double>::quiet_NaN();
+    file << std::setprecision(17) << lbm.get_t() << ',' << lbm.get_t() * c.dt << ',' << snapshot.mass << ','
+         << volume << ',' << centroid_x << ',' << centroid_y << ',' << centroid_z << ',' << level_min << ','
+         << level_max << ',' << wet_area << ',' << dry_area << '\n';
+    file.flush();
+    require(bool(file), "Free-surface metrics write failed");
+}
+static void write_budget(LBM &lbm, const Config &c, const MonitorSnapshot &snapshot, const BudgetTotals &budget,
+                         std::ofstream &file) {
+    file << std::setprecision(17) << lbm.get_t() << ',' << lbm.get_t() * c.dt;
+    if (c.model.free_surface) {
+        const double residual = snapshot.mass - budget.initial_mass + budget.cumulative_mass_outward;
+        file << ',' << budget.initial_mass << ',' << snapshot.mass << ',' << budget.cumulative_mass_outward << ','
+             << residual;
+    }
+    if (c.model.temperature) {
+        const double residual = snapshot.sensible_energy - budget.initial_energy + budget.cumulative_enthalpy_outward -
+                                budget.cumulative_source_in - budget.cumulative_boundary_heat_in;
+        file << ',' << budget.initial_energy << ',' << snapshot.sensible_energy << ','
+             << budget.cumulative_enthalpy_outward << ',' << budget.cumulative_source_in << ','
+             << budget.cumulative_boundary_heat_in << ',' << residual;
+    }
+    file << '\n';
+    file.flush();
+    require(bool(file), "Conservation budget write failed");
 }
 static void solve(Config &c, const fs::path &output, int device, bool prepare) {
     const auto devices = get_devices(false); // verify the explicit device instead of silently falling back
@@ -1157,19 +1269,22 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
     Json geometries = Json::array();
     std::vector<DynamicBody> dynamic_bodies;
     std::vector<MotionState> initial_motion(c.geometry.size());
+    std::vector<Vec> geometry_pivots(c.geometry.size());
     for (const auto &g : c.geometry) {
         for (ulong n = 0; n < lbm.get_N(); n++)
             lbm.flags[n] = 0;
         lbm.flags.write_to_device();
         auto m = mesh(c, g);
+        const size_t geometry_index = static_cast<size_t>(&g - c.geometry.data());
+        geometry_pivots[geometry_index] = g.motion.has_pivot
+                                              ? g.motion.pivot
+                                              : Vec{m->get_bounding_box_center().x, m->get_bounding_box_center().y,
+                                                    m->get_bounding_box_center().z};
         Mesh *active_mesh = m.get();
         if (g.motion.enabled) {
             DynamicBody body;
             body.geometry = &g;
-            body.pivot = g.motion.has_pivot
-                             ? g.motion.pivot
-                             : Vec{m->get_bounding_box_center().x, m->get_bounding_box_center().y,
-                                   m->get_bounding_box_center().z};
+            body.pivot = geometry_pivots[geometry_index];
             body.state = motion_state(g, 0.0);
             initial_motion[static_cast<size_t>(&g - c.geometry.data())] = body.state;
             body.base = std::move(m);
@@ -1206,6 +1321,7 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
                               {"object_id", g.object_index},
                               {"dynamic", g.motion.enabled},
                               {"material", g.material.empty() ? Json(nullptr) : Json(g.material)},
+                              {"local_thermal_regions", g.thermal_regions.size()},
                               {"contact_angle_degrees", c.model.free_surface ? Json(g.contact_angle) : Json(nullptr)}});
     }
     if (c.model.dynamic_geometry) {
@@ -1416,6 +1532,22 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
                     temperature = material.initial_temperature;
                     lbm.T[n] = static_cast<float>(temperature);
                 }
+                if (!geometry.thermal_regions.empty()) {
+                    const auto &pivot = geometry_pivots[static_cast<size_t>(geometry_owner)];
+                    const auto &state = initial_motion[static_cast<size_t>(geometry_owner)];
+                    const float3 pivot3 = f3(pivot), current(static_cast<float>(x), static_cast<float>(y),
+                                                                  static_cast<float>(z));
+                    const float3 base = pivot3 +
+                                        (current - pivot3 - f3(state.translation)) * motion_rotation(state);
+                    const Vec local{base.x - pivot[0], base.y - pivot[1], base.z - pivot[2]};
+                    for (const auto &region : geometry.thermal_regions)
+                        if (local[0] >= region.lower[0] && local[0] <= region.upper[0] &&
+                            local[1] >= region.lower[1] && local[1] <= region.upper[1] &&
+                            local[2] >= region.lower[2] && local[2] <= region.upper[2]) {
+                            temperature = region.temperature;
+                            lbm.T[n] = static_cast<float>(temperature);
+                        }
+                }
             } else {
                 domain->thermal_capacity[n] = 1.0f;
                 domain->thermal_conductivity[n] = static_cast<float>(c.thermal_diffusivity);
@@ -1505,20 +1637,43 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
                                                : 1.0;
             dynamic_energy_target +=
                 liquid_fraction * static_cast<double>(domain->thermal_capacity[n]) * lbm.T[n];
-            dynamic_energy_source_per_step += liquid_fraction * domain->thermal_source[n];
         }
     }
+    if (c.model.temperature) {
+        auto *domain = lbm.lbm_domain[0];
+        for (ulong n = 0; n < lbm.get_N(); n++) {
+            const bool active = domain->material[n] != 255u &&
+                                (!c.model.free_surface || domain->material[n] > 0u ||
+                                 (lbm.flags[n] & (TYPE_F | TYPE_I)));
+            if (!active)
+                continue;
+            const double fraction = c.model.free_surface && domain->material[n] == 0u
+                                        ? std::clamp(static_cast<double>(lbm.phi[n]), 0.0, 1.0)
+                                        : 1.0;
+            dynamic_energy_source_per_step += fraction * domain->thermal_source[n];
+        }
+    }
+    bool has_thermal_boundary_exchange = false;
+    if (c.model.temperature)
+        for (const auto &boundary : c.boundaries)
+            has_thermal_boundary_exchange = has_thermal_boundary_exchange ||
+                                            (boundary.thermal && boundary.thermal_type != "adiabatic");
     c.resolved["conservation"] = {{"closed_domain", closed_domain},
                                   {"mass_projection", conserve_mass},
-                                  {"sensible_energy_projection", closed_adiabatic_thermal}};
+                                  {"sensible_energy_projection", closed_adiabatic_thermal},
+                                  {"thermal_boundary_exchange", has_thermal_boundary_exchange}};
     if (std::isfinite(dynamic_mass_target))
         c.resolved["conservation"]["initial_mass_lattice"] = dynamic_mass_target;
     if (std::isfinite(dynamic_energy_target))
         c.resolved["conservation"]["initial_sensible_energy_lattice"] = dynamic_energy_target;
     save_json(output / "resolved-config.json", c.resolved);
+    BudgetTotals budget;
     auto advance_to = [&](ulong target) {
-        if (!c.model.dynamic_geometry && !(c.model.free_surface && std::isfinite(dynamic_mass_target))) {
-            lbm.run(target - lbm.get_t(), c.steps);
+        if (!c.model.dynamic_geometry && !(c.model.free_surface && std::isfinite(dynamic_mass_target)) &&
+            flux_surfaces.empty() && !has_thermal_boundary_exchange) {
+            const ulong steps = target - lbm.get_t();
+            lbm.run(steps, c.steps);
+            budget.cumulative_source_in += dynamic_energy_source_per_step * static_cast<double>(steps);
             return;
         }
         while (lbm.get_t() < target) {
@@ -1534,6 +1689,15 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
                     dynamic_energy_target += dynamic_energy_source_per_step;
                     project_closed_sensible_energy(lbm, c, dynamic_energy_target, "Closed-domain");
                 }
+            }
+            budget.cumulative_source_in += dynamic_energy_source_per_step;
+            if (has_thermal_boundary_exchange)
+                budget.cumulative_boundary_heat_in += thermal_boundary_heat(lbm);
+            if (!flux_surfaces.empty()) {
+                sync(lbm);
+                const auto flow = boundary_flow(lbm, c, flux_surfaces);
+                budget.cumulative_mass_outward += flow.first;
+                budget.cumulative_enthalpy_outward += flow.second;
             }
         }
     };
@@ -1554,6 +1718,29 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
         flux << '\n';
         flux_file = &flux;
     }
+    std::ofstream surface_metrics;
+    if (c.model.free_surface) {
+        surface_metrics.open(output / "free-surface.csv", std::ios::binary);
+        require(bool(surface_metrics), "Cannot create free-surface.csv");
+        surface_metrics << "step,time,liquid_mass_lattice,liquid_volume_lattice,centroid_x_lattice,"
+                           "centroid_y_lattice,centroid_z_lattice,"
+                           "level_min_lattice,level_max_lattice,wet_area_lattice,dry_area_lattice\n";
+    }
+    std::ofstream conservation_budget;
+    if (c.model.free_surface || c.model.temperature) {
+        conservation_budget.open(output / "conservation-budget.csv", std::ios::binary);
+        require(bool(conservation_budget), "Cannot create conservation-budget.csv");
+        conservation_budget << "step,time";
+        if (c.model.free_surface)
+            conservation_budget << ",mass_initial_lattice,mass_current_lattice,cumulative_mass_outward_lattice,"
+                                   "mass_residual_lattice";
+        if (c.model.temperature)
+            conservation_budget << ",sensible_energy_initial_lattice,sensible_energy_current_lattice,"
+                                   "cumulative_sensible_enthalpy_outward_lattice,cumulative_heat_source_in_lattice,"
+                                   "cumulative_boundary_heat_in_lattice,"
+                                   "sensible_energy_residual_lattice";
+        conservation_budget << '\n';
+    }
     std::ofstream object_motion;
     if (c.model.dynamic_geometry) {
         object_motion.open(output / "object-motion.csv", std::ios::binary);
@@ -1568,7 +1755,13 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
             object_motion << ",temperature_min,temperature_max,sensible_energy_lattice";
         object_motion << '\n';
     }
-    monitor(lbm, c, stats, flux_surfaces, flux_file);
+    const MonitorSnapshot initial_snapshot = monitor(lbm, c, stats, flux_surfaces, flux_file);
+    budget.initial_mass = initial_snapshot.mass;
+    budget.initial_energy = initial_snapshot.sensible_energy;
+    if (c.model.free_surface)
+        write_free_surface_metrics(lbm, c, initial_snapshot, surface_metrics);
+    if (c.model.free_surface || c.model.temperature)
+        write_budget(lbm, c, initial_snapshot, budget, conservation_budget);
     if (c.model.dynamic_geometry)
         write_object_motion(lbm, c, dynamic_bodies, object_motion);
     Analysis analysis(c, output, std::move(force_groups));
@@ -1598,7 +1791,11 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
             next_sample = next + c.sample_every; // both <= 2^53; sum fits uint64
         }
         if (next == next_monitor || next == c.steps) {
-            monitor(lbm, c, stats, flux_surfaces, flux_file);
+            const MonitorSnapshot snapshot = monitor(lbm, c, stats, flux_surfaces, flux_file);
+            if (c.model.free_surface)
+                write_free_surface_metrics(lbm, c, snapshot, surface_metrics);
+            if (c.model.free_surface || c.model.temperature)
+                write_budget(lbm, c, snapshot, budget, conservation_budget);
             if (c.model.dynamic_geometry)
                 write_object_motion(lbm, c, dynamic_bodies, object_motion);
             next_monitor = next > c.steps - std::min(c.monitor_every, c.steps) ? c.steps : next + c.monitor_every;

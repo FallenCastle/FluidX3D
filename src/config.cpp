@@ -137,6 +137,7 @@ Json capabilities() {
             {"geometry",
              {{"format", "binary STL"},
               {"prescribed_motion", {"constant translation", "fixed-axis rotation", "sinusoidal", "trajectory table"}},
+              {"object_local_thermal_regions", true},
               {"object_ids", true}}},
             {"outputs", {"VTK", "CSV", "JSON"}},
             {"body_force", "constant force density"},
@@ -574,7 +575,8 @@ Config read_config(const fs::path &path) {
     require(gs.is_array(), "geometry must be an array");
     std::set<std::string> ids;
     for (const auto &g : gs) {
-        keys(g, {"id", "file", "transform", "material", "contact_angle", "motion"}, "geometry");
+        keys(g, {"id", "file", "transform", "material", "contact_angle", "motion", "thermal_regions"},
+             "geometry");
         Geometry geo;
         geo.id = string_value(field(g, "id"), "geometry.id");
         require(!geo.id.empty() && ids.insert(geo.id).second, "Empty/duplicate geometry ID");
@@ -586,6 +588,28 @@ Config read_config(const fs::path &path) {
             geo.material_index = 1 + static_cast<int>(material - c.thermal_materials.begin());
         } else {
             require(!g.contains("material"), "geometry.material requires physics.thermal");
+        }
+        if (g.contains("thermal_regions")) {
+            require(c.model.temperature, "geometry.thermal_regions requires physics.thermal");
+            require(g["thermal_regions"].is_array(), "geometry.thermal_regions must be an array");
+            for (const auto &item : g["thermal_regions"]) {
+                keys(item, {"box_min", "box_max", "temperature"}, "geometry thermal region");
+                LocalThermalRegion region;
+                region.lower = vec(field(item, "box_min"), "geometry thermal region.box_min");
+                region.upper = vec(field(item, "box_max"), "geometry thermal region.box_max");
+                if (c.si)
+                    for (int a = 0; a < 3; a++) {
+                        region.lower[a] /= c.dx;
+                        region.upper[a] /= c.dx;
+                    }
+                for (int a = 0; a < 3; a++)
+                    require(region.lower[a] <= region.upper[a], "Reversed geometry thermal region");
+                region.temperature =
+                    positive(field(item, "temperature"), "geometry thermal region.temperature") /
+                    c.temperature_scale;
+                finite_float(region.temperature, "geometry thermal region lattice temperature", true);
+                geo.thermal_regions.push_back(region);
+            }
         }
         if (g.contains("contact_angle")) {
             require(c.model.free_surface, "geometry.contact_angle requires physics.free_surface");

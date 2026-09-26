@@ -34,6 +34,10 @@ struct PrescribedMotion {
     MotionRotation rotation;
     std::vector<MotionKeyframe> trajectory;
 };
+struct LocalThermalRegion {
+    Vec lower{}, upper{};
+    double temperature = 1;
+};
 struct Geometry {
     std::string id, material;
     fs::path file;
@@ -43,6 +47,7 @@ struct Geometry {
     int material_index = 0;
     int object_index = 0;
     PrescribedMotion motion;
+    std::vector<LocalThermalRegion> thermal_regions;
 };
 struct ThermalMaterial {
     std::string id;
@@ -96,11 +101,11 @@ struct Config {
     unsigned device_cell_bytes() const {
         return model.q * ddf_storage_bytes(storage) + 29u + (model.free_surface ? 20u : 0u) +
                (model.dynamic_geometry ? 1u : 0u) +
-               (model.temperature ? 30u : 0u);
+               (model.temperature ? 34u : 0u);
     }
     unsigned host_cell_bytes() const {
         return 29u + (model.free_surface ? 12u : 0u) + (model.dynamic_geometry ? 1u : 0u) +
-               (model.temperature ? 26u : 0u);
+               (model.temperature ? 30u : 0u);
     }
     std::array<unsigned, 3> cells{};
     Vec origin{};

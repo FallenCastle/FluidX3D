@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "case": { "name": "free-surface-sloshing-lattice" },
+  "solver": { "lattice": "D3Q19", "collision": "TRT", "storage": "FP32", "turbulence": "none" },
+  "physics": {
+    "gravity": [0, 0, -0.0002],
+    "free_surface": { "surface_tension": 0.00005, "environment_pressure": 0 }
+  },
+  "units": { "mode": "lattice" },
+  "domain": { "cells": [64, 8, 32] },
+  "fluid": { "rho": 1.0, "nu": 0.02 },
+  "initial": {
+    "velocity": [0.005, 0, 0],
+    "liquid_regions": [
+      { "box_min": [1, 1, 1], "box_max": [62.999, 6.999, 15.5] }
+    ]
+  },
+  "geometry": [],
+  "boundaries": [
+    {
+      "id": "tank",
+      "faces": ["xmin", "xmax", "ymin", "ymax", "zmin", "zmax"],
+      "type": "no_slip",
+      "contact_angle": 90
+    }
+  ],
+  "run": { "steps": 6000, "monitor_every": 20 },
+  "output": { "vtk_fields": ["phi", "u", "rho", "flags"], "vtk_every": 500, "initial": true }
+}

@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "case": { "name": "free-surface-static-droplet-lattice" },
+  "solver": { "lattice": "D3Q27", "collision": "TRT", "storage": "FP32", "turbulence": "none" },
+  "physics": {
+    "gravity": [0, 0, 0],
+    "free_surface": { "surface_tension": 0.005, "environment_pressure": 0 }
+  },
+  "units": { "mode": "lattice" },
+  "domain": { "cells": [48, 48, 48] },
+  "fluid": { "rho": 1.0, "nu": 0.1 },
+  "initial": {
+    "velocity": [0, 0, 0],
+    "liquid_regions": [
+      { "shape": "sphere", "center": [24, 24, 24], "radius": 10 }
+    ]
+  },
+  "geometry": [],
+  "boundaries": [
+    {
+      "id": "walls",
+      "faces": ["xmin", "xmax", "ymin", "ymax", "zmin", "zmax"],
+      "type": "no_slip",
+      "contact_angle": 90
+    }
+  ],
+  "run": { "steps": 1000, "monitor_every": 50 },
+  "output": { "vtk_fields": ["phi", "p", "rho", "u", "flags"], "vtk_every": 1000, "initial": true }
+}

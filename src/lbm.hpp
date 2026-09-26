@@ -69,6 +69,7 @@ private:
 	Memory<float> T_next; // device-only second buffer for conservative finite-volume heat transport
 	Kernel kernel_thermal_forward;
 	Kernel kernel_thermal_reverse;
+	Kernel kernel_reset_thermal_exchange;
 #endif // TEMPERATURE
 #ifdef PARTICLES
 	Kernel kernel_integrate_particles; // intgegrates particles forward in time and couples particles to fluid
@@ -99,6 +100,7 @@ public:
 	Memory<uchar> thermal_boundary_type; // 0 adiabatic, 1 fixed T, 2 heat flux, 3 ambient convection
 	Memory<float> thermal_boundary_value; // prescribed T, inward heat flux, or ambient T
 	Memory<float> thermal_boundary_coefficient; // convection coefficient
+	Memory<float> thermal_boundary_exchange; // heat entering active cells through external thermal boundaries per LBM step
 #endif // TEMPERATURE
 #ifdef PARTICLES
 	Memory<float> particles; // particle positions

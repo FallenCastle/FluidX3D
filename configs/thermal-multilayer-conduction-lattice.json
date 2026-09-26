@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "case": { "name": "thermal-multilayer-conduction-lattice" },
+  "solver": { "lattice": "D3Q19", "collision": "SRT", "storage": "FP32", "turbulence": "none" },
+  "physics": {
+    "thermal": {
+      "reference_temperature": 1.0,
+      "initial_temperature": 1.0,
+      "specific_heat": 1.0,
+      "conductivity": 0.05,
+      "materials": [
+        {
+          "id": "conductive-slab",
+          "density": 2.0,
+          "specific_heat": 1.0,
+          "conductivity": 0.2,
+          "initial_temperature": 1.0
+        }
+      ]
+    }
+  },
+  "units": { "mode": "lattice" },
+  "domain": { "cells": [42, 10, 10] },
+  "fluid": { "rho": 1.0, "nu": 0.08 },
+  "initial": { "velocity": [0, 0, 0] },
+  "geometry": [
+    {
+      "id": "center-slab",
+      "file": "assets/thermal-slab-1x4x4-binary.stl",
+      "material": "conductive-slab",
+      "transform": { "mode": "fit", "size": 10, "center": [21, 5, 5] }
+    }
+  ],
+  "boundaries": [
+    {
+      "id": "hot",
+      "faces": ["xmin"],
+      "type": "no_slip",
+      "thermal": { "type": "fixed_temperature", "temperature": 1.1 }
+    },
+    {
+      "id": "cold",
+      "faces": ["xmax"],
+      "type": "no_slip",
+      "thermal": { "type": "fixed_temperature", "temperature": 0.9 }
+    },
+    { "id": "periodic-yz", "faces": ["ymin", "ymax", "zmin", "zmax"], "type": "periodic" }
+  ],
+  "run": { "steps": 40000, "monitor_every": 1000 },
+  "output": { "vtk_fields": ["T", "material", "flags"], "vtk_every": 40000, "initial": true }
+}

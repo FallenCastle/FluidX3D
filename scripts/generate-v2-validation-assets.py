@@ -42,3 +42,4 @@ def write_box(filename, dimensions):
 OUTPUT_DIRECTORY.mkdir(parents=True, exist_ok=True)
 write_box("unit-cube-binary.stl", (1.0, 1.0, 1.0))
 write_box("rectangular-box-2x1x1-binary.stl", (2.0, 1.0, 1.0))
+write_box("thermal-slab-1x4x4-binary.stl", (1.0, 4.0, 4.0))

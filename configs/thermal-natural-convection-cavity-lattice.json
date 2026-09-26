@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "case": { "name": "thermal-natural-convection-cavity-lattice" },
+  "solver": { "lattice": "D3Q27", "collision": "TRT", "storage": "FP32", "turbulence": "none" },
+  "physics": {
+    "gravity": [0, -0.000074074074074074, 0],
+    "thermal": {
+      "reference_temperature": 1.0,
+      "initial_temperature": 1.0,
+      "specific_heat": 1.0,
+      "conductivity": 0.02,
+      "thermal_expansion": 0.1
+    }
+  },
+  "units": { "mode": "lattice" },
+  "domain": { "cells": [32, 32, 4] },
+  "fluid": { "rho": 1.0, "nu": 0.02 },
+  "initial": { "velocity": [0, 0, 0] },
+  "geometry": [],
+  "boundaries": [
+    {
+      "id": "hot",
+      "faces": ["xmin"],
+      "type": "no_slip",
+      "thermal": { "type": "fixed_temperature", "temperature": 1.1 }
+    },
+    {
+      "id": "cold",
+      "faces": ["xmax"],
+      "type": "no_slip",
+      "thermal": { "type": "fixed_temperature", "temperature": 0.9 }
+    },
+    {
+      "id": "adiabatic",
+      "faces": ["ymin", "ymax", "zmin", "zmax"],
+      "type": "no_slip",
+      "thermal": { "type": "adiabatic" }
+    }
+  ],
+  "run": { "steps": 30000, "monitor_every": 1000 },
+  "output": { "vtk_fields": ["T", "u", "rho", "flags"], "vtk_every": 30000, "initial": true }
+}
