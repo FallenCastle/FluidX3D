@@ -133,7 +133,10 @@ Json capabilities() {
                 {"static_contact_angle", "per solid wall in degrees"},
                 {"initial_liquid_regions", {"box", "sphere"}},
                 {"open_boundaries", {"liquid_inlet", "open_outlet"}}}}}},
-            {"geometry", "binary STL solid union"},
+            {"geometry",
+             {{"format", "binary STL"},
+              {"prescribed_motion", {"constant translation", "fixed-axis rotation", "sinusoidal", "trajectory table"}},
+              {"object_ids", true}}},
             {"outputs", {"VTK", "CSV", "JSON"}},
             {"body_force", "constant force density"},
             {"analysis", {"probes", "temporal statistics", "gauge force on solids"}},
@@ -160,7 +163,9 @@ Json solver_description(const Config &c) {
                    {"storage", ddf_storage_name(c.storage)},
                    {"turbulence", c.model.turbulence_name()},
                    {"base_even_relaxation_rate", even_rate}};
-    result["physics"] = {{"thermal", c.model.temperature}, {"free_surface", c.model.free_surface}};
+    result["physics"] = {{"thermal", c.model.temperature},
+                         {"free_surface", c.model.free_surface},
+                         {"dynamic_geometry", c.model.dynamic_geometry}};
     if (c.model.temperature)
         result["thermal_substeps"] = c.model.thermal_substeps;
     if (c.model.subgrid) {
@@ -250,9 +255,13 @@ Config read_config(const fs::path &path) {
             require((*physics)["free_surface"].is_object(), "physics.free_surface must be an object");
             c.model.free_surface = true;
         }
-        require(!(c.model.temperature || c.model.free_surface) || c.storage == DdfStorage::Float32,
-                "Thermal and free-surface physics require solver.storage=FP32");
     }
+    if (j.contains("geometry") && j["geometry"].is_array())
+        c.model.dynamic_geometry = std::any_of(j["geometry"].begin(), j["geometry"].end(),
+                                               [](const Json &g) { return g.is_object() && g.contains("motion"); });
+    require(!(c.model.temperature || c.model.free_surface || c.model.dynamic_geometry) ||
+                c.storage == DdfStorage::Float32,
+            "Thermal, free-surface, and dynamic-geometry features require solver.storage=FP32");
     const auto &u = field(j, "units");
     keys(u, {"mode", "reference_density", "dt", "reference_velocity", "lattice_velocity"}, "units");
     auto mode = string_value(field(u, "mode"), "units.mode");
@@ -524,7 +533,7 @@ Config read_config(const fs::path &path) {
     require(gs.is_array(), "geometry must be an array");
     std::set<std::string> ids;
     for (const auto &g : gs) {
-        keys(g, {"id", "file", "transform", "material", "contact_angle"}, "geometry");
+        keys(g, {"id", "file", "transform", "material", "contact_angle", "motion"}, "geometry");
         Geometry geo;
         geo.id = string_value(field(g, "id"), "geometry.id");
         require(!geo.id.empty() && ids.insert(geo.id).second, "Empty/duplicate geometry ID");
@@ -567,6 +576,136 @@ Config read_config(const fs::path &path) {
             geo.pivot = t.contains("pivot") ? vec(t["pivot"], "transform.pivot") : Vec{};
             geo.translation = vec(field(t, "translation"), "transform.translation");
         }
+        if (g.contains("motion")) {
+            const auto &motion = g["motion"];
+            keys(motion, {"pivot", "translation", "rotation", "trajectory", "trajectory_axis"},
+                 "geometry.motion");
+            geo.motion.enabled = true;
+            auto lattice_time = [&](const Json &value, const std::string &at, bool allow_zero = true) {
+                const double raw = allow_zero ? number(value, at) : positive(value, at);
+                require(raw >= 0, at + " must be nonnegative");
+                return c.si ? raw / c.dt : raw;
+            };
+            auto normalize_axis = [&](Vec axis, const std::string &at) {
+                const double length = std::hypot(axis[0], std::hypot(axis[1], axis[2]));
+                require(std::isfinite(length) && length > 0, at + " must be nonzero");
+                for (double &component : axis)
+                    component /= length;
+                return axis;
+            };
+            auto displacement = [&](const Json &value, const std::string &at) {
+                Vec result = vec(value, at);
+                if (c.si)
+                    for (double &component : result)
+                        component /= c.dx;
+                return result;
+            };
+            if (motion.contains("pivot")) {
+                const Vec world = vec(motion["pivot"], "geometry.motion.pivot");
+                for (int a = 0; a < 3; a++)
+                    geo.motion.pivot[a] = (world[a] - c.origin[a]) / c.dx - 0.5;
+                geo.motion.has_pivot = true;
+            }
+            if (motion.contains("translation")) {
+                const auto &translation = motion["translation"];
+                keys(translation, {"type", "velocity", "amplitude", "period", "phase_degrees", "start_time",
+                                   "stop_time"},
+                     "geometry.motion.translation");
+                auto &law = geo.motion.translation;
+                law.type = string_value(field(translation, "type"), "geometry.motion.translation.type");
+                require(law.type == "constant_velocity" || law.type == "sinusoidal",
+                        "translation.type must be constant_velocity or sinusoidal");
+                law.start = translation.contains("start_time")
+                                ? lattice_time(translation["start_time"], "translation.start_time")
+                                : 0.0;
+                law.stop = translation.contains("stop_time")
+                               ? lattice_time(translation["stop_time"], "translation.stop_time")
+                               : -1.0;
+                require(law.stop < 0 || law.stop > law.start, "translation.stop_time must exceed start_time");
+                if (law.type == "constant_velocity") {
+                    require(translation.contains("velocity") && !translation.contains("amplitude") &&
+                                !translation.contains("period") && !translation.contains("phase_degrees"),
+                            "constant_velocity translation requires only velocity and optional start/stop times");
+                    law.velocity = velocity(translation["velocity"], "geometry.motion.translation.velocity");
+                } else {
+                    require(translation.contains("amplitude") && translation.contains("period") &&
+                                !translation.contains("velocity"),
+                            "sinusoidal translation requires amplitude and period");
+                    law.amplitude = displacement(translation["amplitude"], "geometry.motion.translation.amplitude");
+                    law.period = lattice_time(translation["period"], "translation.period", false);
+                    law.phase_degrees = translation.contains("phase_degrees")
+                                            ? number(translation["phase_degrees"], "translation.phase_degrees")
+                                            : 0.0;
+                }
+            }
+            if (motion.contains("rotation")) {
+                const auto &rotation = motion["rotation"];
+                keys(rotation, {"type", "axis", "angular_velocity_degrees", "amplitude_degrees", "period",
+                                "phase_degrees", "start_time", "stop_time"},
+                     "geometry.motion.rotation");
+                auto &law = geo.motion.rotation;
+                law.type = string_value(field(rotation, "type"), "geometry.motion.rotation.type");
+                require(law.type == "constant_angular_velocity" || law.type == "sinusoidal",
+                        "rotation.type must be constant_angular_velocity or sinusoidal");
+                law.axis = normalize_axis(vec(field(rotation, "axis"), "geometry.motion.rotation.axis"),
+                                          "geometry.motion.rotation.axis");
+                law.start = rotation.contains("start_time")
+                                ? lattice_time(rotation["start_time"], "rotation.start_time")
+                                : 0.0;
+                law.stop = rotation.contains("stop_time")
+                               ? lattice_time(rotation["stop_time"], "rotation.stop_time")
+                               : -1.0;
+                require(law.stop < 0 || law.stop > law.start, "rotation.stop_time must exceed start_time");
+                if (law.type == "constant_angular_velocity") {
+                    require(rotation.contains("angular_velocity_degrees") &&
+                                !rotation.contains("amplitude_degrees") && !rotation.contains("period") &&
+                                !rotation.contains("phase_degrees"),
+                            "constant_angular_velocity rotation requires only angular_velocity_degrees and axis");
+                    law.angular_velocity_degrees =
+                        number(rotation["angular_velocity_degrees"], "rotation.angular_velocity_degrees") *
+                        (c.si ? c.dt : 1.0);
+                } else {
+                    require(rotation.contains("amplitude_degrees") && rotation.contains("period") &&
+                                !rotation.contains("angular_velocity_degrees"),
+                            "sinusoidal rotation requires amplitude_degrees, period, and axis");
+                    law.amplitude_degrees = number(rotation["amplitude_degrees"], "rotation.amplitude_degrees");
+                    law.period = lattice_time(rotation["period"], "rotation.period", false);
+                    law.phase_degrees = rotation.contains("phase_degrees")
+                                            ? number(rotation["phase_degrees"], "rotation.phase_degrees")
+                                            : 0.0;
+                }
+            }
+            if (motion.contains("trajectory")) {
+                require(!motion.contains("translation") && !motion.contains("rotation"),
+                        "trajectory cannot be combined with translation/rotation laws");
+                const auto &trajectory = motion["trajectory"];
+                require(trajectory.is_array() && trajectory.size() >= 2,
+                        "geometry.motion.trajectory requires at least two keyframes");
+                if (motion.contains("trajectory_axis"))
+                    geo.motion.trajectory_axis = normalize_axis(
+                        vec(motion["trajectory_axis"], "geometry.motion.trajectory_axis"),
+                        "geometry.motion.trajectory_axis");
+                for (const auto &keyframe : trajectory) {
+                    keys(keyframe, {"time", "translation", "degrees"}, "motion trajectory keyframe");
+                    MotionKeyframe frame;
+                    frame.time = lattice_time(field(keyframe, "time"), "trajectory.time");
+                    frame.translation = displacement(field(keyframe, "translation"), "trajectory.translation");
+                    frame.degrees = number(field(keyframe, "degrees"), "trajectory.degrees");
+                    require(geo.motion.trajectory.empty() || frame.time > geo.motion.trajectory.back().time,
+                            "trajectory times must be strictly increasing");
+                    geo.motion.trajectory.push_back(frame);
+                }
+                require(geo.motion.trajectory.front().time == 0.0,
+                        "trajectory first keyframe time must be zero");
+            } else
+                require(!motion.contains("trajectory_axis"),
+                        "geometry.motion.trajectory_axis requires trajectory");
+            require(!geo.motion.translation.type.empty() || !geo.motion.rotation.type.empty() ||
+                        !geo.motion.trajectory.empty(),
+                    "geometry.motion requires translation, rotation, or trajectory");
+        }
+        require(c.geometry.size() < 254, "At most 254 STL objects are supported");
+        geo.object_index = static_cast<int>(c.geometry.size()) + 1;
         require(fs::is_regular_file(geo.file), "STL not found: " + geo.file.u8string());
         c.geometry.push_back(geo);
     }
@@ -723,6 +862,7 @@ Config read_config(const fs::path &path) {
                 auto name = string_value(item, "vtk_fields");
                 require(name == "u" || name == "rho" || name == "flags" || name == "p" ||
                             (name == "T" && c.model.temperature) || (name == "material" && c.model.temperature) ||
+                            (name == "object" && c.model.dynamic_geometry) ||
                             (name == "phi" && c.model.free_surface),
                         "Unknown or unavailable output field");
                 require(unique.insert(name).second, "Duplicate output field");

@@ -78,6 +78,7 @@ public:
 	Memory<float> rho; // density of every cell
 	Memory<float> u; // velocity of every cell
 	Memory<uchar> flags; // flags of every cell
+	Memory<uchar> object_id; // prescribed STL object ownership, allocated for dynamic geometry
 #ifdef FORCE_FIELD
 	Memory<float> F; // individual force for every cell
 	Memory<float> object_sum; // sum of individual cell data for an object
@@ -167,7 +168,7 @@ public:
 	void set_fz(const float fz) { this->fz = fz; } // set global froce per volume
 	void set_f(const float fx, const float fy, const float fz) { set_fx(fx); set_fy(fy); set_fz(fz); } // set global froce per volume
 
-	void voxelize_mesh_on_device(const Mesh* mesh, const uchar flag=TYPE_S, const float3& rotation_center=float3(0.0f), const float3& linear_velocity=float3(0.0f), const float3& rotational_velocity=float3(0.0f)); // voxelize mesh
+	void voxelize_mesh_on_device(const Mesh* mesh, const uchar flag=TYPE_S, const float3& rotation_center=float3(0.0f), const float3& linear_velocity=float3(0.0f), const float3& rotational_velocity=float3(0.0f), const uchar object=0u); // voxelize mesh
 	void enqueue_unvoxelize_mesh_on_device(const Mesh* mesh, const uchar flag=TYPE_S); // remove voxelized triangle mesh from LBM grid
 
 #ifdef GRAPHICS
@@ -564,7 +565,7 @@ public:
 	}
 	void write_status(const string& path=""); // write LBM status report to a .txt file
 
-	void voxelize_mesh_on_device(const Mesh* mesh, const uchar flag=TYPE_S, const float3& rotation_center=float3(0.0f), const float3& linear_velocity=float3(0.0f), const float3& rotational_velocity=float3(0.0f)); // voxelize mesh
+	void voxelize_mesh_on_device(const Mesh* mesh, const uchar flag=TYPE_S, const float3& rotation_center=float3(0.0f), const float3& linear_velocity=float3(0.0f), const float3& rotational_velocity=float3(0.0f), const uchar object=0u); // voxelize mesh
 	void unvoxelize_mesh_on_device(const Mesh* mesh, const uchar flag=TYPE_S); // remove voxelized triangle mesh from LBM grid
 	void write_mesh_to_vtk(const Mesh* mesh, const string& path="", const bool convert_to_si_units=true) const; // write mesh to binary .vtk file
 	void voxelize_stl(const string& path, const float3& center, const float3x3& rotation, const float size=0.0f, const uchar flag=TYPE_S); // read and voxelize binary .stl file

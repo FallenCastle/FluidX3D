@@ -9,6 +9,7 @@ struct SolverOptions {
     bool subgrid = true;
     bool free_surface = false;
     bool temperature = false;
+    bool dynamic_geometry = false;
     std::array<double, 3> gravity{0.0, 0.0, 0.0};
     double reference_temperature = 1.0;
     double ambient_density = 1.0;

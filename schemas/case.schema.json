@@ -444,6 +444,76 @@
             "exclusiveMinimum": 0,
             "exclusiveMaximum": 180
           },
+          "motion": {
+            "type": "object",
+            "properties": {
+              "pivot": {
+                "type": "array",
+                "items": { "type": "number" },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "trajectory_axis": {
+                "type": "array",
+                "items": { "type": "number" },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "translation": {
+                "type": "object",
+                "properties": {
+                  "type": { "enum": ["constant_velocity", "sinusoidal"] },
+                  "velocity": {
+                    "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3
+                  },
+                  "amplitude": {
+                    "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3
+                  },
+                  "period": { "type": "number", "exclusiveMinimum": 0 },
+                  "phase_degrees": { "type": "number" },
+                  "start_time": { "type": "number", "minimum": 0 },
+                  "stop_time": { "type": "number", "exclusiveMinimum": 0 }
+                },
+                "required": ["type"],
+                "additionalProperties": false
+              },
+              "rotation": {
+                "type": "object",
+                "properties": {
+                  "type": { "enum": ["constant_angular_velocity", "sinusoidal"] },
+                  "axis": {
+                    "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3
+                  },
+                  "angular_velocity_degrees": { "type": "number" },
+                  "amplitude_degrees": { "type": "number" },
+                  "period": { "type": "number", "exclusiveMinimum": 0 },
+                  "phase_degrees": { "type": "number" },
+                  "start_time": { "type": "number", "minimum": 0 },
+                  "stop_time": { "type": "number", "exclusiveMinimum": 0 }
+                },
+                "required": ["type", "axis"],
+                "additionalProperties": false
+              },
+              "trajectory": {
+                "type": "array",
+                "minItems": 2,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "time": { "type": "number", "minimum": 0 },
+                    "translation": {
+                      "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3
+                    },
+                    "degrees": { "type": "number" }
+                  },
+                  "required": ["time", "translation", "degrees"],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "minProperties": 1,
+            "additionalProperties": false
+          },
           "transform": {
             "type": "object",
             "properties": {
@@ -795,6 +865,7 @@
               "rho",
               "flags",
               "material",
+              "object",
               "p",
               "T",
               "phi"

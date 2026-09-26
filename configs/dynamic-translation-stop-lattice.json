@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "case": { "name": "dynamic-translation-stop-lattice" },
+  "solver": {
+    "lattice": "D3Q19",
+    "collision": "SRT",
+    "storage": "FP32",
+    "turbulence": "none"
+  },
+  "units": { "mode": "lattice" },
+  "domain": { "cells": [32, 20, 20] },
+  "fluid": { "rho": 1.0, "nu": 0.08 },
+  "initial": { "velocity": [0, 0, 0] },
+  "geometry": [
+    {
+      "id": "moving-cube",
+      "file": "assets/unit-cube-binary.stl",
+      "transform": {
+        "mode": "fit",
+        "size": 5.0,
+        "center": [12.0, 10.0, 10.0]
+      },
+      "motion": {
+        "translation": {
+          "type": "constant_velocity",
+          "velocity": [0.03, 0, 0],
+          "stop_time": 40
+        }
+      }
+    }
+  ],
+  "boundaries": [
+    {
+      "id": "walls",
+      "faces": ["xmin", "xmax", "ymin", "ymax", "zmin", "zmax"],
+      "type": "no_slip"
+    }
+  ],
+  "run": { "steps": 60, "monitor_every": 10 },
+  "output": {
+    "vtk_fields": ["object", "flags", "u", "rho"],
+    "vtk_every": 10,
+    "initial": true
+  }
+}

@@ -16,6 +16,7 @@ uint bytes_per_cell_host(const SolverOptions& model) { // returns the number of 
 #ifdef TEMPERATURE
 	if(model.temperature) bytes_per_cell += 26u; // T, material properties and thermal boundary data
 #endif // TEMPERATURE
+	if(model.dynamic_geometry) bytes_per_cell += 1u; // object_id
 	return bytes_per_cell;
 }
 uint bytes_per_cell_device(const DdfStorage storage, const SolverOptions& model) { // returns the number of Bytes per cell allocated in device memory
@@ -27,6 +28,7 @@ uint bytes_per_cell_device(const DdfStorage storage, const SolverOptions& model)
 #ifdef SURFACE
 	if(model.free_surface) bytes_per_cell += 16u; // phi, mass, massex, contact_angle
 #endif // SURFACE
+	if(model.dynamic_geometry) bytes_per_cell += 1u; // object_id
 #ifdef TEMPERATURE
 	if(model.temperature) bytes_per_cell += 30u; // T buffers, material properties and thermal boundary data
 #endif // TEMPERATURE
@@ -109,6 +111,7 @@ void LBM_Domain::allocate(Device& device) {
 	rho = Memory<float>(device, N, 1u, true, true, 1.0f);
 	u = Memory<float>(device, N, 3u);
 	flags = Memory<uchar>(device, N);
+	if(model.dynamic_geometry) object_id = Memory<uchar>(device, N);
 	kernel_initialize = Kernel(device, N, "initialize", fi, rho, u, flags);
 	kernel_stream_collide = Kernel(device, N, "stream_collide", fi, rho, u, flags, t, fx, fy, fz);
 	kernel_update_fields = Kernel(device, N, "update_fields", fi, rho, u, flags, t, fx, fy, fz);
@@ -287,7 +290,7 @@ uint LBM_Domain::get_velocity_set() const {
 	return velocity_set;
 }
 
-void LBM_Domain::voxelize_mesh_on_device(const Mesh* mesh, const uchar flag, const float3& rotation_center, const float3& linear_velocity, const float3& rotational_velocity) { // voxelize triangle mesh
+void LBM_Domain::voxelize_mesh_on_device(const Mesh* mesh, const uchar flag, const float3& rotation_center, const float3& linear_velocity, const float3& rotational_velocity, const uchar object) { // voxelize triangle mesh
 	Memory<float3> p0(device, mesh->triangle_number, 1u, mesh->p0);
 	Memory<float3> p1(device, mesh->triangle_number, 1u, mesh->p1);
 	Memory<float3> p2(device, mesh->triangle_number, 1u, mesh->p2);
@@ -330,7 +333,9 @@ void LBM_Domain::voxelize_mesh_on_device(const Mesh* mesh, const uchar flag, con
 		}
 	}
 	const ulong A[3] = { (ulong)Ny*(ulong)Nz, (ulong)Nz*(ulong)Nx, (ulong)Nx*(ulong)Ny };
-	Kernel kernel_voxelize_mesh(device, A[direction], "voxelize_mesh", direction, fi, u, flags, t+1ull, flag, p0, p1, p2, bounding_box_and_velocity);
+	Kernel kernel_voxelize_mesh(device, A[direction], "voxelize_mesh", direction, fi, u, flags, t+1ull, flag);
+	if(model.dynamic_geometry) kernel_voxelize_mesh.add_parameters(object, object_id);
+	kernel_voxelize_mesh.add_parameters(p0, p1, p2, bounding_box_and_velocity);
 #ifdef SURFACE
 	if(model.free_surface) kernel_voxelize_mesh.add_parameters(mass, massex);
 #endif // SURFACE
@@ -454,6 +459,8 @@ string LBM_Domain::device_defines(const Device_Info& device_info) const { return
 		"\n\t#define def_gx "+to_string(static_cast<float>(model.gravity[0]))+"f"+
 		"\n\t#define def_gy "+to_string(static_cast<float>(model.gravity[1]))+"f"+
 		"\n\t#define def_gz "+to_string(static_cast<float>(model.gravity[2]))+"f" : string(""))
+
++(model.dynamic_geometry ? string("\n\t#define DYNAMIC_GEOMETRY") : string(""))
 
 +(model.subgrid ? string("\n\t#define SUBGRID") : string(""))+ ""
 
@@ -888,6 +895,7 @@ void LBM::initialize() { // write all data fields to device and call kernel_init
 	for(uint d=0u; d<get_D(); d++) lbm_domain[d]->rho.enqueue_write_to_device();
 	for(uint d=0u; d<get_D(); d++) lbm_domain[d]->u.enqueue_write_to_device();
 	for(uint d=0u; d<get_D(); d++) lbm_domain[d]->flags.enqueue_write_to_device();
+	if(model.dynamic_geometry) for(uint d=0u; d<get_D(); d++) lbm_domain[d]->object_id.enqueue_write_to_device();
 #ifdef FORCE_FIELD
 	for(uint d=0u; d<get_D(); d++) lbm_domain[d]->F.enqueue_write_to_device();
 	communicate_F();
@@ -1090,20 +1098,21 @@ void LBM::write_status(const string& path) { // write LBM status report to a .tx
 	write_file(filename, status);
 }
 
-void LBM::voxelize_mesh_on_device(const Mesh* mesh, const uchar flag, const float3& rotation_center, const float3& linear_velocity, const float3& rotational_velocity) { // voxelize triangle mesh
+void LBM::voxelize_mesh_on_device(const Mesh* mesh, const uchar flag, const float3& rotation_center, const float3& linear_velocity, const float3& rotational_velocity, const uchar object) { // voxelize mesh
 	if(get_D()==1u) {
-		lbm_domain[0]->voxelize_mesh_on_device(mesh, flag, rotation_center, linear_velocity, rotational_velocity); // if this crashes on Windows, create a TdrDelay 32-bit DWORD with decimal value 300 in Computer\HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\GraphicsDrivers
+		lbm_domain[0]->voxelize_mesh_on_device(mesh, flag, rotation_center, linear_velocity, rotational_velocity, object); // if this crashes on Windows, create a TdrDelay 32-bit DWORD with decimal value 300 in Computer\HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\GraphicsDrivers
 	} else {
 		parallel_for(get_D(), get_D(), [&](uint d) {
-			lbm_domain[d]->voxelize_mesh_on_device(mesh, flag, rotation_center, linear_velocity, rotational_velocity);
+			lbm_domain[d]->voxelize_mesh_on_device(mesh, flag, rotation_center, linear_velocity, rotational_velocity, object);
 		});
 	}
 #ifdef MOVING_BOUNDARIES
-	if((flag&(TYPE_S|TYPE_E))==TYPE_S&&(length(linear_velocity)>0.0f||length(rotational_velocity)>0.0f)) update_moving_boundaries();
+	if((flag&(TYPE_S|TYPE_E))==TYPE_S&&(length(linear_velocity)>0.0f||length(rotational_velocity)>0.0f||(model.dynamic_geometry&&object!=0u))) update_moving_boundaries();
 #endif // MOVING_BOUNDARIES
 	if(!initialized) {
 		flags.read_from_device();
 		u.read_from_device();
+		if(model.dynamic_geometry) object_id.read_from_device();
 	}
 }
 void LBM::unvoxelize_mesh_on_device(const Mesh* mesh, const uchar flag) { // remove voxelized triangle mesh from LBM grid by removing all flags in mesh bounding box (only required when bounding box size changes during re-voxelization)

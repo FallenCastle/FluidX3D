@@ -162,6 +162,341 @@ static std::unique_ptr<Mesh> mesh(const Config &c, const Geometry &g) {
     }
     return m;
 }
+struct MotionState {
+    Vec translation{}, linear_velocity{}, axis{0, 0, 1};
+    double degrees = 0, angular_velocity_radians = 0;
+};
+static double active_elapsed(double time, double start, double stop) {
+    if (time <= start)
+        return 0;
+    return stop < 0 ? time - start : std::min(time, stop) - start;
+}
+static bool active_now(double time, double start, double stop) {
+    return time >= start && (stop < 0 || time < stop);
+}
+static MotionState motion_state(const Geometry &geometry, double time) {
+    MotionState state;
+    const auto &motion = geometry.motion;
+    if (!motion.trajectory.empty()) {
+        const auto &frames = motion.trajectory;
+        state.axis = motion.trajectory_axis;
+        if (time <= frames.front().time) {
+            state.translation = frames.front().translation;
+            state.degrees = frames.front().degrees;
+            if (time == frames.front().time) {
+                const auto &a = frames[0], &b = frames[1];
+                const double duration = b.time - a.time;
+                for (int component = 0; component < 3; component++)
+                    state.linear_velocity[component] =
+                        (b.translation[component] - a.translation[component]) / duration;
+                state.angular_velocity_radians =
+                    (b.degrees - a.degrees) / duration * 0.017453292519943295769;
+            }
+        } else if (time >= frames.back().time) {
+            state.translation = frames.back().translation;
+            state.degrees = frames.back().degrees;
+        } else {
+            auto upper = std::upper_bound(frames.begin(), frames.end(), time,
+                                          [](double t, const MotionKeyframe &frame) { return t < frame.time; });
+            const auto &b = *upper, &a = *(upper - 1);
+            const double duration = b.time - a.time, fraction = (time - a.time) / duration;
+            for (int component = 0; component < 3; component++) {
+                state.translation[component] =
+                    a.translation[component] + fraction * (b.translation[component] - a.translation[component]);
+                state.linear_velocity[component] =
+                    (b.translation[component] - a.translation[component]) / duration;
+            }
+            state.degrees = a.degrees + fraction * (b.degrees - a.degrees);
+            state.angular_velocity_radians = (b.degrees - a.degrees) / duration * 0.017453292519943295769;
+        }
+        return state;
+    }
+    const auto &translation = motion.translation;
+    if (translation.type == "constant_velocity") {
+        const double elapsed = active_elapsed(time, translation.start, translation.stop);
+        for (int component = 0; component < 3; component++) {
+            state.translation[component] = translation.velocity[component] * elapsed;
+            state.linear_velocity[component] =
+                active_now(time, translation.start, translation.stop) ? translation.velocity[component] : 0.0;
+        }
+    } else if (translation.type == "sinusoidal") {
+        const double elapsed = active_elapsed(time, translation.start, translation.stop);
+        const double omega = 6.2831853071795864769 / translation.period;
+        const double phase = translation.phase_degrees * 0.017453292519943295769;
+        for (int component = 0; component < 3; component++) {
+            state.translation[component] =
+                translation.amplitude[component] * (std::sin(omega * elapsed + phase) - std::sin(phase));
+            state.linear_velocity[component] = active_now(time, translation.start, translation.stop)
+                                                   ? translation.amplitude[component] * omega *
+                                                         std::cos(omega * elapsed + phase)
+                                                   : 0.0;
+        }
+    }
+    const auto &rotation = motion.rotation;
+    if (!rotation.type.empty())
+        state.axis = rotation.axis;
+    if (rotation.type == "constant_angular_velocity") {
+        const double elapsed = active_elapsed(time, rotation.start, rotation.stop);
+        state.degrees = rotation.angular_velocity_degrees * elapsed;
+        state.angular_velocity_radians = active_now(time, rotation.start, rotation.stop)
+                                               ? rotation.angular_velocity_degrees * 0.017453292519943295769
+                                               : 0.0;
+    } else if (rotation.type == "sinusoidal") {
+        const double elapsed = active_elapsed(time, rotation.start, rotation.stop);
+        const double omega = 6.2831853071795864769 / rotation.period;
+        const double phase = rotation.phase_degrees * 0.017453292519943295769;
+        state.degrees = rotation.amplitude_degrees * (std::sin(omega * elapsed + phase) - std::sin(phase));
+        state.angular_velocity_radians = active_now(time, rotation.start, rotation.stop)
+                                               ? rotation.amplitude_degrees * omega *
+                                                     std::cos(omega * elapsed + phase) * 0.017453292519943295769
+                                               : 0.0;
+    }
+    return state;
+}
+static std::unique_ptr<Mesh> transform_mesh(const Mesh &base, const Vec &pivot, const MotionState &state) {
+    auto result = std::make_unique<Mesh>(base.triangle_number, f3(pivot));
+    const float3 pivot3 = f3(pivot), shift = f3(state.translation);
+    const float3x3 rotation(f3(state.axis), radians(static_cast<float>(state.degrees)));
+    for (uint triangle = 0; triangle < base.triangle_number; triangle++) {
+        result->p0[triangle] = pivot3 + rotation * (base.p0[triangle] - pivot3) + shift;
+        result->p1[triangle] = pivot3 + rotation * (base.p1[triangle] - pivot3) + shift;
+        result->p2[triangle] = pivot3 + rotation * (base.p2[triangle] - pivot3) + shift;
+    }
+    result->find_bounds();
+    result->center = pivot3 + shift;
+    return result;
+}
+struct DynamicBody {
+    const Geometry *geometry = nullptr;
+    Vec pivot{};
+    std::unique_ptr<Mesh> base, current;
+    MotionState state;
+};
+static std::string quote_csv_field(const std::string &value);
+static float3x3 motion_rotation(const MotionState &state) {
+    return float3x3(f3(state.axis), radians(static_cast<float>(state.degrees)));
+}
+static double sample_object_temperature(const Config &c, const std::vector<float> &temperature,
+                                        const std::vector<uchar> &objects, uchar object, const float3 &position,
+                                        double fallback) {
+    const int x0 = static_cast<int>(std::floor(position.x)), y0 = static_cast<int>(std::floor(position.y)),
+              z0 = static_cast<int>(std::floor(position.z));
+    double weighted = 0, weights = 0;
+    for (int dz = 0; dz <= 1; dz++)
+        for (int dy = 0; dy <= 1; dy++)
+            for (int dx = 0; dx <= 1; dx++) {
+                const int x = x0 + dx, y = y0 + dy, z = z0 + dz;
+                if (x < 0 || y < 0 || z < 0 || x >= static_cast<int>(c.cells[0]) ||
+                    y >= static_cast<int>(c.cells[1]) || z >= static_cast<int>(c.cells[2]))
+                    continue;
+                const ulong n = static_cast<ulong>(x) +
+                                (static_cast<ulong>(y) + static_cast<ulong>(z) * c.cells[1]) * c.cells[0];
+                if (objects[static_cast<size_t>(n)] != object)
+                    continue;
+                const double wx = dx ? position.x - x0 : 1.0 - (position.x - x0);
+                const double wy = dy ? position.y - y0 : 1.0 - (position.y - y0);
+                const double wz = dz ? position.z - z0 : 1.0 - (position.z - z0);
+                const double weight = std::max(0.0, wx * wy * wz);
+                weighted += weight * temperature[static_cast<size_t>(n)];
+                weights += weight;
+            }
+    if (weights > 1e-12)
+        return weighted / weights;
+    int nearest_distance = 100;
+    double nearest = fallback;
+    const int cx = static_cast<int>(std::round(position.x)), cy = static_cast<int>(std::round(position.y)),
+              cz = static_cast<int>(std::round(position.z));
+    for (int dz = -2; dz <= 2; dz++)
+        for (int dy = -2; dy <= 2; dy++)
+            for (int dx = -2; dx <= 2; dx++) {
+                const int x = cx + dx, y = cy + dy, z = cz + dz, distance = dx * dx + dy * dy + dz * dz;
+                if (distance >= nearest_distance || x < 0 || y < 0 || z < 0 ||
+                    x >= static_cast<int>(c.cells[0]) || y >= static_cast<int>(c.cells[1]) ||
+                    z >= static_cast<int>(c.cells[2]))
+                    continue;
+                const ulong n = static_cast<ulong>(x) +
+                                (static_cast<ulong>(y) + static_cast<ulong>(z) * c.cells[1]) * c.cells[0];
+                if (objects[static_cast<size_t>(n)] == object) {
+                    nearest_distance = distance;
+                    nearest = temperature[static_cast<size_t>(n)];
+                }
+            }
+    return nearest;
+}
+static void update_dynamic_geometry(LBM &lbm, Config &c, std::vector<DynamicBody> &bodies, double time) {
+    auto *domain = lbm.lbm_domain[0];
+    domain->object_id.read_from_device();
+    lbm.flags.read_from_device();
+    std::vector<uchar> old_objects(static_cast<size_t>(lbm.get_N()));
+    for (ulong n = 0; n < lbm.get_N(); n++)
+        old_objects[static_cast<size_t>(n)] = domain->object_id[n];
+    std::vector<float> old_temperature;
+    if (c.model.temperature) {
+        domain->T.read_from_device();
+        old_temperature.resize(static_cast<size_t>(lbm.get_N()));
+        for (ulong n = 0; n < lbm.get_N(); n++)
+            old_temperature[static_cast<size_t>(n)] = domain->T[n];
+    }
+    for (auto &body : bodies) {
+        MotionState next_state = motion_state(*body.geometry, time);
+        auto next = transform_mesh(*body.base, body.pivot, next_state);
+        const float3 actual_min = next->pmin, actual_max = next->pmax;
+        require(actual_min.x >= -0.5001f && actual_min.y >= -0.5001f && actual_min.z >= -0.5001f &&
+                    actual_max.x <= c.cells[0] - 0.4999f && actual_max.y <= c.cells[1] - 0.4999f &&
+                    actual_max.z <= c.cells[2] - 0.4999f,
+                "Dynamic STL crosses the domain: " + body.geometry->id + " at step " +
+                    std::to_string(static_cast<unsigned long long>(time)));
+        next->pmin = float3(std::min(body.current->pmin.x, actual_min.x),
+                            std::min(body.current->pmin.y, actual_min.y),
+                            std::min(body.current->pmin.z, actual_min.z));
+        next->pmax = float3(std::max(body.current->pmax.x, actual_max.x),
+                            std::max(body.current->pmax.y, actual_max.y),
+                            std::max(body.current->pmax.z, actual_max.z));
+        const float3 center = f3(body.pivot) + f3(next_state.translation);
+        const float3 linear = f3(next_state.linear_velocity);
+        const float3 angular = f3(next_state.axis) * static_cast<float>(next_state.angular_velocity_radians);
+        double radius = 0;
+        for (int corner = 0; corner < 8; corner++) {
+            const float3 point(corner & 1 ? actual_max.x : actual_min.x,
+                               corner & 2 ? actual_max.y : actual_min.y,
+                               corner & 4 ? actual_max.z : actual_min.z);
+            radius = std::max(radius, static_cast<double>(length(point - center)));
+        }
+        require(length(linear) + length(angular) * radius < 0.57735027f,
+                "Dynamic STL surface velocity reaches the lattice speed of sound: " + body.geometry->id);
+        lbm.voxelize_mesh_on_device(next.get(), TYPE_S, center, linear, angular,
+                                    static_cast<uchar>(body.geometry->object_index));
+        next->pmin = actual_min;
+        next->pmax = actual_max;
+        body.current = std::move(next);
+        body.state = next_state;
+    }
+    domain->object_id.read_from_device();
+    lbm.flags.read_from_device();
+    lbm.u.read_from_device();
+    for (ulong n = 0; n < lbm.get_N(); n++)
+        require(domain->object_id[n] != 255u,
+                "Prescribed STL objects overlap at step " + std::to_string(static_cast<unsigned long long>(time)));
+    if (c.model.free_surface) {
+        for (ulong n = 0; n < lbm.get_N(); n++) {
+            const uchar object = domain->object_id[n];
+            if (object > 0u) {
+                const auto &geometry = c.geometry[static_cast<size_t>(object - 1u)];
+                domain->contact_angle[n] =
+                    static_cast<float>(geometry.contact_angle * 0.017453292519943295769);
+            }
+        }
+        domain->contact_angle.enqueue_write_to_device();
+    }
+    if (c.model.temperature) {
+        for (auto &body : bodies) {
+            const uchar object = static_cast<uchar>(body.geometry->object_index);
+            double fallback = 0, old_energy = 0;
+            ulong old_count = 0;
+            const auto &material = c.thermal_materials[static_cast<size_t>(body.geometry->material_index - 1)];
+            for (ulong n = 0; n < lbm.get_N(); n++)
+                if (old_objects[static_cast<size_t>(n)] == object) {
+                    fallback += old_temperature[static_cast<size_t>(n)];
+                    old_energy += material.capacity_lattice * old_temperature[static_cast<size_t>(n)];
+                    old_count++;
+                }
+            require(old_count > 0, "Dynamic STL lost all thermal cells: " + body.geometry->id);
+            fallback /= static_cast<double>(old_count);
+            const MotionState old_state = motion_state(*body.geometry, time - 1.0);
+            const float3x3 old_rotation = motion_rotation(old_state), new_rotation = motion_rotation(body.state);
+            const float3 pivot = f3(body.pivot), old_shift = f3(old_state.translation),
+                         new_shift = f3(body.state.translation);
+            std::vector<std::pair<ulong, double>> mapped;
+            double mapped_energy = 0;
+            for (ulong n = 0; n < lbm.get_N(); n++)
+                if (domain->object_id[n] == object) {
+                    uint x, y, z;
+                    lbm.coordinates(n, x, y, z);
+                    const float3 current(static_cast<float>(x), static_cast<float>(y), static_cast<float>(z));
+                    const float3 base_position = pivot + (current - pivot - new_shift) * new_rotation;
+                    const float3 old_position = pivot + old_rotation * (base_position - pivot) + old_shift;
+                    const double value = sample_object_temperature(c, old_temperature, old_objects, object,
+                                                                   old_position, fallback);
+                    mapped.push_back({n, value});
+                    mapped_energy += material.capacity_lattice * value;
+                }
+            require(!mapped.empty() && mapped_energy > 0, "Dynamic STL voxelized to zero thermal cells: " + body.geometry->id);
+            const double correction = old_energy / mapped_energy;
+            for (const auto &entry : mapped)
+                domain->T[entry.first] = static_cast<float>(entry.second * correction);
+        }
+        for (ulong n = 0; n < lbm.get_N(); n++) {
+            const uchar old_object = old_objects[static_cast<size_t>(n)], object = domain->object_id[n];
+            if (old_object > 0u && object == 0u) {
+                domain->thermal_capacity[n] = 1.0f;
+                domain->thermal_conductivity[n] = static_cast<float>(c.thermal_diffusivity);
+                domain->thermal_source[n] = 0.0f;
+                domain->material[n] = 0u;
+                domain->T[n] = static_cast<float>(c.initial_temperature);
+            }
+            if (object > 0u) {
+                const auto &geometry = c.geometry[static_cast<size_t>(object - 1u)];
+                const auto &material = c.thermal_materials[static_cast<size_t>(geometry.material_index - 1)];
+                domain->thermal_capacity[n] = static_cast<float>(material.capacity_lattice);
+                domain->thermal_conductivity[n] = static_cast<float>(material.conductivity_lattice);
+                domain->thermal_source[n] = static_cast<float>(material.source_lattice);
+                domain->material[n] = static_cast<uchar>(geometry.material_index);
+            }
+        }
+        domain->T.enqueue_write_to_device();
+        domain->thermal_capacity.enqueue_write_to_device();
+        domain->thermal_conductivity.enqueue_write_to_device();
+        domain->thermal_source.enqueue_write_to_device();
+        domain->material.enqueue_write_to_device();
+    }
+}
+static void write_object_motion(LBM &lbm, const Config &c, const std::vector<DynamicBody> &bodies,
+                                std::ofstream &file) {
+    lbm.lbm_domain[0]->enqueue_config_force_field(static_cast<float>(c.pressure_rho));
+    lbm.F.read_from_device();
+    lbm.lbm_domain[0]->object_id.read_from_device();
+    for (const auto &body : bodies) {
+        const uchar object = static_cast<uchar>(body.geometry->object_index);
+        const Vec center{body.pivot[0] + body.state.translation[0], body.pivot[1] + body.state.translation[1],
+                         body.pivot[2] + body.state.translation[2]};
+        Vec force{}, torque{};
+        ulong cells = 0;
+        for (ulong n = 0; n < lbm.get_N(); n++)
+            if (lbm.lbm_domain[0]->object_id[n] == object) {
+                uint x, y, z;
+                lbm.coordinates(n, x, y, z);
+                const Vec f{lbm.F.x[n], lbm.F.y[n], lbm.F.z[n]};
+                const Vec r{static_cast<double>(x) - center[0], static_cast<double>(y) - center[1],
+                            static_cast<double>(z) - center[2]};
+                for (int a = 0; a < 3; a++)
+                    force[a] += f[a];
+                torque[0] += r[1] * f[2] - r[2] * f[1];
+                torque[1] += r[2] * f[0] - r[0] * f[2];
+                torque[2] += r[0] * f[1] - r[1] * f[0];
+                cells++;
+            }
+        require(cells > 0, "Dynamic object has no occupied cells: " + body.geometry->id);
+        file << std::setprecision(17) << lbm.get_t() << ',' << lbm.get_t() * c.dt << ','
+             << quote_csv_field(body.geometry->id) << ',' << body.geometry->object_index << ',' << cells;
+        for (double value : body.state.translation)
+            file << ',' << value;
+        for (double value : center)
+            file << ',' << value;
+        for (double value : body.state.axis)
+            file << ',' << value;
+        file << ',' << body.state.degrees;
+        for (double value : body.state.linear_velocity)
+            file << ',' << value;
+        file << ',' << body.state.angular_velocity_radians;
+        for (double value : force)
+            file << ',' << value;
+        for (double value : torque)
+            file << ',' << value;
+        file << '\n';
+    }
+    file.flush();
+    require(bool(file), "Object motion output failed");
+}
 static Json inspect_meshes(const Config &c) {
     Json list = Json::array();
     for (const auto &g : c.geometry) {
@@ -181,7 +516,7 @@ static std::string stamp(unsigned long long t) {
 }
 static void vtk(LBM &lbm, const Config &c, const fs::path &output, const std::string &fieldname) {
     unsigned dim = fieldname == "u" ? 3 : 1;
-    bool bytes = fieldname == "flags" || fieldname == "material";
+    bool bytes = fieldname == "flags" || fieldname == "material" || fieldname == "object";
     fs::path filename = output / (fieldname + "-" + stamp(lbm.get_t()) + ".vtk");
     std::ofstream file(filename, std::ios::binary);
     require(bool(file), "Cannot write VTK");
@@ -199,7 +534,8 @@ static void vtk(LBM &lbm, const Config &c, const fs::path &output, const std::st
         for (unsigned a = 0; a < dim; a++) {
             if (bytes)
                 block.push_back(static_cast<char>(fieldname == "flags" ? lbm.flags[n]
-                                                                        : lbm.lbm_domain[0]->material[n]));
+                                                    : fieldname == "material" ? lbm.lbm_domain[0]->material[n]
+                                                                                : lbm.lbm_domain[0]->object_id[n]));
             else {
                 float value = fieldname == "rho"
                                   ? lbm.rho[n] * static_cast<float>(c.reference_density)
@@ -233,6 +569,8 @@ static void sync(LBM &lbm) {
     lbm.rho.read_from_device();
     lbm.u.read_from_device();
     lbm.flags.read_from_device();
+    if (lbm.get_model().dynamic_geometry)
+        lbm.lbm_domain[0]->object_id.read_from_device();
     if (lbm.get_model().free_surface)
         lbm.phi.read_from_device();
     if (lbm.get_model().temperature)
@@ -359,18 +697,35 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
     std::vector<uchar> solid(static_cast<size_t>(lbm.get_N()), 0);
     std::vector<std::vector<ulong>> force_groups(c.forces.size());
     std::vector<int> owner;
-    bool need_owner = (c.model.temperature || c.model.free_surface) && !c.geometry.empty();
+    bool need_owner = (c.model.temperature || c.model.free_surface || c.model.dynamic_geometry) && !c.geometry.empty();
     for (const auto &f : c.forces)
         need_owner = need_owner || f.target.rfind("geometry:", 0) == 0;
     if (need_owner)
         owner.assign(static_cast<size_t>(lbm.get_N()), -1);
     Json geometries = Json::array();
+    std::vector<DynamicBody> dynamic_bodies;
+    std::vector<MotionState> initial_motion(c.geometry.size());
     for (const auto &g : c.geometry) {
         for (ulong n = 0; n < lbm.get_N(); n++)
             lbm.flags[n] = 0;
         lbm.flags.write_to_device();
         auto m = mesh(c, g);
-        lbm.voxelize_mesh_on_device(m.get(), TYPE_S);
+        Mesh *active_mesh = m.get();
+        if (g.motion.enabled) {
+            DynamicBody body;
+            body.geometry = &g;
+            body.pivot = g.motion.has_pivot
+                             ? g.motion.pivot
+                             : Vec{m->get_bounding_box_center().x, m->get_bounding_box_center().y,
+                                   m->get_bounding_box_center().z};
+            body.state = motion_state(g, 0.0);
+            initial_motion[static_cast<size_t>(&g - c.geometry.data())] = body.state;
+            body.base = std::move(m);
+            body.current = transform_mesh(*body.base, body.pivot, body.state);
+            active_mesh = body.current.get();
+            dynamic_bodies.push_back(std::move(body));
+        }
+        lbm.voxelize_mesh_on_device(active_mesh, TYPE_S);
         ulong count = 0;
         for (ulong n = 0; n < lbm.get_N(); n++)
             if (lbm.flags[n] & TYPE_S) {
@@ -381,6 +736,7 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
                     if (o != -1) {
                         require(!c.model.temperature, "Thermal geometries overlap: " + g.id);
                         require(!c.model.free_surface, "Free-surface geometries overlap: " + g.id);
+                        require(!c.model.dynamic_geometry, "Dynamic STL geometries overlap: " + g.id);
                         for (const auto &f : c.forces)
                             require(f.target != "geometry:" + g.id &&
                                         (o < 0 || f.target != "geometry:" + c.geometry[o].id),
@@ -394,6 +750,8 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
         require(count > 0, "STL voxelized to zero solid cells: " + g.id);
         geometries.push_back({{"id", g.id},
                               {"solid_cells", count},
+                              {"object_id", g.object_index},
+                              {"dynamic", g.motion.enabled},
                               {"material", g.material.empty() ? Json(nullptr) : Json(g.material)},
                               {"contact_angle_degrees", c.model.free_surface ? Json(g.contact_angle) : Json(nullptr)}});
     }
@@ -424,9 +782,18 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
                 temperature_override = temperature_override || r.has_temperature;
             }
         lbm.flags[n] = solid[static_cast<size_t>(n)];
+        if (c.model.dynamic_geometry)
+            lbm.lbm_domain[0]->object_id[n] =
+                owner.empty() || owner[static_cast<size_t>(n)] < 0
+                    ? 0u
+                    : static_cast<uchar>(c.geometry[static_cast<size_t>(owner[static_cast<size_t>(n)])].object_index);
         int b = boundary_at(c, x, y, z);
         if (b >= 0) {
             const auto &rule = c.boundaries[b];
+            if (need_owner && owner[static_cast<size_t>(n)] >= 0)
+                require(!c.geometry[static_cast<size_t>(owner[static_cast<size_t>(n)])].motion.enabled,
+                        "Dynamic geometry intersects a domain boundary: " +
+                            c.geometry[static_cast<size_t>(owner[static_cast<size_t>(n)])].id);
             coverage[b]++;
             if (flux_surface_for_boundary[static_cast<size_t>(b)] >= 0) {
                 const unsigned xyz[3]{x, y, z};
@@ -472,7 +839,25 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
             }
         }
         if (lbm.flags[n] & TYPE_S) {
-            if (b < 0 || c.boundaries[b].type != "moving_wall")
+            const int geometry_owner = owner.empty() ? -1 : owner[static_cast<size_t>(n)];
+            const bool moving_geometry = geometry_owner >= 0 && c.geometry[static_cast<size_t>(geometry_owner)].motion.enabled;
+            if (moving_geometry) {
+                const auto &state = initial_motion[static_cast<size_t>(geometry_owner)];
+                const auto &body = *std::find_if(dynamic_bodies.begin(), dynamic_bodies.end(), [&](const DynamicBody &item) {
+                    return item.geometry == &c.geometry[static_cast<size_t>(geometry_owner)];
+                });
+                const Vec center{body.pivot[0] + state.translation[0], body.pivot[1] + state.translation[1],
+                                 body.pivot[2] + state.translation[2]};
+                const Vec radius{static_cast<double>(x) - center[0], static_cast<double>(y) - center[1],
+                                 static_cast<double>(z) - center[2]};
+                const Vec omega{state.axis[0] * state.angular_velocity_radians,
+                                state.axis[1] * state.angular_velocity_radians,
+                                state.axis[2] * state.angular_velocity_radians};
+                velocity = {state.linear_velocity[0] + omega[1] * radius[2] - omega[2] * radius[1],
+                            state.linear_velocity[1] + omega[2] * radius[0] - omega[0] * radius[2],
+                            state.linear_velocity[2] + omega[0] * radius[1] - omega[1] * radius[0]};
+            }
+            if ((b < 0 || c.boundaries[b].type != "moving_wall") && !moving_geometry)
                 velocity = {0, 0, 0};
             solid_count++;
             for (size_t i = 0; i < c.forces.size(); i++) {
@@ -493,7 +878,7 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
                 angle = c.boundaries[b].contact_angle;
             lbm.lbm_domain[0]->contact_angle[n] = static_cast<float>(angle * 0.017453292519943295769);
         }
-        if (c.model.free_surface && !(lbm.flags[n] & TYPE_S)) {
+        if (c.model.free_surface && (!(lbm.flags[n] & TYPE_S) || c.model.dynamic_geometry)) {
             double fill = 0;
             for (const auto &r : c.liquid_regions)
                 if ((r.shape == "box" && p[0] >= r.lower[0] && p[0] <= r.upper[0] && p[1] >= r.lower[1] &&
@@ -582,6 +967,16 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
                      static_cast<float>(c.dt));
     lbm.run(0, c.steps);
     sync(lbm);
+    auto advance_to = [&](ulong target) {
+        if (!c.model.dynamic_geometry) {
+            lbm.run(target - lbm.get_t(), c.steps);
+            return;
+        }
+        while (lbm.get_t() < target) {
+            lbm.run(1, c.steps);
+            update_dynamic_geometry(lbm, c, dynamic_bodies, static_cast<double>(lbm.get_t()));
+        }
+    };
     std::ofstream stats(output / "monitor.csv", std::ios::binary);
     require(bool(stats), "Cannot create monitor.csv");
     stats << "step,time,fluid_cells,mass_lattice,rho_min_lattice,rho_max_lattice,speed_max_lattice";
@@ -599,7 +994,20 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
         flux << '\n';
         flux_file = &flux;
     }
+    std::ofstream object_motion;
+    if (c.model.dynamic_geometry) {
+        object_motion.open(output / "object-motion.csv", std::ios::binary);
+        require(bool(object_motion), "Cannot create object-motion.csv");
+        object_motion
+            << "step,time,geometry_id,object_index,solid_cells,translation_x_lattice,translation_y_lattice,"
+               "translation_z_lattice,pivot_x_lattice,pivot_y_lattice,pivot_z_lattice,axis_x,axis_y,axis_z,"
+               "degrees,linear_velocity_x_lattice,linear_velocity_y_lattice,linear_velocity_z_lattice,"
+               "angular_velocity_radians_per_step,force_x_lattice,force_y_lattice,force_z_lattice,"
+               "torque_x_lattice,torque_y_lattice,torque_z_lattice\n";
+    }
     monitor(lbm, c, stats, flux_surfaces, flux_file);
+    if (c.model.dynamic_geometry)
+        write_object_motion(lbm, c, dynamic_bodies, object_motion);
     Analysis analysis(c, output, std::move(force_groups));
     auto next_sample = c.sample_start;
     if (!prepare && c.analysis && next_sample == 0) {
@@ -620,7 +1028,7 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
             next = std::min(next, next_sample);
         if (c.vtk_every)
             next = std::min(next, next_vtk);
-        lbm.run(next - lbm.get_t(), c.steps);
+        advance_to(next);
         sync(lbm);
         if (c.analysis && next == next_sample) {
             analysis.sample(lbm);
@@ -628,6 +1036,8 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
         }
         if (next == next_monitor || next == c.steps) {
             monitor(lbm, c, stats, flux_surfaces, flux_file);
+            if (c.model.dynamic_geometry)
+                write_object_motion(lbm, c, dynamic_bodies, object_motion);
             next_monitor = next > c.steps - std::min(c.monitor_every, c.steps) ? c.steps : next + c.monitor_every;
         }
         if ((c.vtk_every && next == next_vtk) || next == c.steps) {

@@ -11,6 +11,29 @@ namespace fxconfig {
 using Json = nlohmann::json;
 using Vec = std::array<double, 3>;
 namespace fs = std::filesystem;
+struct MotionTranslation {
+    std::string type;
+    Vec velocity{}, amplitude{};
+    double period = 0, phase_degrees = 0, start = 0, stop = -1;
+};
+struct MotionRotation {
+    std::string type;
+    Vec axis{0, 0, 1};
+    double angular_velocity_degrees = 0, amplitude_degrees = 0, period = 0, phase_degrees = 0, start = 0,
+           stop = -1;
+};
+struct MotionKeyframe {
+    double time = 0, degrees = 0;
+    Vec translation{};
+};
+struct PrescribedMotion {
+    bool enabled = false;
+    Vec pivot{}, trajectory_axis{0, 0, 1};
+    bool has_pivot = false;
+    MotionTranslation translation;
+    MotionRotation rotation;
+    std::vector<MotionKeyframe> trajectory;
+};
 struct Geometry {
     std::string id, material;
     fs::path file;
@@ -18,6 +41,8 @@ struct Geometry {
     double size = 1, factor = 1, degrees = 0, contact_angle = 90;
     Vec center{}, pivot{}, translation{}, axis{1, 0, 0};
     int material_index = 0;
+    int object_index = 0;
+    PrescribedMotion motion;
 };
 struct ThermalMaterial {
     std::string id;
@@ -66,9 +91,13 @@ struct Config {
     DdfStorage storage = DdfStorage::Float16Scaled;
     unsigned device_cell_bytes() const {
         return model.q * ddf_storage_bytes(storage) + 29u + (model.free_surface ? 16u : 0u) +
+               (model.dynamic_geometry ? 1u : 0u) +
                (model.temperature ? 30u : 0u);
     }
-    unsigned host_cell_bytes() const { return 29u + (model.free_surface ? 8u : 0u) + (model.temperature ? 26u : 0u); }
+    unsigned host_cell_bytes() const {
+        return 29u + (model.free_surface ? 8u : 0u) + (model.dynamic_geometry ? 1u : 0u) +
+               (model.temperature ? 26u : 0u);
+    }
     std::array<unsigned, 3> cells{};
     Vec origin{};
     double dx = 1, dt = 1, reference_density = 1, nu = 0, rho = 1;

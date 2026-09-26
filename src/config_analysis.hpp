@@ -131,11 +131,26 @@ class Analysis {
             double scale = c.reference_density * std::pow(c.dx, 4) / (c.dt * c.dt);
             for (size_t i = 0; i < groups.size(); i++) {
                 std::vector<double> f(3, 0);
-                for (ulong n : groups[i]) {
-                    f[0] += lbm.F.x[n];
-                    f[1] += lbm.F.y[n];
-                    f[2] += lbm.F.z[n];
-                }
+                const auto &target = c.forces[i].target;
+                int moving_object = 0;
+                if (c.model.dynamic_geometry && target.rfind("geometry:", 0) == 0)
+                    for (const auto &geometry : c.geometry)
+                        if (geometry.motion.enabled && target == "geometry:" + geometry.id)
+                            moving_object = geometry.object_index;
+                if (c.model.dynamic_geometry && (target == "all_solids" || moving_object > 0)) {
+                    for (ulong n = 0; n < lbm.get_N(); n++)
+                        if ((target == "all_solids" && is_solid(lbm.flags[n])) ||
+                            (moving_object > 0 && lbm.lbm_domain[0]->object_id[n] == moving_object)) {
+                            f[0] += lbm.F.x[n];
+                            f[1] += lbm.F.y[n];
+                            f[2] += lbm.F.z[n];
+                        }
+                } else
+                    for (ulong n : groups[i]) {
+                        f[0] += lbm.F.x[n];
+                        f[1] += lbm.F.y[n];
+                        f[2] += lbm.F.z[n];
+                    }
                 for (auto &x : f)
                     x *= scale;
                 forces << step << ',' << step * c.dt << ',' << csv_string(c.forces[i].id);

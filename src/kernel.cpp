@@ -2342,7 +2342,11 @@ string opencl_c_container() { return R( // ########################## begin of O
 
 
 
-)+R(kernel void voxelize_mesh)+"("+R(const uint direction, global fpxx* fi, global float* u, global uchar* flags, const ulong t, const uchar flag, const global float* p0, const global float* p1, const global float* p2, const global float* bbu // ) { // voxelize triangle mesh
+)+R(kernel void voxelize_mesh)+"("+R(const uint direction, global fpxx* fi, global float* u, global uchar* flags, const ulong t, const uchar flag // ) { // voxelize triangle mesh
+)+"#ifdef DYNAMIC_GEOMETRY"+R(
+	, const uchar object, global uchar* object_id
+)+"#endif"+R( // DYNAMIC_GEOMETRY
+	, const global float* p0, const global float* p1, const global float* p2, const global float* bbu
 )+"#ifdef SURFACE"+R(
 	, global float* mass, global float* massex // argument order is important
 )+"#endif"+R( // SURFACE
@@ -2397,7 +2401,7 @@ string opencl_c_container() { return R( // ########################## begin of O
 	const bool set_u = sq(ux)+sq(uy)+sq(uz)+sq(rx)+sq(ry)+sq(rz)>0.0f;
 	uint intersection = intersections%2u!=intersections_check%2u; // iterate through column, start with 0 regularly, start with 1 if forward and backward intersection count evenness differs (error correction)
 	const uint h0 = direction==0u ? xyz.x : direction==1u ? xyz.y : xyz.z;
-	const uint hmesh = h0+(uint)distances[min(intersections-1u, 63u)]; // clamp (intersections-1u) to prevent array out-of-bounds access
+	const uint hmesh = intersections>0u ? h0+(uint)distances[min(intersections-1u, 63u)] : h0; // no intersections on old-only columns during dynamic re-voxelization
 	for(uint h=h0; h<=hmax; h++) {
 		while(intersection<intersections&&h>h0+(uint)distances[min(intersection, 63u)]) { // clamp intersection to prevent array out-of-bounds access
 			inside = !inside; // passed mesh intersection, so switch inside/outside state
@@ -2406,16 +2410,39 @@ string opencl_c_container() { return R( // ########################## begin of O
 		inside = inside&&(intersection<intersections&&h<hmesh); // point must be outside if there are no more ray-mesh intersections ahead (error correction)
 		const uxx n = index((uint3)(direction==0u?h:xyz.x, direction==1u?h:xyz.y, direction==2u?h:xyz.z));
 		uchar flagsn = flags[n];
+		bool owned_by_object = true;
+)+"#ifdef DYNAMIC_GEOMETRY"+R(
+		const uchar previous_object = object_id[n];
+		owned_by_object = object==0u||previous_object==0u||previous_object==object;
+)+"#endif"+R( // DYNAMIC_GEOMETRY
 		const float3 p = position(coordinates(n))+offset;
 		const float3 u_set = (float3)(ux, uy, uz)+cross((float3)(cx, cy, cz)-p, (float3)(rx, ry, rz));
-		if(inside) { // cell is inside of mesh geometry
+		if(inside&&owned_by_object) { // cell is inside of mesh geometry
 			flagsn = (flagsn&~TYPE_BO)|flag; // set flag
 			if(set_u) store3(u, n, u_set); // set solid velocity
+			else store3(u, n, (float3)(0.0f, 0.0f, 0.0f));
+)+"#ifdef DYNAMIC_GEOMETRY"+R(
+			if(object!=0u) object_id[n] = object;
+		} else if(inside&&!owned_by_object) {
+			object_id[n] = 255u; // overlapping prescribed objects are rejected by the host after voxelization
+)+"#endif"+R( // DYNAMIC_GEOMETRY
 		} else { // cell is outside of mesh geometry
-			if((flagsn&TYPE_BO)==TYPE_S&&(flagsn&TYPE_XY)==(flag&TYPE_XY)) { // cell was previously marked solid
+			bool belongs_to_geometry = (flagsn&TYPE_BO)==TYPE_S&&(flagsn&TYPE_XY)==(flag&TYPE_XY);
+)+"#ifdef DYNAMIC_GEOMETRY"+R(
+			if(object!=0u) belongs_to_geometry = (flagsn&TYPE_BO)==TYPE_S&&previous_object==object;
+)+"#endif"+R( // DYNAMIC_GEOMETRY
+			if(belongs_to_geometry) { // cell was previously marked solid
 				const float3 un = load3(u, n); // load previous velocity
-				if(un.x==u_set.x&&un.y==u_set.y&&un.z==u_set.z) { // velocity matched: cell belonged to the currently voxelized geometry
-					if(set_u) { // reconstruct DDFs when solid cell is converted to fluid
+				bool same_geometry = un.x==u_set.x&&un.y==u_set.y&&un.z==u_set.z;
+)+"#ifdef DYNAMIC_GEOMETRY"+R(
+				if(object!=0u) same_geometry = true;
+)+"#endif"+R( // DYNAMIC_GEOMETRY
+				if(same_geometry) {
+					if(set_u
+)+"#ifdef DYNAMIC_GEOMETRY"+R(
+					   ||object!=0u
+)+"#endif"+R( // DYNAMIC_GEOMETRY
+					) { // reconstruct DDFs when solid cell is converted to fluid
 						uxx j[def_velocity_set]; // neighbor indices
 						neighbors(n, j); // calculate neighbor indices
 						float feq[def_velocity_set]; // f_equilibrium
@@ -2423,6 +2450,9 @@ string opencl_c_container() { return R( // ########################## begin of O
 						store_f(n, feq, fi, j, t); // write to fi
 					}
 					flagsn = (flagsn&TYPE_BO)==TYPE_MS ? flagsn&~TYPE_MS : flagsn&~flag; // clear flag
+)+"#ifdef DYNAMIC_GEOMETRY"+R(
+					if(object!=0u) object_id[n] = 0u;
+)+"#endif"+R( // DYNAMIC_GEOMETRY
 				} // else: don't change cell state
 			}
 		}
