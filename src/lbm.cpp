@@ -373,6 +373,16 @@ void LBM_Domain::read_dynamic_surface_mass(float* values) {
 #endif // SURFACE
 	(void)values;
 }
+void LBM_Domain::write_dynamic_surface_mass(const float* values) {
+#ifdef SURFACE
+	if(model.free_surface&&model.dynamic_geometry) {
+		for(ulong n=0ull; n<get_N(); n++) mass[n] = values[n];
+		mass.write_to_device();
+		return;
+	}
+#endif // SURFACE
+	(void)values;
+}
 void LBM_Domain::reconcile_dynamic_object_mask(uchar* desired_object_id, float* release_density, float* release_velocity, float* release_mass, const uchar object, const float3& rotation_center, const float3& linear_velocity, const float3& rotational_velocity) { // reconcile a prescribed moving object to a host-selected constant-volume mask
 	Memory<uchar> desired(device, get_N(), 1u, desired_object_id);
 	Memory<float> desired_rho(device, get_N(), 1u, release_density);

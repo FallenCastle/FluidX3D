@@ -475,8 +475,10 @@ static void update_dynamic_geometry(LBM &lbm, Config &c, std::vector<DynamicBody
     lbm.u.read_from_device();
     lbm.flags.read_from_device();
     std::vector<float> old_surface_mass(c.model.free_surface ? static_cast<size_t>(lbm.get_N()) : 0u);
-    if (c.model.free_surface)
+    if (c.model.free_surface) {
         domain->settle_dynamic_surface_mass(old_surface_mass.data());
+        lbm.phi.read_from_device();
+    }
     std::vector<uchar> old_objects(static_cast<size_t>(lbm.get_N()));
     for (ulong n = 0; n < lbm.get_N(); n++)
         old_objects[static_cast<size_t>(n)] = domain->object_id[n];
@@ -617,19 +619,53 @@ static void update_dynamic_geometry(LBM &lbm, Config &c, std::vector<DynamicBody
         require(cells == body.target_cells, "Prescribed STL volume reconciliation failed: " + body.geometry->id);
     }
     if (std::isfinite(mass_target)) {
-        double current_mass = 0, minimum_density = std::numeric_limits<double>::infinity();
-        ulong fluid_cells = 0;
-        for (ulong n = 0; n < lbm.get_N(); n++)
-            if (!is_solid(lbm.flags[n])) {
-                current_mass += lbm.rho[n];
-                minimum_density = std::min(minimum_density, static_cast<double>(lbm.rho[n]));
-                fluid_cells++;
+        if (c.model.free_surface) {
+            std::vector<float> current_surface_mass(static_cast<size_t>(lbm.get_N()));
+            domain->read_dynamic_surface_mass(current_surface_mass.data());
+            double current_mass = 0;
+            for (ulong n = 0; n < lbm.get_N(); n++)
+                if (!is_solid(lbm.flags[n]))
+                    current_mass += current_surface_mass[static_cast<size_t>(n)];
+            const double correction = mass_target - current_mass;
+            double capacity = 0;
+            for (ulong n = 0; n < lbm.get_N(); n++)
+                if (!is_solid(lbm.flags[n]) && (lbm.flags[n] & TYPE_I)) {
+                    const double cell_mass = current_surface_mass[static_cast<size_t>(n)];
+                    capacity += correction >= 0 ? std::max(0.0, static_cast<double>(lbm.rho[n]) - cell_mass)
+                                                : std::max(0.0, cell_mass);
+                }
+            require(std::isfinite(correction) && capacity + 1.0e-9 >= std::abs(correction),
+                    "Dynamic free-surface mass correction exceeds interface capacity");
+            if (std::abs(correction) > 1.0e-9) {
+                for (ulong n = 0; n < lbm.get_N(); n++)
+                    if (!is_solid(lbm.flags[n]) && (lbm.flags[n] & TYPE_I)) {
+                        const double cell_mass = current_surface_mass[static_cast<size_t>(n)];
+                        const double available = correction >= 0
+                                                     ? std::max(0.0, static_cast<double>(lbm.rho[n]) - cell_mass)
+                                                     : std::max(0.0, cell_mass);
+                        current_surface_mass[static_cast<size_t>(n)] =
+                            static_cast<float>(cell_mass + correction * available / capacity);
+                        lbm.phi[n] = std::clamp(current_surface_mass[static_cast<size_t>(n)] / lbm.rho[n],
+                                               0.0f, 1.0f);
+                    }
+                domain->write_dynamic_surface_mass(current_surface_mass.data());
+                lbm.phi.write_to_device();
             }
-        require(fluid_cells > 0, "Dynamic mass correction has no fluid cells");
-        const double density_delta = (mass_target - current_mass) / static_cast<double>(fluid_cells);
-        require(std::isfinite(density_delta) && minimum_density + density_delta > 0,
-                "Dynamic mass correction would produce a non-positive density");
-        domain->correct_dynamic_mass(static_cast<float>(density_delta));
+        } else {
+            double current_mass = 0, minimum_density = std::numeric_limits<double>::infinity();
+            ulong fluid_cells = 0;
+            for (ulong n = 0; n < lbm.get_N(); n++)
+                if (!is_solid(lbm.flags[n])) {
+                    current_mass += lbm.rho[n];
+                    minimum_density = std::min(minimum_density, static_cast<double>(lbm.rho[n]));
+                    fluid_cells++;
+                }
+            require(fluid_cells > 0, "Dynamic mass correction has no fluid cells");
+            const double density_delta = (mass_target - current_mass) / static_cast<double>(fluid_cells);
+            require(std::isfinite(density_delta) && minimum_density + density_delta > 0,
+                    "Dynamic mass correction would produce a non-positive density");
+            domain->correct_dynamic_mass(static_cast<float>(density_delta));
+        }
     }
     if (c.model.free_surface) {
         for (ulong n = 0; n < lbm.get_N(); n++) {
@@ -1314,16 +1350,24 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
     lbm.run(0, c.steps);
     sync(lbm);
     double dynamic_mass_target = std::numeric_limits<double>::quiet_NaN();
-    bool closed_single_phase = c.model.dynamic_geometry && !c.model.free_surface;
+    bool closed_dynamic_domain = c.model.dynamic_geometry;
     for (const auto &boundary : c.boundaries)
-        closed_single_phase = closed_single_phase &&
-                              (boundary.type == "no_slip" || boundary.type == "moving_wall" ||
-                               boundary.type == "periodic");
-    if (closed_single_phase) {
+        closed_dynamic_domain = closed_dynamic_domain &&
+                                (boundary.type == "no_slip" || boundary.type == "moving_wall" ||
+                                 boundary.type == "periodic");
+    if (closed_dynamic_domain) {
         dynamic_mass_target = 0;
-        for (ulong n = 0; n < lbm.get_N(); n++)
-            if (!is_solid(lbm.flags[n]))
-                dynamic_mass_target += lbm.rho[n];
+        if (c.model.free_surface) {
+            std::vector<float> initial_surface_mass(static_cast<size_t>(lbm.get_N()));
+            lbm.lbm_domain[0]->settle_dynamic_surface_mass(initial_surface_mass.data());
+            for (ulong n = 0; n < lbm.get_N(); n++)
+                if (!is_solid(lbm.flags[n]))
+                    dynamic_mass_target += initial_surface_mass[static_cast<size_t>(n)];
+        } else {
+            for (ulong n = 0; n < lbm.get_N(); n++)
+                if (!is_solid(lbm.flags[n]))
+                    dynamic_mass_target += lbm.rho[n];
+        }
     }
     auto advance_to = [&](ulong target) {
         if (!c.model.dynamic_geometry) {

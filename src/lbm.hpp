@@ -174,6 +174,7 @@ public:
 	void voxelize_mesh_on_device(const Mesh* mesh, const uchar flag=TYPE_S, const float3& rotation_center=float3(0.0f), const float3& linear_velocity=float3(0.0f), const float3& rotational_velocity=float3(0.0f), const uchar object=0u); // voxelize mesh
 	void settle_dynamic_surface_mass(float* values); // apply pending free-surface excess mass and copy the settled mass to host
 	void read_dynamic_surface_mass(float* values); // copy settled free-surface mass to host for diagnostics
+	void write_dynamic_surface_mass(const float* values); // upload corrected settled mass after closed-domain conservation
 	void reconcile_dynamic_object_mask(uchar* desired_object_id, float* release_density, float* release_velocity, float* release_mass, const uchar object, const float3& rotation_center, const float3& linear_velocity, const float3& rotational_velocity); // reconcile a prescribed moving object to a host-selected constant-volume mask
 	void refresh_dynamic_macroscopic_fields(); // refresh rho/u after prescribed-geometry remapping
 	void correct_dynamic_mass(const float density_delta); // apply a uniform closed-domain density correction while preserving velocity
