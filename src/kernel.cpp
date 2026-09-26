@@ -2434,15 +2434,15 @@ string opencl_c_container() { return R( // ########################## begin of O
 			if(belongs_to_geometry) { // cell was previously marked solid
 				const float3 un = load3(u, n); // load previous velocity
 				bool same_geometry = un.x==u_set.x&&un.y==u_set.y&&un.z==u_set.z;
+				bool reconstruct = set_u;
 )+"#ifdef DYNAMIC_GEOMETRY"+R(
-				if(object!=0u) same_geometry = true;
+				if(object!=0u) {
+					same_geometry = true;
+					reconstruct = true;
+				}
 )+"#endif"+R( // DYNAMIC_GEOMETRY
 				if(same_geometry) {
-					if(set_u
-)+"#ifdef DYNAMIC_GEOMETRY"+R(
-					   ||object!=0u
-)+"#endif"+R( // DYNAMIC_GEOMETRY
-					) { // reconstruct DDFs when solid cell is converted to fluid
+					if(reconstruct) { // reconstruct DDFs when solid cell is converted to fluid
 						uxx j[def_velocity_set]; // neighbor indices
 						neighbors(n, j); // calculate neighbor indices
 						float feq[def_velocity_set]; // f_equilibrium
