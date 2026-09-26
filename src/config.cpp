@@ -947,7 +947,7 @@ Config read_config(const fs::path &path) {
     if (j.contains("analysis")) {
         c.analysis = true;
         const auto &a = j["analysis"];
-        keys(a, {"every", "start_step", "statistics", "probes", "forces"}, "analysis");
+        keys(a, {"every", "start_step", "statistics", "probes", "surface_levels", "forces"}, "analysis");
         if (a.contains("every"))
             c.sample_every = integer(a["every"], "analysis.every");
         if (a.contains("start_step"))
@@ -975,6 +975,29 @@ Config read_config(const fs::path &path) {
                 p.index = p.cell[0] + static_cast<unsigned long long>(c.cells[0]) *
                                           (p.cell[1] + static_cast<unsigned long long>(c.cells[1]) * p.cell[2]);
                 c.probes.push_back(p);
+            }
+        }
+        ids.clear();
+        if (a.contains("surface_levels")) {
+            require(c.model.free_surface, "analysis.surface_levels requires physics.free_surface");
+            require(a["surface_levels"].is_array(), "analysis.surface_levels must be an array");
+            for (const auto &v : a["surface_levels"]) {
+                keys(v, {"id", "position"}, "surface level probe");
+                SurfaceLevelProbe p;
+                p.id = string_value(field(v, "id"), "surface level probe.id");
+                require(!p.id.empty() && ids.insert(p.id).second,
+                        "Empty/duplicate surface level probe ID");
+                const auto &position = field(v, "position");
+                require(position.is_array() && position.size() == 2,
+                        "surface level probe.position requires two coordinates");
+                for (int k = 0; k < 2; k++) {
+                    p.position[k] = number(position[k], "surface level probe.position");
+                    const double q = (p.position[k] - c.origin[k]) / c.dx;
+                    require(q >= 0 && q < c.cells[k], "Surface level probe outside domain: " + p.id);
+                    p.cell[k] = static_cast<unsigned>(std::floor(q));
+                    p.actual[k] = c.origin[k] + (p.cell[k] + 0.5) * c.dx;
+                }
+                c.surface_level_probes.push_back(p);
             }
         }
         ids.clear();
@@ -1068,6 +1091,10 @@ Config read_config(const fs::path &path) {
         c.resolved["analysis"]["probes"] = Json::array();
         for (const auto &p : c.probes)
             c.resolved["analysis"]["probes"].push_back(
+                {{"id", p.id}, {"requested", p.position}, {"actual", p.actual}, {"cell", p.cell}});
+        c.resolved["analysis"]["surface_levels"] = Json::array();
+        for (const auto &p : c.surface_level_probes)
+            c.resolved["analysis"]["surface_levels"].push_back(
                 {{"id", p.id}, {"requested", p.position}, {"actual", p.actual}, {"cell", p.cell}});
     }
     return c;

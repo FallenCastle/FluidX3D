@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "case": { "name": "free-surface-marin-dam-break-si" },
+  "solver": { "lattice": "D3Q27", "collision": "TRT", "storage": "FP32", "turbulence": "smagorinsky" },
+  "physics": {
+    "gravity": [0, 0, -9.81],
+    "free_surface": { "surface_tension": 0.072, "environment_pressure": 0 }
+  },
+  "units": { "mode": "si", "reference_density": 1000, "dt": 0.0005 },
+  "domain": { "length": [3.22, 1.0, 1.0], "dx": 0.02 },
+  "fluid": { "rho": 1000, "nu": 0.000001 },
+  "initial": {
+    "velocity": [0, 0, 0],
+    "liquid_regions": [
+      { "box_min": [1.992, 0.02, 0.02], "box_max": [3.20, 0.98, 0.55] }
+    ]
+  },
+  "geometry": [
+    {
+      "id": "marin-obstacle",
+      "file": "assets/marin-obstacle-161x403x161-binary.stl",
+      "contact_angle": 90,
+      "transform": { "mode": "fit", "size": 0.403, "center": [0.8245, 0.4965, 0.0805] }
+    }
+  ],
+  "boundaries": [
+    {
+      "id": "tank-walls",
+      "faces": ["xmin", "xmax", "ymin", "ymax", "zmin"],
+      "type": "no_slip",
+      "contact_angle": 90
+    },
+    {
+      "id": "open-roof",
+      "faces": ["zmax"],
+      "type": "open_outlet",
+      "rho": 1000,
+      "velocity": [0, 0, 0]
+    }
+  ],
+  "run": { "duration": 3.0, "monitor_every": 200 },
+  "output": { "vtk_fields": ["phi", "u", "rho", "flags"], "vtk_every": 1000, "initial": true },
+  "analysis": {
+    "every": 20,
+    "statistics": false,
+    "surface_levels": [
+      { "id": "H1", "position": [0.496, 0.5] },
+      { "id": "H2", "position": [0.992, 0.5] },
+      { "id": "H3", "position": [1.488, 0.5] },
+      { "id": "H4", "position": [2.638, 0.5] }
+    ]
+  }
+}

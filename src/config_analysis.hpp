@@ -51,7 +51,7 @@ struct Moments {
 class Analysis {
     const Config &c;
     fs::path output;
-    std::ofstream probes, global, forces;
+    std::ofstream probes, surface_levels, global, forces;
     std::vector<std::vector<ulong>> groups;
     std::vector<Moments> probe_moments, force_moments;
     Moments global_moments;
@@ -77,6 +77,12 @@ class Analysis {
         global.open(output / "analysis.csv", std::ios::binary);
         forces.open(output / "forces.csv", std::ios::binary);
         require(bool(probes) && bool(global) && bool(forces), "Cannot create analysis CSV");
+        if (!c.surface_level_probes.empty()) {
+            surface_levels.open(output / "surface-levels.csv", std::ios::binary);
+            require(bool(surface_levels), "Cannot create surface-levels.csv");
+            surface_levels << std::setprecision(17)
+                           << "step,time,id,x,y,liquid_height,top_elevation\n";
+        }
         probes << std::setprecision(17) << "step,time,id,x,y,z,rho,ux,uy,uz,speed,p\n";
         global << std::setprecision(17)
                << "step,time,fluid_cells,mass,rho_mean,ux_mean,uy_mean,uz_mean,speed_mean,p_mean,kinetic_energy\n";
@@ -102,6 +108,21 @@ class Analysis {
             row(probes, v);
             if (c.statistics)
                 probe_moments[i].add(step, v);
+        }
+        for (const auto &p : c.surface_level_probes) {
+            double height = 0, top = c.origin[2];
+            for (unsigned z = 0; z < c.cells[2]; z++) {
+                const ulong n = p.cell[0] + static_cast<ulong>(c.cells[0]) *
+                                                (p.cell[1] + static_cast<ulong>(c.cells[1]) * z);
+                if (is_solid(lbm.flags[n]))
+                    continue;
+                const double fill = std::clamp(static_cast<double>(lbm.phi[n]), 0.0, 1.0);
+                height += fill * c.dx;
+                if (fill > 0.5)
+                    top = std::max(top, c.origin[2] + (z + 1.0) * c.dx);
+            }
+            surface_levels << step << ',' << step * c.dt << ',' << csv_string(p.id) << ',' << p.actual[0]
+                           << ',' << p.actual[1] << ',' << height << ',' << top << '\n';
         }
         std::vector<double> sums(8, 0);
         unsigned long long cells = 0;
@@ -160,9 +181,12 @@ class Analysis {
             }
         }
         probes.flush();
+        if (surface_levels.is_open())
+            surface_levels.flush();
         global.flush();
         forces.flush();
-        require(bool(probes) && bool(global) && bool(forces), "Analysis CSV write failed");
+        require(bool(probes) && (!surface_levels.is_open() || bool(surface_levels)) && bool(global) && bool(forces),
+                "Analysis CSV write failed");
     }
     void finish() {
         if (!c.analysis || !c.statistics)

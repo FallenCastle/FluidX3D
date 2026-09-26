@@ -88,6 +88,11 @@ struct Probe {
     std::array<unsigned, 3> cell{};
     unsigned long long index = 0;
 };
+struct SurfaceLevelProbe {
+    std::string id;
+    std::array<double, 2> position{}, actual{};
+    std::array<unsigned, 2> cell{};
+};
 struct ForceTarget {
     std::string id, target;
 };
@@ -119,6 +124,7 @@ struct Config {
     bool analysis = false, statistics = true;
     unsigned long long sample_every = 100, sample_start = 0;
     std::vector<Probe> probes;
+    std::vector<SurfaceLevelProbe> surface_level_probes;
     std::vector<ForceTarget> forces;
     std::vector<InitialRegion> regions;
     std::vector<LiquidRegion> liquid_regions;
