@@ -108,7 +108,24 @@
             "specific_heat": { "type": "number", "exclusiveMinimum": 0 },
             "conductivity": { "type": "number", "exclusiveMinimum": 0 },
             "thermal_expansion": { "type": "number", "minimum": 0 },
-            "turbulent_prandtl": { "type": "number", "exclusiveMinimum": 0 }
+            "turbulent_prandtl": { "type": "number", "exclusiveMinimum": 0 },
+            "materials": {
+              "type": "array",
+              "maxItems": 254,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": { "type": "string", "minLength": 1 },
+                  "density": { "type": "number", "exclusiveMinimum": 0 },
+                  "specific_heat": { "type": "number", "exclusiveMinimum": 0 },
+                  "conductivity": { "type": "number", "exclusiveMinimum": 0 },
+                  "heat_source": { "type": "number" },
+                  "initial_temperature": { "type": "number", "exclusiveMinimum": 0 }
+                },
+                "required": ["id", "density", "specific_heat", "conductivity"],
+                "additionalProperties": false
+              }
+            }
           },
           "required": ["reference_temperature", "initial_temperature", "specific_heat", "conductivity"],
           "additionalProperties": false
@@ -396,6 +413,10 @@
             "type": "string",
             "minLength": 1
           },
+          "material": {
+            "type": "string",
+            "minLength": 1
+          },
           "transform": {
             "type": "object",
             "properties": {
@@ -594,6 +615,20 @@
             },
             "minItems": 3,
             "maxItems": 3
+          },
+          "thermal": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "enum": ["adiabatic", "fixed_temperature", "heat_flux", "convection"]
+              },
+              "temperature": { "type": "number", "exclusiveMinimum": 0 },
+              "heat_flux": { "type": "number" },
+              "ambient_temperature": { "type": "number", "exclusiveMinimum": 0 },
+              "heat_transfer_coefficient": { "type": "number", "exclusiveMinimum": 0 }
+            },
+            "required": ["type"],
+            "additionalProperties": false
           }
         },
         "required": [
@@ -725,6 +760,7 @@
               "u",
               "rho",
               "flags",
+              "material",
               "p",
               "T",
               "phi"

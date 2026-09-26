@@ -12,6 +12,7 @@ struct SolverOptions {
     std::array<double, 3> gravity{0.0, 0.0, 0.0};
     double reference_temperature = 1.0;
     double ambient_density = 1.0;
+    unsigned thermal_substeps = 4;
     static constexpr double default_cs = 0.17326595533835415;
     double smagorinsky_constant = default_cs;
     double trt_magic_parameter = 0.1875;

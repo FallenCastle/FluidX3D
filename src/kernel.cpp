@@ -1358,9 +1358,6 @@ string opencl_c_container() { return R( // ########################## begin of O
 )+"#ifdef SURFACE"+R(
 	, global float* mass, global float* massex, global float* phi // argument order is important
 )+"#endif"+R( // SURFACE
-)+"#ifdef TEMPERATURE"+R(
-	, global fpxx* gi, const global float* T // argument order is important
-)+"#endif"+R( // TEMPERATURE
 )+") {"+R( // initialize()
 	const uxx n = get_global_id(0); // n = x+(y+z*Ny)*Nx
 	if(n>=(uxx)def_N||is_halo(n)) return; // don't execute initialize() on halo
@@ -1416,15 +1413,6 @@ string opencl_c_container() { return R( // ########################## begin of O
 		flags[n] = flagsn;
 	}
 )+"#endif"+R( // SURFACE
-)+"#ifdef TEMPERATURE"+R(
-	{ // separate block to avoid variable name conflicts
-		float geq[7];
-		calculate_g_eq(T[n], u[n], u[def_N+(ulong)n], u[2ul*def_N+(ulong)n], geq);
-		uxx j7[7]; // neighbors of D3Q7 subset
-		neighbors_temperature(n, j7);
-		store_g(n, geq, gi, j7, 1ul);
-	}
-)+"#endif"+R( // TEMPERATURE
 	store_f(n, feq, fi, j, 1ul); // write to fi
 } // initialize()
 
@@ -1458,7 +1446,7 @@ string opencl_c_container() { return R( // ########################## begin of O
 	, const global float* mass // argument order is important
 )+"#endif"+R( // SURFACE
 )+"#ifdef TEMPERATURE"+R(
-	, global fpxx* gi, global float* T // argument order is important
+	, const global float* T // argument order is important
 )+"#endif"+R( // TEMPERATURE
 )+") {"+R( // stream_collide()
 	const uxx n = get_global_id(0); // n = x+(y+z*Ny)*Nx
@@ -1517,29 +1505,7 @@ string opencl_c_container() { return R( // ########################## begin of O
 
 )+"#ifdef TEMPERATURE"+R(
 	{ // separate block to avoid variable name conflicts
-		uxx j7[7]; // neighbors of D3Q7 subset
-		neighbors_temperature(n, j7);
-		float ghn[7]; // read from gA and stream to gh (D3Q7 subset, periodic boundary conditions)
-		load_g(n, ghn, gi, j7, t); // perform streaming (part 2)
-		float Tn;
-		if(flagsn&TYPE_T) {
-			Tn = T[n]; // apply preset temperature
-		} else {
-			Tn = 0.0f;
-			for(uint i=0u; i<7u; i++) Tn += ghn[i]; // calculate temperature from g
-			Tn += 1.0f; // add 1.0f last to avoid digit extinction effects when summing up gi (perturbation method / DDF-shifting)
-		}
-		float geq[7]; // cache f_equilibrium[n]
-		calculate_g_eq(Tn, uxn, uyn, uzn, geq); // calculate equilibrium DDFs
-		if(flagsn&TYPE_T) {
-			for(uint i=0u; i<7u; i++) ghn[i] = geq[i]; // just write geq to ghn (no collision)
-		} else {
-)+"#ifdef UPDATE_FIELDS"+R(
-			T[n] = Tn; // update temperature field
-)+"#endif"+R( // UPDATE_FIELDS
-			for(uint i=0u; i<7u; i++) ghn[i] = fma(1.0f-def_w_T, ghn[i], def_w_T*geq[i]); // perform collision
-		}
-		store_g(n, ghn, gi, j7, t); // perform streaming (part 1)
+		const float Tn = T[n];
 		fxn -= def_gx*def_beta*(Tn-def_T_avg);
 		fyn -= def_gy*def_beta*(Tn-def_T_avg);
 		fzn -= def_gz*def_beta*(Tn-def_T_avg);
@@ -1795,7 +1761,7 @@ string opencl_c_container() { return R( // ########################## begin of O
 	, const global float* F // argument order is important
 )+"#endif"+R( // FORCE_FIELD
 )+"#ifdef TEMPERATURE"+R(
-	, const global fpxx* gi, global float* T // argument order is important
+	, const global float* T // argument order is important
 )+"#endif"+R( // TEMPERATURE
 )+") {"+R( // update_fields()
 	const uxx n = get_global_id(0); // n = x+(y+z*Ny)*Nx
@@ -1827,22 +1793,10 @@ string opencl_c_container() { return R( // ########################## begin of O
 
 )+"#ifdef TEMPERATURE"+R(
 	{ // separate block to avoid variable name conflicts
-		uxx j7[7]; // neighbors of D3Q7 subset
-		neighbors_temperature(n, j7);
-		float ghn[7]; // read from gA and stream to gh (D3Q7 subset, periodic boundary conditions)
-		load_g(n, ghn, gi, j7, t); // perform streaming (part 2)
-		float Tn;
-		if(flagsn&TYPE_T) {
-			Tn = T[n]; // apply preset temperature
-		} else {
-			Tn = 0.0f;
-			for(uint i=0u; i<7u; i++) Tn += ghn[i]; // calculate temperature from g
-			Tn += 1.0f; // add 1.0f last to avoid digit extinction effects when summing up gi (perturbation method / DDF-shifting)
-			T[n] = Tn; // update temperature field
-		}
-		fxn -= fx*def_beta*(Tn-def_T_avg);
-		fyn -= fy*def_beta*(Tn-def_T_avg);
-		fzn -= fz*def_beta*(Tn-def_T_avg);
+		const float Tn = T[n];
+		fxn -= def_gx*def_beta*(Tn-def_T_avg);
+		fyn -= def_gy*def_beta*(Tn-def_T_avg);
+		fzn -= def_gz*def_beta*(Tn-def_T_avg);
 	}
 )+"#endif"+R( // TEMPERATURE
 
@@ -1866,7 +1820,50 @@ string opencl_c_container() { return R( // ########################## begin of O
 		rho[n] = rhon; // update density field
 		store3(u, n, (float3)(uxn, uyn, uzn)); // update velocity field
 	}
-} // update_fields()
+	} // update_fields()
+
+)+"#ifdef TEMPERATURE"+R(
+)+R(kernel void thermal_step(const global float* T_src, global float* T_dst, const global float* u,
+		const global uchar* flags, const global float* capacity, const global float* conductivity,
+		const global float* source, const global uchar* material, const global uchar* boundary_type,
+		const global float* boundary_value, const global float* boundary_coefficient) {
+	const uxx n = get_global_id(0);
+	if(n>=(uxx)def_N||is_halo(n)) return;
+	const uchar mn = material[n];
+	const uchar fn = flags[n];
+	if(mn==255u||(fn&TYPE_SU)==TYPE_G) { T_dst[n] = T_src[n]; return; }
+	if((fn&TYPE_T)||boundary_type[n]==1u) { T_dst[n] = boundary_value[n]; return; }
+	const float Cn = capacity[n], kn = conductivity[n], Tn = T_src[n];
+	if(!(Cn>0.0f)||!(kn>=0.0f)) { T_dst[n] = Tn; return; }
+	uxx j[7];
+	neighbors_temperature(n, j);
+	float rhs = source[n];
+	const float3 un = mn==0u ? load3(u, n) : (float3)(0.0f);
+	for(uint face=0u; face<6u; face++) {
+		const uxx m = j[face+1u];
+		const uchar mm = material[m], fm = flags[m];
+		if(mm==255u) {
+			const uchar bc = boundary_type[m];
+			if(bc==1u) rhs += 2.0f*kn*(boundary_value[m]-Tn);
+			else if(bc==2u) rhs += boundary_value[m];
+			else if(bc==3u) rhs += boundary_coefficient[m]*(boundary_value[m]-Tn);
+			continue;
+		}
+		if((fm&TYPE_SU)==TYPE_G) continue;
+		const float km = conductivity[m];
+		if(kn>0.0f&&km>0.0f) rhs += (2.0f*kn*km/(kn+km))*(T_src[m]-Tn);
+		if(mn==0u&&mm==0u) {
+			const uint axis = face/2u;
+			const float sign = (face&1u)==0u ? 1.0f : -1.0f;
+			const float um = u[(ulong)axis*def_N+(ulong)m];
+			const float velocity = 0.5f*(un[axis]+um)*sign;
+			const float energy = velocity>=0.0f ? Cn*Tn : capacity[m]*T_src[m];
+			rhs -= velocity*energy;
+		}
+	}
+	T_dst[n] = Tn+def_thermal_dt*rhs/Cn;
+}
+)+"#endif"+R( // TEMPERATURE
 
 )+"#ifdef FORCE_FIELD"+R(
 )+R(kernel void config_force_field(const global fpxx* fi, const global uchar* flags, const ulong t, global float* F, const global float* u, const float reference_rho) {

@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "case": { "name": "thermal-boundaries-lattice" },
+  "solver": { "storage": "FP32", "turbulence": "none" },
+  "physics": {
+    "thermal": {
+      "reference_temperature": 1.0,
+      "initial_temperature": 1.0,
+      "specific_heat": 1.0,
+      "conductivity": 0.05
+    }
+  },
+  "units": { "mode": "lattice" },
+  "domain": { "cells": [20, 8, 8] },
+  "fluid": { "rho": 1.0, "nu": 0.08 },
+  "initial": { "velocity": [0, 0, 0] },
+  "geometry": [],
+  "boundaries": [
+    {
+      "id": "hot",
+      "faces": ["xmin"],
+      "type": "no_slip",
+      "thermal": { "type": "fixed_temperature", "temperature": 1.1 }
+    },
+    {
+      "id": "ambient",
+      "faces": ["xmax"],
+      "type": "no_slip",
+      "thermal": {
+        "type": "convection",
+        "ambient_temperature": 0.9,
+        "heat_transfer_coefficient": 0.05
+      }
+    },
+    {
+      "id": "adiabatic",
+      "faces": ["ymin", "ymax", "zmin", "zmax"],
+      "type": "no_slip",
+      "thermal": { "type": "adiabatic" }
+    }
+  ],
+  "run": { "steps": 40, "monitor_every": 10 },
+  "output": {
+    "vtk_fields": ["T", "material", "flags"],
+    "vtk_every": 40,
+    "initial": true
+  }
+}

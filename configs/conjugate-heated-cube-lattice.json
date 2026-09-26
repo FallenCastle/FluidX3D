@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "case": { "name": "conjugate-heated-cube-lattice" },
+  "solver": {
+    "lattice": "D3Q19",
+    "collision": "TRT",
+    "storage": "FP32",
+    "turbulence": "none"
+  },
+  "physics": {
+    "thermal": {
+      "reference_temperature": 300.0,
+      "initial_temperature": 300.0,
+      "specific_heat": 1000.0,
+      "conductivity": 0.6,
+      "materials": [
+        {
+          "id": "heated-solid",
+          "density": 2.0,
+          "specific_heat": 500.0,
+          "conductivity": 1.2,
+          "heat_source": 0.0006,
+          "initial_temperature": 300.0
+        }
+      ]
+    }
+  },
+  "units": { "mode": "lattice" },
+  "domain": { "cells": [24, 16, 16] },
+  "fluid": { "rho": 1.0, "nu": 0.08 },
+  "initial": { "velocity": [0.02, 0, 0] },
+  "geometry": [
+    {
+      "id": "heater",
+      "file": "assets/unit-cube-binary.stl",
+      "material": "heated-solid",
+      "transform": {
+        "mode": "fit",
+        "size": 6.0,
+        "center": [12.0, 8.0, 8.0]
+      }
+    }
+  ],
+  "boundaries": [
+    {
+      "id": "periodic-x",
+      "faces": ["xmin", "xmax"],
+      "type": "periodic"
+    },
+    {
+      "id": "walls",
+      "faces": ["ymin", "ymax", "zmin", "zmax"],
+      "type": "no_slip",
+      "thermal": { "type": "adiabatic" }
+    }
+  ],
+  "run": { "steps": 40, "monitor_every": 10 },
+  "output": {
+    "vtk_fields": ["T", "material", "u", "rho", "flags"],
+    "vtk_every": 40,
+    "initial": true
+  }
+}

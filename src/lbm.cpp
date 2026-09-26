@@ -14,7 +14,7 @@ uint bytes_per_cell_host(const SolverOptions& model) { // returns the number of 
 	if(model.free_surface) bytes_per_cell += 4u; // phi
 #endif // SURFACE
 #ifdef TEMPERATURE
-	if(model.temperature) bytes_per_cell += 4u; // T
+	if(model.temperature) bytes_per_cell += 26u; // T, material properties and thermal boundary data
 #endif // TEMPERATURE
 	return bytes_per_cell;
 }
@@ -28,7 +28,7 @@ uint bytes_per_cell_device(const DdfStorage storage, const SolverOptions& model)
 	if(model.free_surface) bytes_per_cell += 12u; // phi, mass, massex
 #endif // SURFACE
 #ifdef TEMPERATURE
-	if(model.temperature) bytes_per_cell += 7u*ddf_storage_bytes(storage)+4u; // gi, T
+	if(model.temperature) bytes_per_cell += 30u; // T buffers, material properties and thermal boundary data
 #endif // TEMPERATURE
 	return bytes_per_cell;
 }
@@ -51,7 +51,7 @@ uint bandwidth_bytes_per_cell_device(const DdfStorage storage, const SolverOptio
 	if(model.free_surface) bandwidth_bytes_per_cell += (1u+(2u*velocity_set-1u)*ddf_storage_bytes(storage)+8u+(velocity_set-1u)*4u) + 1u + 1u + (4u+velocity_set+4u+4u+4u); // surface_0 (flags, fi, mass, massex), surface_1 (flags), surface_2 (flags), surface_3 (rho, flags, mass, massex, phi)
 #endif // SURFACE
 #ifdef TEMPERATURE
-	if(model.temperature) bandwidth_bytes_per_cell += 7u*2u*ddf_storage_bytes(storage); // 2*gi
+	if(model.temperature) bandwidth_bytes_per_cell += 88u*model.thermal_substeps; // conservative heat stencil estimate
 #endif // TEMPERATURE
 	return bandwidth_bytes_per_cell;
 }
@@ -146,11 +146,23 @@ void LBM_Domain::allocate(Device& device) {
 
 #ifdef TEMPERATURE
 	if(model.temperature) {
-		gi = Memory<uchar>(device, N, 7u*get_ddf_bytes(), false);
 		T = Memory<float>(device, N, 1u, true, true, static_cast<float>(model.reference_temperature));
-		kernel_initialize.add_parameters(gi, T);
-		kernel_stream_collide.add_parameters(gi, T);
-		kernel_update_fields.add_parameters(gi, T);
+		T_next = Memory<float>(device, N, 1u, false);
+		thermal_capacity = Memory<float>(device, N, 1u, true, true, 1.0f);
+		thermal_conductivity = Memory<float>(device, N, 1u, true, true, alpha);
+		thermal_source = Memory<float>(device, N);
+		material = Memory<uchar>(device, N);
+		thermal_boundary_type = Memory<uchar>(device, N);
+		thermal_boundary_value = Memory<float>(device, N);
+		thermal_boundary_coefficient = Memory<float>(device, N);
+		kernel_stream_collide.add_parameters(T);
+		kernel_update_fields.add_parameters(T);
+		kernel_thermal_forward = Kernel(device, N, "thermal_step", T, T_next, u, flags, thermal_capacity,
+			thermal_conductivity, thermal_source, material, thermal_boundary_type, thermal_boundary_value,
+			thermal_boundary_coefficient);
+		kernel_thermal_reverse = Kernel(device, N, "thermal_step", T_next, T, u, flags, thermal_capacity,
+			thermal_conductivity, thermal_source, material, thermal_boundary_type, thermal_boundary_value,
+			thermal_boundary_coefficient);
 	}
 #endif // TEMPERATURE
 
@@ -172,12 +184,11 @@ void LBM_Domain::enqueue_stream_collide() { // call kernel_stream_collide to per
 	kernel_stream_collide.set_parameters(4u, t, fx, fy, fz).enqueue_run();
 }
 void LBM_Domain::enqueue_update_fields() { // update fields (rho, u, T) manually
-#ifndef UPDATE_FIELDS
+	if(model.free_surface||model.temperature) return; // these profiles update fields in stream_collide()
 	if(t!=t_last_update_fields) { // only run kernel_update_fields if the time step has changed since last update
 		kernel_update_fields.set_parameters(4u, t, fx, fy, fz).enqueue_run();
 		t_last_update_fields = t;
 	}
-#endif // UPDATE_FIELDS
 }
 #ifdef SURFACE
 void LBM_Domain::enqueue_surface_0() {
@@ -193,6 +204,14 @@ void LBM_Domain::enqueue_surface_3() {
 	kernel_surface_3.enqueue_run();
 }
 #endif // SURFACE
+#ifdef TEMPERATURE
+void LBM_Domain::enqueue_thermal() {
+	for(uint substep=0u; substep<model.thermal_substeps; substep+=2u) {
+		kernel_thermal_forward.enqueue_run();
+		kernel_thermal_reverse.enqueue_run();
+	}
+}
+#endif // TEMPERATURE
 #ifdef FORCE_FIELD
 void LBM_Domain::enqueue_config_force_field(const float reference_rho) {
     kernel_config_force_field.set_parameters(2u, t);
@@ -404,7 +423,7 @@ string LBM_Domain::device_defines(const Device_Info& device_info) const { return
 ))+
 
 
-		(model.free_surface ? string("\n\t#define UPDATE_FIELDS") : string(""))+
+		(model.free_surface||model.temperature ? string("\n\t#define UPDATE_FIELDS") : string(""))+
 
 #ifdef VOLUME_FORCE
 	"\n	#define VOLUME_FORCE"
@@ -427,7 +446,7 @@ string LBM_Domain::device_defines(const Device_Info& device_info) const { return
 		"\n\t#define def_rho_air "+to_string(static_cast<float>(model.ambient_density))+"f" : string("")) // rho_laplace = 2*o*K, rho = rho_air-rho_laplace/c^2
 
 	+(model.temperature ? string("\n\t#define TEMPERATURE")+
-		"\n\t#define def_w_T "+to_string(1.0f/(2.0f*alpha+0.5f))+"f"+
+		"\n\t#define def_thermal_dt "+to_string(1.0f/static_cast<float>(model.thermal_substeps))+"f"+
 		"\n\t#define def_beta "+to_string(beta)+"f"+
 		"\n\t#define def_T_avg "+to_string(static_cast<float>(model.reference_temperature))+"f"+
 		"\n\t#define def_gx "+to_string(static_cast<float>(model.gravity[0]))+"f"+
@@ -705,6 +724,8 @@ LBM::LBM(const uint Nx, const uint Ny, const uint Nz, const uint Dx, const uint 
 	#endif
 	    if((model.free_surface || model.temperature) && storage!=DdfStorage::Float32)
 	        print_error("Runtime free-surface and temperature profiles require FP32 storage");
+	    if(model.temperature&&(model.thermal_substeps<2u||(model.thermal_substeps&1u)))
+	        print_error("Runtime thermal profile requires a positive even thermal_substeps value");
 
 	const uint NDx=(Nx/Dx)*Dx, NDy=(Ny/Dy)*Dy, NDz=(Nz/Dz)*Dz; // make resolution equally divisible by domains
 	if(NDx!=Nx||NDy!=Ny||NDz!=Nz) print_warning("LBM grid ("+to_string(Nx)+"x"+to_string(Ny)+"x"+to_string(Nz)+") is not equally divisible in domains ("+to_string(Dx)+"x"+to_string(Dy)+"x"+to_string(Dz)+"). Changing resolution to ("+to_string(NDx)+"x"+to_string(NDy)+"x"+to_string(NDz)+").");
@@ -873,7 +894,16 @@ void LBM::initialize() { // write all data fields to device and call kernel_init
 	if(model.free_surface) for(uint d=0u; d<get_D(); d++) lbm_domain[d]->phi.enqueue_write_to_device();
 #endif // SURFACE
 #ifdef TEMPERATURE
-	if(model.temperature) for(uint d=0u; d<get_D(); d++) lbm_domain[d]->T.enqueue_write_to_device();
+	if(model.temperature) for(uint d=0u; d<get_D(); d++) {
+		lbm_domain[d]->T.enqueue_write_to_device();
+		lbm_domain[d]->thermal_capacity.enqueue_write_to_device();
+		lbm_domain[d]->thermal_conductivity.enqueue_write_to_device();
+		lbm_domain[d]->thermal_source.enqueue_write_to_device();
+		lbm_domain[d]->material.enqueue_write_to_device();
+		lbm_domain[d]->thermal_boundary_type.enqueue_write_to_device();
+		lbm_domain[d]->thermal_boundary_value.enqueue_write_to_device();
+		lbm_domain[d]->thermal_boundary_coefficient.enqueue_write_to_device();
+	}
 #endif // TEMPERATURE
 #ifdef PARTICLES
 	for(uint d=0u; d<get_D(); d++) lbm_domain[d]->particles.enqueue_write_to_device();
@@ -894,7 +924,6 @@ void LBM::initialize() { // write all data fields to device and call kernel_init
 #ifdef TEMPERATURE
 	if(model.temperature) {
 		communicate_T(); // T halo data is required for field_slice rendering
-		communicate_gi(); // time step must be odd here
 	}
 #endif // TEMPERATURE
 	for(uint d=0u; d<get_D(); d++) lbm_domain[d]->finish_queue();
@@ -922,10 +951,10 @@ void LBM::do_time_step() { // call kernel_stream_collide to perform one LBM time
 #endif // SURFACE
 	communicate_fi();
 #ifdef TEMPERATURE
-#ifdef GRAPHICS
-	if(model.temperature) communicate_T(); // T halo data is required for field_slice rendering
-#endif // GRAPHICS
-	if(model.temperature) communicate_gi();
+	if(model.temperature) {
+		for(uint d=0u; d<get_D(); d++) lbm_domain[d]->enqueue_thermal();
+		communicate_T();
+	}
 #endif // TEMPERATURE
 #ifdef PARTICLES
 	for(uint d=0u; d<get_D(); d++) lbm_domain[d]->enqueue_integrate_particles(); // intgegrate particles forward in time and couple particles to fluid
@@ -1314,8 +1343,6 @@ void LBM_Domain::allocate_transfer(Device& device) { // allocate all memory for 
 	kernel_transfer[enum_transfer_field::phi_massex_flags][1] = Kernel(device, 0ull, "transfer__insert_phi_massex_flags", 0u, t, transfer_buffer_p, transfer_buffer_m, phi, massex, flags);
 #endif // SURFACE
 #ifdef TEMPERATURE
-	kernel_transfer[enum_transfer_field::gi              ][0] = Kernel(device, 0ull, "transfer_extract_gi"              , 0u, t, transfer_buffer_p, transfer_buffer_m, gi);
-	kernel_transfer[enum_transfer_field::gi              ][1] = Kernel(device, 0ull, "transfer__insert_gi"              , 0u, t, transfer_buffer_p, transfer_buffer_m, gi);
 	kernel_transfer[enum_transfer_field::T               ][0] = Kernel(device, 0ull, "transfer_extract_T"               , 0u, t, transfer_buffer_p, transfer_buffer_m, T);
 	kernel_transfer[enum_transfer_field::T               ][1] = Kernel(device, 0ull, "transfer__insert_T"               , 0u, t, transfer_buffer_p, transfer_buffer_m, T);
 #endif // TEMPERATURE
@@ -1387,9 +1414,6 @@ void LBM::communicate_phi_massex_flags() {
 }
 #endif // SURFACE
 #ifdef TEMPERATURE
-void LBM::communicate_gi() {
-	communicate_field(enum_transfer_field::gi, get_ddf_bytes());
-}
 void LBM::communicate_T() {
 	communicate_field(enum_transfer_field::T, 4u);
 }

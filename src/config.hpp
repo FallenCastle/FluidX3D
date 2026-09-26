@@ -12,11 +12,17 @@ using Json = nlohmann::json;
 using Vec = std::array<double, 3>;
 namespace fs = std::filesystem;
 struct Geometry {
-    std::string id;
+    std::string id, material;
     fs::path file;
     std::string mode;
     double size = 1, factor = 1, degrees = 0;
     Vec center{}, pivot{}, translation{}, axis{1, 0, 0};
+    int material_index = 0;
+};
+struct ThermalMaterial {
+    std::string id;
+    double density = 0, specific_heat = 0, conductivity = 0, heat_source = 0, initial_temperature = 1;
+    double capacity_lattice = 1, conductivity_lattice = 0, source_lattice = 0;
 };
 struct Boundary {
     std::string id, type;
@@ -26,6 +32,9 @@ struct Boundary {
     std::array<double, 2> lower{}, upper{};
     double rho = 1;
     Vec velocity{};
+    bool thermal = false;
+    std::string thermal_type = "adiabatic";
+    double thermal_value = 0, thermal_coefficient = 0;
 };
 struct InitialRegion {
     Vec lower{}, upper{}, velocity{};
@@ -55,9 +64,9 @@ struct Config {
     DdfStorage storage = DdfStorage::Float16Scaled;
     unsigned device_cell_bytes() const {
         return model.q * ddf_storage_bytes(storage) + 29u + (model.free_surface ? 12u : 0u) +
-               (model.temperature ? 7u * ddf_storage_bytes(storage) + 4u : 0u);
+               (model.temperature ? 30u : 0u);
     }
-    unsigned host_cell_bytes() const { return 29u + (model.free_surface ? 4u : 0u) + (model.temperature ? 4u : 0u); }
+    unsigned host_cell_bytes() const { return 29u + (model.free_surface ? 4u : 0u) + (model.temperature ? 26u : 0u); }
     std::array<unsigned, 3> cells{};
     Vec origin{};
     double dx = 1, dt = 1, reference_density = 1, nu = 0, rho = 1;
@@ -73,6 +82,7 @@ struct Config {
     std::vector<ForceTarget> forces;
     std::vector<InitialRegion> regions;
     std::vector<LiquidRegion> liquid_regions;
+    std::vector<ThermalMaterial> thermal_materials;
     std::vector<Geometry> geometry;
     std::vector<Boundary> boundaries;
     std::array<bool, 3> periodic{};

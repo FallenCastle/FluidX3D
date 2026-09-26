@@ -180,7 +180,7 @@ static std::string stamp(unsigned long long t) {
 }
 static void vtk(LBM &lbm, const Config &c, const fs::path &output, const std::string &fieldname) {
     unsigned dim = fieldname == "u" ? 3 : 1;
-    bool flags = fieldname == "flags";
+    bool bytes = fieldname == "flags" || fieldname == "material";
     fs::path filename = output / (fieldname + "-" + stamp(lbm.get_t()) + ".vtk");
     std::ofstream file(filename, std::ios::binary);
     require(bool(file), "Cannot write VTK");
@@ -191,13 +191,14 @@ static void vtk(LBM &lbm, const Config &c, const fs::path &output, const std::st
          << c.cells[0] << ' ' << c.cells[1] << ' ' << c.cells[2] << "\nORIGIN " << c.origin[0] + .5 * c.dx << ' '
          << c.origin[1] + .5 * c.dx << ' ' << c.origin[2] + .5 * c.dx << "\nSPACING " << c.dx << ' ' << c.dx << ' '
          << c.dx << "\nPOINT_DATA " << lbm.get_N() << "\nSCALARS " << fieldname << ' '
-         << (flags ? "unsigned_char" : "float") << ' ' << dim << "\nLOOKUP_TABLE default\n";
+         << (bytes ? "unsigned_char" : "float") << ' ' << dim << "\nLOOKUP_TABLE default\n";
     std::vector<char> block;
     block.reserve(65536);
     for (ulong n = 0; n < lbm.get_N(); n++)
         for (unsigned a = 0; a < dim; a++) {
-            if (flags)
-                block.push_back(static_cast<char>(lbm.flags[n]));
+            if (bytes)
+                block.push_back(static_cast<char>(fieldname == "flags" ? lbm.flags[n]
+                                                                        : lbm.lbm_domain[0]->material[n]));
             else {
                 float value = fieldname == "rho"
                                   ? lbm.rho[n] * static_cast<float>(c.reference_density)
@@ -238,6 +239,7 @@ static void sync(LBM &lbm) {
 }
 static void monitor(LBM &lbm, const Config &c, std::ofstream &file) {
     double mass = 0, umax = 0, rmin = std::numeric_limits<double>::infinity(), rmax = 0;
+    double tmin = std::numeric_limits<double>::infinity(), tmax = -std::numeric_limits<double>::infinity(), energy = 0;
     ulong count = 0;
     for (ulong n = 0; n < lbm.get_N(); n++)
         if (!is_solid(lbm.flags[n]) &&
@@ -251,9 +253,25 @@ static void monitor(LBM &lbm, const Config &c, std::ofstream &file) {
             umax = std::max(umax, std::sqrt(x * x + y * y + z * z));
             count++;
         }
+    if (c.model.temperature) {
+        auto *domain = lbm.lbm_domain[0];
+        for (ulong n = 0; n < lbm.get_N(); n++)
+            if (domain->material[n] != 255u && (!c.model.free_surface || (lbm.flags[n] & (TYPE_F | TYPE_I)) ||
+                                                                           domain->material[n] != 0u)) {
+                const double temperature = lbm.T[n];
+                require(std::isfinite(temperature), "Non-finite temperature at step " + std::to_string(lbm.get_t()));
+                tmin = std::min(tmin, temperature);
+                tmax = std::max(tmax, temperature);
+                energy += domain->thermal_capacity[n] * temperature;
+            }
+        require(std::isfinite(tmin) && std::isfinite(tmax), "No active thermal cells remain");
+    }
     require(count > 0, "No fluid cells remain");
     file << std::setprecision(17) << lbm.get_t() << ',' << lbm.get_t() * c.dt << ',' << count << ',' << mass << ','
-         << rmin << ',' << rmax << ',' << umax << '\n';
+         << rmin << ',' << rmax << ',' << umax;
+    if (c.model.temperature)
+        file << ',' << tmin << ',' << tmax << ',' << energy;
+    file << '\n';
     file.flush();
     require(bool(file), "Monitor write failed");
     std::cout << "Step " << lbm.get_t() << "/" << c.steps << "; lattice rho=[" << rmin << "," << rmax
@@ -298,7 +316,7 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
     std::vector<uchar> solid(static_cast<size_t>(lbm.get_N()), 0);
     std::vector<std::vector<ulong>> force_groups(c.forces.size());
     std::vector<int> owner;
-    bool need_owner = false;
+    bool need_owner = c.model.temperature && !c.geometry.empty();
     for (const auto &f : c.forces)
         need_owner = need_owner || f.target.rfind("geometry:", 0) == 0;
     if (need_owner)
@@ -318,6 +336,7 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
                     int &o = owner[static_cast<size_t>(n)];
                     int id = static_cast<int>(&g - c.geometry.data());
                     if (o != -1) {
+                        require(!c.model.temperature, "Thermal geometries overlap: " + g.id);
                         for (const auto &f : c.forces)
                             require(f.target != "geometry:" + g.id &&
                                         (o < 0 || f.target != "geometry:" + c.geometry[o].id),
@@ -329,7 +348,7 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
                 count++;
             }
         require(count > 0, "STL voxelized to zero solid cells: " + g.id);
-        geometries.push_back({{"id", g.id}, {"solid_cells", count}});
+        geometries.push_back({{"id", g.id}, {"solid_cells", count}, {"material", g.material.empty() ? Json(nullptr) : Json(g.material)}});
     }
     std::vector<unsigned long long> coverage(c.boundaries.size(), 0);
     ulong solid_count = 0;
@@ -340,6 +359,7 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
         double rho = c.rho;
         Vec velocity = c.velocity;
         double temperature = c.initial_temperature;
+        bool temperature_override = false;
         for (const auto &r : c.regions)
             if (p[0] >= r.lower[0] && p[0] <= r.upper[0] && p[1] >= r.lower[1] && p[1] <= r.upper[1] &&
                 p[2] >= r.lower[2] && p[2] <= r.upper[2]) {
@@ -347,6 +367,7 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
                 velocity = r.velocity;
                 if (r.has_temperature)
                     temperature = r.temperature;
+                temperature_override = temperature_override || r.has_temperature;
             }
         lbm.flags[n] = solid[static_cast<size_t>(n)];
         int b = boundary_at(c, x, y, z);
@@ -398,6 +419,45 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
         lbm.u.z[n] = static_cast<float>(velocity[2]);
         if (c.model.temperature)
             lbm.T[n] = static_cast<float>(temperature);
+        if (c.model.temperature) {
+            auto *domain = lbm.lbm_domain[0];
+            const bool external_solid = b >= 0 &&
+                                        (c.boundaries[b].type == "no_slip" || c.boundaries[b].type == "moving_wall");
+            const int geometry_owner = owner.empty() ? -1 : owner[static_cast<size_t>(n)];
+            if (geometry_owner >= 0) {
+                const auto &geometry = c.geometry[static_cast<size_t>(geometry_owner)];
+                const auto &material = c.thermal_materials[static_cast<size_t>(geometry.material_index - 1)];
+                domain->thermal_capacity[n] = static_cast<float>(material.capacity_lattice);
+                domain->thermal_conductivity[n] = static_cast<float>(material.conductivity_lattice);
+                domain->thermal_source[n] = static_cast<float>(material.source_lattice);
+                domain->material[n] = static_cast<uchar>(geometry.material_index);
+                if (!temperature_override) {
+                    temperature = material.initial_temperature;
+                    lbm.T[n] = static_cast<float>(temperature);
+                }
+            } else {
+                domain->thermal_capacity[n] = 1.0f;
+                domain->thermal_conductivity[n] = static_cast<float>(c.thermal_diffusivity);
+                domain->thermal_source[n] = 0.0f;
+                domain->material[n] = external_solid ? 255u : 0u;
+            }
+            uchar thermal_type = 0u;
+            if (b >= 0 && c.boundaries[b].thermal) {
+                const auto &type = c.boundaries[b].thermal_type;
+                thermal_type = type == "fixed_temperature" ? 1u : type == "heat_flux" ? 2u :
+                               type == "convection" ? 3u : 0u;
+            }
+            domain->thermal_boundary_type[n] = thermal_type;
+            domain->thermal_boundary_value[n] =
+                b >= 0 && c.boundaries[b].thermal ? static_cast<float>(c.boundaries[b].thermal_value)
+                                                  : static_cast<float>(temperature);
+            domain->thermal_boundary_coefficient[n] =
+                b >= 0 && c.boundaries[b].thermal ? static_cast<float>(c.boundaries[b].thermal_coefficient) : 0.0f;
+            if (thermal_type == 1u) {
+                lbm.T[n] = domain->thermal_boundary_value[n];
+                lbm.flags[n] = static_cast<uchar>(lbm.flags[n] | TYPE_T);
+            }
+        }
     }
     c.resolved["geometry"] = geometries;
     c.resolved["solid_cells"] = solid_count;
@@ -422,7 +482,10 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
     sync(lbm);
     std::ofstream stats(output / "monitor.csv", std::ios::binary);
     require(bool(stats), "Cannot create monitor.csv");
-    stats << "step,time,fluid_cells,mass_lattice,rho_min_lattice,rho_max_lattice,speed_max_lattice\n";
+    stats << "step,time,fluid_cells,mass_lattice,rho_min_lattice,rho_max_lattice,speed_max_lattice";
+    if (c.model.temperature)
+        stats << ",temperature_min_lattice,temperature_max_lattice,sensible_energy_lattice";
+    stats << '\n';
     monitor(lbm, c, stats);
     Analysis analysis(c, output, std::move(force_groups));
     auto next_sample = c.sample_start;

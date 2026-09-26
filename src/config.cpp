@@ -125,7 +125,7 @@ Json capabilities() {
             {"units", {"lattice", "si"}},
             {"boundaries", {"no_slip", "moving_wall", "equilibrium", "periodic"}},
             {"physics",
-             {{"thermal", {{"storage", "FP32"}, {"model", "D3Q7 advection-diffusion with Boussinesq coupling"}}},
+             {{"thermal", {{"storage", "FP32"}, {"model", "conservative finite-volume energy transport with Boussinesq coupling"}}},
               {"free_surface", {{"storage", "FP32"}, {"gas", "fixed environment pressure"}}}}},
             {"geometry", "binary STL static union; prescribed motion is staged after M1"},
             {"outputs", {"VTK", "CSV", "JSON"}},
@@ -155,6 +155,8 @@ Json solver_description(const Config &c) {
                    {"turbulence", c.model.turbulence_name()},
                    {"base_even_relaxation_rate", even_rate}};
     result["physics"] = {{"thermal", c.model.temperature}, {"free_surface", c.model.free_surface}};
+    if (c.model.temperature)
+        result["thermal_substeps"] = c.model.thermal_substeps;
     if (c.model.subgrid) {
         result["smagorinsky_constant"] = c.model.smagorinsky_constant;
         result["smagorinsky_coefficient_fp32"] = c.model.smagorinsky_coefficient();
@@ -375,7 +377,7 @@ Config read_config(const fs::path &path) {
         const auto &thermal = (*physics)["thermal"];
         keys(thermal,
              {"reference_temperature", "initial_temperature", "specific_heat", "conductivity", "thermal_expansion",
-              "turbulent_prandtl"},
+              "turbulent_prandtl", "materials"},
              "physics.thermal");
         c.temperature_scale = positive(field(thermal, "reference_temperature"), "physics.thermal.reference_temperature");
         c.initial_temperature =
@@ -397,6 +399,47 @@ Config read_config(const fs::path &path) {
         finite_float(c.initial_temperature, "initial lattice temperature", true);
         finite_float(c.thermal_diffusivity, "lattice thermal diffusivity", true);
         finite_float(c.thermal_expansion, "lattice thermal expansion");
+        if (thermal.contains("materials")) {
+            require(thermal["materials"].is_array(), "physics.thermal.materials must be an array");
+            std::set<std::string> material_ids;
+            const double fluid_capacity = density * c.fluid_specific_heat;
+            for (const auto &item : thermal["materials"]) {
+                keys(item, {"id", "density", "specific_heat", "conductivity", "heat_source", "initial_temperature"},
+                     "thermal material");
+                ThermalMaterial material;
+                material.id = string_value(field(item, "id"), "thermal material.id");
+                require(!material.id.empty() && material_ids.insert(material.id).second,
+                        "Empty/duplicate thermal material ID");
+                material.density = positive(field(item, "density"), "thermal material.density");
+                material.specific_heat = positive(field(item, "specific_heat"), "thermal material.specific_heat");
+                material.conductivity = positive(field(item, "conductivity"), "thermal material.conductivity");
+                material.heat_source = item.contains("heat_source")
+                                           ? number(item["heat_source"], "thermal material.heat_source")
+                                           : 0.0;
+                material.initial_temperature =
+                    (item.contains("initial_temperature")
+                         ? positive(item["initial_temperature"], "thermal material.initial_temperature")
+                         : c.initial_temperature * c.temperature_scale) /
+                    c.temperature_scale;
+                material.capacity_lattice = material.density * material.specific_heat / fluid_capacity;
+                material.conductivity_lattice = c.thermal_diffusivity * material.conductivity / c.fluid_conductivity;
+                material.source_lattice = material.heat_source * c.dt / (fluid_capacity * c.temperature_scale);
+                finite_float(material.capacity_lattice, "thermal material lattice capacity", true);
+                finite_float(material.conductivity_lattice, "thermal material lattice conductivity", true);
+                finite_float(material.source_lattice, "thermal material lattice source");
+                c.thermal_materials.push_back(material);
+            }
+            require(c.thermal_materials.size() <= 254, "At most 254 solid thermal materials are supported");
+        }
+        double max_alpha = c.thermal_diffusivity;
+        for (const auto &material : c.thermal_materials)
+            max_alpha = std::max(max_alpha, material.conductivity_lattice / material.capacity_lattice);
+        unsigned substeps = static_cast<unsigned>(std::ceil(6.0 * max_alpha * 1.001));
+        substeps = std::max(2u, substeps);
+        if (substeps & 1u)
+            substeps++;
+        require(substeps <= 1024u, "Thermal diffusivity contrast requires more than 1024 thermal substeps");
+        c.model.thermal_substeps = substeps;
     }
     c.gravity = physics && physics->contains("gravity") ? vec((*physics)["gravity"], "physics.gravity") : Vec{};
     for (int a = 0; a < 3; a++) {
@@ -467,10 +510,19 @@ Config read_config(const fs::path &path) {
     require(gs.is_array(), "geometry must be an array");
     std::set<std::string> ids;
     for (const auto &g : gs) {
-        keys(g, {"id", "file", "transform"}, "geometry");
+        keys(g, {"id", "file", "transform", "material"}, "geometry");
         Geometry geo;
         geo.id = string_value(field(g, "id"), "geometry.id");
         require(!geo.id.empty() && ids.insert(geo.id).second, "Empty/duplicate geometry ID");
+        if (c.model.temperature) {
+            geo.material = string_value(field(g, "material"), "geometry.material");
+            auto material = std::find_if(c.thermal_materials.begin(), c.thermal_materials.end(),
+                                         [&](const ThermalMaterial &m) { return m.id == geo.material; });
+            require(material != c.thermal_materials.end(), "Unknown geometry thermal material: " + geo.material);
+            geo.material_index = 1 + static_cast<int>(material - c.thermal_materials.begin());
+        } else {
+            require(!g.contains("material"), "geometry.material requires physics.thermal");
+        }
         geo.file = fs::absolute(c.path.parent_path() / fs::u8path(string_value(field(g, "file"), "geometry.file")));
         const auto &t = field(g, "transform");
         keys(t, {"mode", "size", "center", "factor", "pivot", "translation", "axis", "degrees"}, "transform");
@@ -504,7 +556,7 @@ Config read_config(const fs::path &path) {
     const std::array<std::string, 6> names{"xmin", "xmax", "ymin", "ymax", "zmin", "zmax"};
     std::array<int, 6> topology{};
     for (const auto &b : bs) {
-        keys(b, {"id", "faces", "type", "priority", "region", "rho", "velocity"}, "boundary");
+        keys(b, {"id", "faces", "type", "priority", "region", "rho", "velocity", "thermal"}, "boundary");
         Boundary bound;
         bound.id = string_value(field(b, "id"), "boundary.id");
         require(!bound.id.empty() && ids.insert(bound.id).second, "Empty/duplicate boundary ID");
@@ -555,6 +607,43 @@ Config read_config(const fs::path &path) {
                 require(bound.velocity[face / 2] == 0, "moving_wall velocity must be tangential");
         } else
             require(!b.contains("rho") && !b.contains("velocity"), "Only equilibrium/moving_wall accept velocity");
+        if (b.contains("thermal")) {
+            require(c.model.temperature, "boundary.thermal requires physics.thermal");
+            require(bound.type != "periodic", "Periodic boundaries do not accept thermal conditions");
+            const auto &thermal = b["thermal"];
+            keys(thermal, {"type", "temperature", "heat_flux", "ambient_temperature", "heat_transfer_coefficient"},
+                 "boundary.thermal");
+            bound.thermal = true;
+            bound.thermal_type = string_value(field(thermal, "type"), "boundary.thermal.type");
+            const double fluid_capacity = density * c.fluid_specific_heat;
+            if (bound.thermal_type == "adiabatic") {
+                require(thermal.size() == 1, "adiabatic thermal boundary accepts no values");
+            } else if (bound.thermal_type == "fixed_temperature") {
+                require(thermal.size() == 2 && thermal.contains("temperature"),
+                        "fixed_temperature requires only temperature");
+                bound.thermal_value = positive(thermal["temperature"], "boundary.thermal.temperature") /
+                                      c.temperature_scale;
+            } else if (bound.thermal_type == "heat_flux") {
+                require((bound.type == "no_slip" || bound.type == "moving_wall") && thermal.size() == 2 &&
+                            thermal.contains("heat_flux"),
+                        "heat_flux requires only heat_flux on a solid wall");
+                const double flux = number(thermal["heat_flux"], "boundary.thermal.heat_flux");
+                bound.thermal_value = flux * c.dt / (fluid_capacity * c.temperature_scale * c.dx);
+            } else if (bound.thermal_type == "convection") {
+                require((bound.type == "no_slip" || bound.type == "moving_wall") && thermal.size() == 3 &&
+                            thermal.contains("ambient_temperature") && thermal.contains("heat_transfer_coefficient"),
+                        "convection requires ambient_temperature and heat_transfer_coefficient on a solid wall");
+                bound.thermal_value = positive(thermal["ambient_temperature"], "boundary.thermal.ambient_temperature") /
+                                      c.temperature_scale;
+                const double coefficient =
+                    positive(thermal["heat_transfer_coefficient"], "boundary.thermal.heat_transfer_coefficient");
+                bound.thermal_coefficient = coefficient * c.dt / (fluid_capacity * c.dx);
+            } else {
+                require(false, "Unsupported boundary.thermal.type");
+            }
+            finite_float(bound.thermal_value, "lattice thermal boundary value");
+            finite_float(bound.thermal_coefficient, "lattice thermal boundary coefficient");
+        }
         c.boundaries.push_back(bound);
     }
     for (int a = 0; a < 3; a++) {
@@ -597,7 +686,8 @@ Config read_config(const fs::path &path) {
             for (const auto &item : out["vtk_fields"]) {
                 auto name = string_value(item, "vtk_fields");
                 require(name == "u" || name == "rho" || name == "flags" || name == "p" ||
-                            (name == "T" && c.model.temperature) || (name == "phi" && c.model.free_surface),
+                            (name == "T" && c.model.temperature) || (name == "material" && c.model.temperature) ||
+                            (name == "phi" && c.model.free_surface),
                         "Unknown or unavailable output field");
                 require(unique.insert(name).second, "Duplicate output field");
                 c.vtk_fields.push_back(name);
@@ -717,7 +807,17 @@ Config read_config(const fs::path &path) {
                                   {"lattice_diffusivity", c.thermal_diffusivity},
                                   {"lattice_expansion", c.thermal_expansion},
                                   {"lattice_gravity_force_density", c.model.gravity},
-                                  {"turbulent_prandtl", c.turbulent_prandtl}};
+                                  {"turbulent_prandtl", c.turbulent_prandtl},
+                                  {"substeps", c.model.thermal_substeps},
+                                  {"materials", Json::array()}};
+    if (c.model.temperature)
+        for (const auto &material : c.thermal_materials)
+            c.resolved["thermal"]["materials"].push_back(
+                {{"id", material.id},
+                 {"relative_volumetric_heat_capacity", material.capacity_lattice},
+                 {"lattice_conductivity", material.conductivity_lattice},
+                 {"lattice_heat_source", material.source_lattice},
+                 {"initial_lattice_temperature", material.initial_temperature}});
     if (c.analysis) {
         c.resolved["analysis"] = {{"every", c.sample_every},
                                   {"start_step", c.sample_start},

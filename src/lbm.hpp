@@ -63,7 +63,9 @@ private:
 	Memory<float> massex; // excess mass; used for mass conservation
 #endif // SURFACE
 #ifdef TEMPERATURE
-	Memory<uchar> gi; // byte-addressed thermal DDF allocation; runtime profile currently requires FP32
+	Memory<float> T_next; // device-only second buffer for conservative finite-volume heat transport
+	Kernel kernel_thermal_forward;
+	Kernel kernel_thermal_reverse;
 #endif // TEMPERATURE
 #ifdef PARTICLES
 	Kernel kernel_integrate_particles; // intgegrates particles forward in time and couples particles to fluid
@@ -85,6 +87,13 @@ public:
 #endif // SURFACE
 #ifdef TEMPERATURE
 	Memory<float> T; // temperature of every cell
+	Memory<float> thermal_capacity; // volumetric heat capacity relative to the fluid
+	Memory<float> thermal_conductivity; // lattice conductivity relative to the fluid heat-capacity scale
+	Memory<float> thermal_source; // lattice volumetric heat source
+	Memory<uchar> material; // 0 fluid, 1..254 solid material, 255 external thermal boundary
+	Memory<uchar> thermal_boundary_type; // 0 adiabatic, 1 fixed T, 2 heat flux, 3 ambient convection
+	Memory<float> thermal_boundary_value; // prescribed T, inward heat flux, or ambient T
+	Memory<float> thermal_boundary_coefficient; // convection coefficient
 #endif // TEMPERATURE
 #ifdef PARTICLES
 	Memory<float> particles; // particle positions
@@ -108,6 +117,9 @@ public:
 	void enqueue_surface_2();
 	void enqueue_surface_3();
 #endif // SURFACE
+#ifdef TEMPERATURE
+	void enqueue_thermal();
+#endif // TEMPERATURE
 #ifdef FORCE_FIELD
 	void enqueue_config_force_field(const float reference_rho);
 	void enqueue_update_force_field(); // calculate forces from fluid on TYPE_S cells
@@ -241,7 +253,6 @@ private:
 	void communicate_phi_massex_flags();
 #endif // SURFACE
 #ifdef TEMPERATURE
-	void communicate_gi();
 	void communicate_T();
 #endif // TEMPERATURE
 #ifdef PARTICLES
