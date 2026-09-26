@@ -34,6 +34,7 @@
       "id": "open-roof",
       "faces": ["zmax"],
       "type": "open_outlet",
+      "priority": 20,
       "rho": 1000,
       "velocity": [0, 0, 0]
     }
