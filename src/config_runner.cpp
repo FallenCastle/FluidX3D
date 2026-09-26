@@ -489,9 +489,13 @@ static void project_closed_surface_mass(LBM &lbm, const double target, const std
     lbm.flags.read_from_device();
     lbm.phi.read_from_device();
     double current = 0;
-    for (ulong n = 0; n < lbm.get_N(); n++)
-        if (!is_solid(lbm.flags[n]))
+    for (ulong n = 0; n < lbm.get_N(); n++) {
+        const uchar state = lbm.flags[n] & (TYPE_F | TYPE_I | TYPE_G);
+        if (!is_solid(lbm.flags[n]) && (state & (TYPE_F | TYPE_I)))
             current += mass[static_cast<size_t>(n)];
+        else
+            mass[static_cast<size_t>(n)] = 0.0f;
+    }
     const double correction = target - current;
     double capacity = 0;
     for (ulong n = 0; n < lbm.get_N(); n++)
