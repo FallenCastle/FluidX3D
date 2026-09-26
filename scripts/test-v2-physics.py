@@ -75,6 +75,20 @@ def sinusoid_fit(times, values, omega):
     return residual, coefficients
 
 
+def damped_sinusoid_fit(times, values, omega, damping):
+    envelope = [math.exp(-damping * t) for t in times]
+    columns = [
+        [1.0] * len(times),
+        list(times),
+        [value * math.cos(omega * t) for value, t in zip(envelope, times)],
+        [value * math.sin(omega * t) for value, t in zip(envelope, times)],
+    ]
+    coefficients = least_squares(columns, values)
+    residual = sum((value - sum(c * column[i] for c, column in zip(coefficients, columns))) ** 2
+                   for i, value in enumerate(values))
+    return residual, coefficients
+
+
 def relative_l2(actual, expected, reference=None):
     reference = expected if reference is None else reference
     denominator = sum(value * value for value in reference)
@@ -327,22 +341,26 @@ def main():
             check_budget(entry, result, mass=True)
 
         sloshing = read(configs / "free-surface-sloshing-lattice.json")
-        sloshing["run"] = {"steps": 6000, "monitor_every": 10}
-        sloshing["output"] = {"vtk_fields": ["phi"], "vtk_every": 6000, "initial": True}
+        sloshing["run"] = {"steps": 3000, "monitor_every": 10}
+        sloshing["output"] = {"vtk_fields": ["phi"], "vtk_every": 3000, "initial": True}
         result, entry = invoke("small-amplitude-sloshing", sloshing)
         surface = rows(result / "free-surface.csv")
-        samples = [(float(row["time"]), float(row["centroid_x_lattice"])) for row in surface if float(row["time"]) >= 500]
+        samples = [(float(row["time"]), float(row["centroid_x_lattice"])) for row in surface]
         times = [sample[0] for sample in samples]
         values = [sample[1] for sample in samples]
         length, depth, gravity = 62.0, 14.5, 0.0002
         wave = math.pi / length
         expected_omega = math.sqrt(gravity * wave * math.tanh(wave * depth))
-        candidates = [expected_omega * (0.9 + 0.0005 * i) for i in range(401)]
-        measured_omega, fit = min(((omega, sinusoid_fit(times, values, omega)) for omega in candidates),
-                                  key=lambda item: item[1][0])
+        frequencies = [expected_omega * (0.9 + 0.0005 * i) for i in range(401)]
+        dampings = [0.00005 * i for i in range(61)]
+        measured_omega, measured_damping, fit = min(
+            ((omega, damping, damped_sinusoid_fit(times, values, omega, damping))
+             for damping in dampings for omega in frequencies),
+            key=lambda item: item[2][0])
         frequency_error = abs(measured_omega - expected_omega) / expected_omega
         entry.update(expected_angular_frequency=expected_omega, measured_angular_frequency=measured_omega,
-                     relative_error=frequency_error, fitted_coefficients=fit[1])
+                     fitted_damping=measured_damping, relative_error=frequency_error,
+                     fitted_coefficients=fit[1], fit_residual=fit[0])
         assert frequency_error <= report["thresholds"]["sloshing_frequency_relative"], entry
         check_budget(entry, result, mass=True)
 
