@@ -797,7 +797,7 @@ static void update_dynamic_geometry(LBM &lbm, Config &c, std::vector<DynamicBody
             if (active)
                 energy_after_remap +=
                     liquid_fraction * static_cast<double>(domain->thermal_capacity[n]) * domain->T[n];
-            if (active && domain->material[n] == 0u)
+            if (active && domain->material[n] == 0u && !(lbm.flags[n] & TYPE_T))
                 correction_capacity += liquid_fraction * domain->thermal_capacity[n];
         }
         const bool correct_all_active = correction_capacity == 0;
@@ -821,7 +821,8 @@ static void update_dynamic_geometry(LBM &lbm, Config &c, std::vector<DynamicBody
             const bool active = domain->material[n] != 255u &&
                                 (!c.model.free_surface || domain->material[n] > 0u ||
                                  (lbm.flags[n] & (TYPE_F | TYPE_I)));
-            const bool correct = active && (correct_all_active || domain->material[n] == 0u);
+            const bool correct =
+                active && (correct_all_active || (domain->material[n] == 0u && !(lbm.flags[n] & TYPE_T)));
             if (correct) {
                 domain->T[n] = static_cast<float>(domain->T[n] + temperature_correction);
                 require(std::isfinite(domain->T[n]) && domain->T[n] > 0,
