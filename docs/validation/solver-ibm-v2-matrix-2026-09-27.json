@@ -1,0 +1,981 @@
+{
+  "schema_version": 1,
+  "status": "succeeded",
+  "started_at_utc": "2026-09-26T22:13:57.683843+00:00",
+  "build": {
+    "schemaVersion": 1,
+    "status": "succeeded",
+    "buildName": "solver-ibm-v2.0.0",
+    "productName": "Solver-IBM",
+    "productVersion": "2.0.0",
+    "executableName": "Solver-IBM.exe",
+    "gitCommit": "a039a20d32dd4571ebfcd27cd8125c77f7b049f4",
+    "sourceTree": "b3b27571e3578e6237986260b1dcbee8774702da",
+    "repositoryPath": "F:\\01-Project\\Opensource\\01-FluidX3D\\src",
+    "executablePath": "F:\\01-Project\\Opensource\\01-FluidX3D\\bin\\solver-ibm-v2.0.0\\Solver-IBM.exe",
+    "executableSha256": "3ab5c696aa38e5fd919a6b1236e0b330347058a097f99f40b2a606d3d908c4cd",
+    "configuration": "Release",
+    "platform": "x64",
+    "platformToolset": "v142",
+    "buildLog": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\_builds\\20260926T220417827Z-a039a20d32dd\\msbuild.log",
+    "startedAtUtc": "2026-09-26T22:04:17.8342455Z",
+    "completedAtUtc": "2026-09-26T22:04:29.7356593Z",
+    "visualStudio": "17.10.35122.118",
+    "msbuildPath": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\MSBuild\\Current\\Bin\\MSBuild.exe",
+    "msbuildVersion": "17.10.4.21802",
+    "vcTargetsPath": "C:/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Microsoft/VC/v160/",
+    "compilerPath": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.29.30133\\bin\\Hostx64\\x64\\cl.exe",
+    "vcToolsVersion": "14.29.30133",
+    "windowsSdkDirectory": "C:\\Program Files (x86)\\Windows Kits\\10\\",
+    "windowsSdkVersion": "10.0.22621.0",
+    "evaluationLog": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\_builds\\20260926T220417827Z-a039a20d32dd\\evaluation.json",
+    "projectBlob": "1b9a4a59810c8a0538e5b898e0f1cf7750a3a1f2",
+    "definesBlob": "7046175838f19c9c0f02a53fc58622b79e5282dc",
+    "setupBlob": "148cb5a1fa278470fe40dda4654c1df9a2da12e5",
+    "declaredDefineLines": [
+      "#define D3Q19 // choose D3Q19 velocity set for 3D; allocates 93 (FP32) or 55 (FP16) Bytes/cell; (default)",
+      "#define SRT // choose single-relaxation-time LBM collision operator; (default)",
+      "#define FP16S // legacy default; the configuration runner selects DdfStorage per instance. Optional for 2x speedup and 2x VRAM footprint reduction: compress LBM DDFs to range-shifted IEEE-754 FP16; number conversion is done in hardware; all arithmetic is still done in FP32",
+      "#define VOLUME_FORCE // enables global force per volume in one direction (equivalent to a pressure gradient); specified in the LBM class constructor; the force can be changed on-the-fly between time steps at no performance cost",
+      "#define FORCE_FIELD // enables computing the forces on solid boundaries with lbm.update_force_field(); and enables setting the force for each lattice point independently (enable VOLUME_FORCE too); allocates an extra 12 Bytes/cell",
+      "#define EQUILIBRIUM_BOUNDARIES // enables fixing the velocity/density by marking cells with TYPE_E; can be used for inflow/outflow; does not reflect shock waves",
+      "#define MOVING_BOUNDARIES // enables moving solids: set solid cells to TYPE_S and set their velocity u unequal to zero",
+      "#define SURFACE // runtime-selectable free-surface support",
+      "#define TEMPERATURE // runtime-selectable temperature support",
+      "#define SUBGRID // enables Smagorinsky-Lilly subgrid turbulence LES model to keep simulations with very large Reynolds number stable",
+      "#define GRAPHICS_FRAME_WIDTH 1280 // set frame width if only GRAPHICS is enabled",
+      "#define GRAPHICS_FRAME_HEIGHT 720 // set frame height if only GRAPHICS is enabled",
+      "#define GRAPHICS_BACKGROUND_COLOR 0x000000 // set background color; black background (default) = 0x000000, white background = 0xFFFFFF",
+      "#define GRAPHICS_U_MAX 0.18f // maximum velocity for velocity coloring in units of LBM lattice speed of sound (c=1/sqrt(3)) (default: 0.18f)",
+      "#define GRAPHICS_RHO_DELTA 0.001f // coloring range for density rho will be [1.0f-GRAPHICS_RHO_DELTA, 1.0f+GRAPHICS_RHO_DELTA] (default: 0.001f)",
+      "#define GRAPHICS_T_DELTA 1.0f // coloring range for temperature T will be [1.0f-GRAPHICS_T_DELTA, 1.0f+GRAPHICS_T_DELTA] (default: 1.0f)",
+      "#define GRAPHICS_F_MAX 0.001f // maximum force in LBM units for visualization of forces on solid boundaries if VOLUME_FORCE is enabled and lbm.update_force_field(); is called (default: 0.001f)",
+      "#define GRAPHICS_Q_CRITERION 0.0001f // Q-criterion value for Q-criterion isosurface visualization (default: 0.0001f)",
+      "#define GRAPHICS_STREAMLINE_SPARSE 8u // set how many streamlines there are every x lattice points",
+      "#define GRAPHICS_STREAMLINE_LENGTH 128u // set maximum length of streamlines",
+      "#define GRAPHICS_RAYTRACING_TRANSMITTANCE 0.25f // transmitted light fraction in raytracing graphics (\"0.25f\" = 1/4 of light is transmitted and 3/4 is absorbed along longest box side length, \"1.0f\" = no absorption)",
+      "#define GRAPHICS_RAYTRACING_COLOR 0x005F7F // absorption color of fluid in raytracing graphics",
+      "#define GRAPHICS_LSF 4u // local box size for local memory optimization in graphics_flags_mc() kernel, possible values: 0u (disable local memory optimization), 4u (default, ~40% speedup), 8u (~40% speedup)",
+      "#define GRAPHICS_LSQ 8u // local box size for local memory optimization in graphics_q() kernel, possible values: 0u (disable local memory optimization), 4u (no speedup), 8u (default, ~10-90% speedup)",
+      "#define GRAPHICS_LSP 4u // local box size for local memory optimization in graphics_rasterize_phi() kernel, possible values: 0u (disable local memory optimization), 4u (default, ~40% speedup), 8u (~40% speedup)",
+      "#define TYPE_S 0b00000001 // (stationary or moving) solid boundary",
+      "#define TYPE_E 0b00000010 // equilibrium boundary (inflow/outflow)",
+      "#define TYPE_T 0b00000100 // temperature boundary",
+      "#define TYPE_F 0b00001000 // fluid",
+      "#define TYPE_I 0b00010000 // interface",
+      "#define TYPE_G 0b00100000 // gas",
+      "#define TYPE_X 0b01000000 // reserved type X",
+      "#define TYPE_Y 0b10000000 // reserved type Y",
+      "#define VIS_FLAG_LATTICE  0b00000001 // lbm.graphics.visualization_modes = VIS_...|VIS_...|VIS_...;",
+      "#define VIS_FLAG_SURFACE  0b00000010",
+      "#define VIS_FIELD         0b00000100",
+      "#define VIS_STREAMLINES   0b00001000",
+      "#define VIS_Q_CRITERION   0b00010000",
+      "#define VIS_PHI_RASTERIZE 0b00100000",
+      "#define VIS_PHI_RAYTRACE  0b01000000",
+      "#define VIS_PARTICLES     0b10000000",
+      "#define fpxx ushort",
+      "#define fpxx float",
+      "#define UPDATE_FIELDS // update (rho, u, T) in every LBM step",
+      "#define GRAPHICS",
+      "#define UPDATE_FIELDS // to prevent flickering artifacts in interactive graphics"
+    ],
+    "msbuildArguments": [
+      "F:\\01-Project\\Opensource\\01-FluidX3D\\src\\FluidX3D.vcxproj",
+      "/nologo",
+      "/p:Configuration=Release",
+      "/p:Platform=x64",
+      "/p:PreferredToolArchitecture=x64",
+      "/p:PlatformToolset=v142",
+      "/p:VCTargetsPath=C:/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Microsoft/VC/v160/",
+      "/p:SolutionDir=F:/01-Project/Opensource/01-FluidX3D/src/",
+      "/p:OutDir=F:/01-Project/Opensource/01-FluidX3D/bin/solver-ibm-v2.0.0/",
+      "/p:IntDir=F:/01-Project/Opensource/01-FluidX3D/src/temp/solver-ibm-v2.0.0/20260926T220417827Z-a039a20d32dd/",
+      "/p:TargetName=Solver-IBM",
+      "/p:WindowsTargetPlatformVersion=10.0.22621.0",
+      "/t:Rebuild",
+      "/m",
+      "/nodeReuse:false",
+      "/verbosity:minimal"
+    ],
+    "reportedVersion": "Solver-IBM 2.0.0"
+  },
+  "executable_sha256": "3ab5c696aa38e5fd919a6b1236e0b330347058a097f99f40b2a606d3d908c4cd",
+  "device": "0",
+  "matrix": [
+    {
+      "feature": "thermal",
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "storage": "FP32",
+        "turbulence": "none"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.610926500055939,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\thermal-D3Q19-SRT-none\\results"
+    },
+    {
+      "feature": "free-surface",
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "storage": "FP32",
+        "turbulence": "none"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.6064350000815466,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\free-surface-D3Q19-SRT-none\\results"
+    },
+    {
+      "feature": "dynamic-stl",
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "storage": "FP32",
+        "turbulence": "none"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.5899089999729767,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\dynamic-stl-D3Q19-SRT-none\\results"
+    },
+    {
+      "feature": "thermal+free-surface",
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "storage": "FP32",
+        "turbulence": "none"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.6168704000301659,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\thermal_free-surface-D3Q19-SRT-none\\results"
+    },
+    {
+      "feature": "thermal+dynamic-stl",
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "storage": "FP32",
+        "turbulence": "none"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.64546079991851,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\thermal_dynamic-stl-D3Q19-SRT-none\\results"
+    },
+    {
+      "feature": "free-surface+dynamic-stl",
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "storage": "FP32",
+        "turbulence": "none"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.6532748000463471,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\free-surface_dynamic-stl-D3Q19-SRT-none\\results"
+    },
+    {
+      "feature": "thermal+free-surface+dynamic-stl",
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "storage": "FP32",
+        "turbulence": "none"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.6122080000350252,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\thermal_free-surface_dynamic-stl-D3Q19-SRT-none\\results"
+    },
+    {
+      "feature": "thermal",
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "storage": "FP32",
+        "turbulence": "smagorinsky"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.6305097000440583,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\thermal-D3Q19-SRT-smagorinsky\\results"
+    },
+    {
+      "feature": "free-surface",
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "storage": "FP32",
+        "turbulence": "smagorinsky"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.5907986999955028,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\free-surface-D3Q19-SRT-smagorinsky\\results"
+    },
+    {
+      "feature": "dynamic-stl",
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "storage": "FP32",
+        "turbulence": "smagorinsky"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.5973314000293612,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\dynamic-stl-D3Q19-SRT-smagorinsky\\results"
+    },
+    {
+      "feature": "thermal+free-surface",
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "storage": "FP32",
+        "turbulence": "smagorinsky"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.6178604000015184,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\thermal_free-surface-D3Q19-SRT-smagorinsky\\results"
+    },
+    {
+      "feature": "thermal+dynamic-stl",
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "storage": "FP32",
+        "turbulence": "smagorinsky"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.6166736000450328,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\thermal_dynamic-stl-D3Q19-SRT-smagorinsky\\results"
+    },
+    {
+      "feature": "free-surface+dynamic-stl",
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "storage": "FP32",
+        "turbulence": "smagorinsky"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.6188160000601783,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\free-surface_dynamic-stl-D3Q19-SRT-smagorinsky\\results"
+    },
+    {
+      "feature": "thermal+free-surface+dynamic-stl",
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "SRT",
+        "storage": "FP32",
+        "turbulence": "smagorinsky"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.6382218999788165,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\thermal_free-surface_dynamic-stl-D3Q19-SRT-smagorinsky\\results"
+    },
+    {
+      "feature": "thermal",
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "storage": "FP32",
+        "turbulence": "none"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.6110856999875978,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\thermal-D3Q19-TRT-none\\results"
+    },
+    {
+      "feature": "free-surface",
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "storage": "FP32",
+        "turbulence": "none"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.5861220000078902,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\free-surface-D3Q19-TRT-none\\results"
+    },
+    {
+      "feature": "dynamic-stl",
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "storage": "FP32",
+        "turbulence": "none"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.5822130999295041,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\dynamic-stl-D3Q19-TRT-none\\results"
+    },
+    {
+      "feature": "thermal+free-surface",
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "storage": "FP32",
+        "turbulence": "none"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.6333747999742627,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\thermal_free-surface-D3Q19-TRT-none\\results"
+    },
+    {
+      "feature": "thermal+dynamic-stl",
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "storage": "FP32",
+        "turbulence": "none"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.6299240000080317,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\thermal_dynamic-stl-D3Q19-TRT-none\\results"
+    },
+    {
+      "feature": "free-surface+dynamic-stl",
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "storage": "FP32",
+        "turbulence": "none"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.6239257999695837,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\free-surface_dynamic-stl-D3Q19-TRT-none\\results"
+    },
+    {
+      "feature": "thermal+free-surface+dynamic-stl",
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "storage": "FP32",
+        "turbulence": "none"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.6428389999782667,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\thermal_free-surface_dynamic-stl-D3Q19-TRT-none\\results"
+    },
+    {
+      "feature": "thermal",
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "storage": "FP32",
+        "turbulence": "smagorinsky"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.6025269998935983,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\thermal-D3Q19-TRT-smagorinsky\\results"
+    },
+    {
+      "feature": "free-surface",
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "storage": "FP32",
+        "turbulence": "smagorinsky"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.5735690000001341,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\free-surface-D3Q19-TRT-smagorinsky\\results"
+    },
+    {
+      "feature": "dynamic-stl",
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "storage": "FP32",
+        "turbulence": "smagorinsky"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.5933668999932706,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\dynamic-stl-D3Q19-TRT-smagorinsky\\results"
+    },
+    {
+      "feature": "thermal+free-surface",
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "storage": "FP32",
+        "turbulence": "smagorinsky"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.6071600000141189,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\thermal_free-surface-D3Q19-TRT-smagorinsky\\results"
+    },
+    {
+      "feature": "thermal+dynamic-stl",
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "storage": "FP32",
+        "turbulence": "smagorinsky"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.6901879999786615,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\thermal_dynamic-stl-D3Q19-TRT-smagorinsky\\results"
+    },
+    {
+      "feature": "free-surface+dynamic-stl",
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "storage": "FP32",
+        "turbulence": "smagorinsky"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.6210822999710217,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\free-surface_dynamic-stl-D3Q19-TRT-smagorinsky\\results"
+    },
+    {
+      "feature": "thermal+free-surface+dynamic-stl",
+      "solver": {
+        "lattice": "D3Q19",
+        "collision": "TRT",
+        "storage": "FP32",
+        "turbulence": "smagorinsky"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.6237309999996796,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\thermal_free-surface_dynamic-stl-D3Q19-TRT-smagorinsky\\results"
+    },
+    {
+      "feature": "thermal",
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "storage": "FP32",
+        "turbulence": "none"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.6044006000738591,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\thermal-D3Q27-SRT-none\\results"
+    },
+    {
+      "feature": "free-surface",
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "storage": "FP32",
+        "turbulence": "none"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.5867032000096515,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\free-surface-D3Q27-SRT-none\\results"
+    },
+    {
+      "feature": "dynamic-stl",
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "storage": "FP32",
+        "turbulence": "none"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.6170473999809474,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\dynamic-stl-D3Q27-SRT-none\\results"
+    },
+    {
+      "feature": "thermal+free-surface",
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "storage": "FP32",
+        "turbulence": "none"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.6091858999570832,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\thermal_free-surface-D3Q27-SRT-none\\results"
+    },
+    {
+      "feature": "thermal+dynamic-stl",
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "storage": "FP32",
+        "turbulence": "none"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.6299755999352783,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\thermal_dynamic-stl-D3Q27-SRT-none\\results"
+    },
+    {
+      "feature": "free-surface+dynamic-stl",
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "storage": "FP32",
+        "turbulence": "none"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.6360769999446347,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\free-surface_dynamic-stl-D3Q27-SRT-none\\results"
+    },
+    {
+      "feature": "thermal+free-surface+dynamic-stl",
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "storage": "FP32",
+        "turbulence": "none"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.6647495999932289,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\thermal_free-surface_dynamic-stl-D3Q27-SRT-none\\results"
+    },
+    {
+      "feature": "thermal",
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "storage": "FP32",
+        "turbulence": "smagorinsky"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.60390109999571,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\thermal-D3Q27-SRT-smagorinsky\\results"
+    },
+    {
+      "feature": "free-surface",
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "storage": "FP32",
+        "turbulence": "smagorinsky"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.6446644000243396,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\free-surface-D3Q27-SRT-smagorinsky\\results"
+    },
+    {
+      "feature": "dynamic-stl",
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "storage": "FP32",
+        "turbulence": "smagorinsky"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.5996311000781134,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\dynamic-stl-D3Q27-SRT-smagorinsky\\results"
+    },
+    {
+      "feature": "thermal+free-surface",
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "storage": "FP32",
+        "turbulence": "smagorinsky"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.5923602998955175,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\thermal_free-surface-D3Q27-SRT-smagorinsky\\results"
+    },
+    {
+      "feature": "thermal+dynamic-stl",
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "storage": "FP32",
+        "turbulence": "smagorinsky"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.7574506000382826,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\thermal_dynamic-stl-D3Q27-SRT-smagorinsky\\results"
+    },
+    {
+      "feature": "free-surface+dynamic-stl",
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "storage": "FP32",
+        "turbulence": "smagorinsky"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 1.1898972999770194,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\free-surface_dynamic-stl-D3Q27-SRT-smagorinsky\\results"
+    },
+    {
+      "feature": "thermal+free-surface+dynamic-stl",
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "SRT",
+        "storage": "FP32",
+        "turbulence": "smagorinsky"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.6602116998983547,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\thermal_free-surface_dynamic-stl-D3Q27-SRT-smagorinsky\\results"
+    },
+    {
+      "feature": "thermal",
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "storage": "FP32",
+        "turbulence": "none"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.6037571000633761,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\thermal-D3Q27-TRT-none\\results"
+    },
+    {
+      "feature": "free-surface",
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "storage": "FP32",
+        "turbulence": "none"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.5958296000026166,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\free-surface-D3Q27-TRT-none\\results"
+    },
+    {
+      "feature": "dynamic-stl",
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "storage": "FP32",
+        "turbulence": "none"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.6254762000171468,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\dynamic-stl-D3Q27-TRT-none\\results"
+    },
+    {
+      "feature": "thermal+free-surface",
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "storage": "FP32",
+        "turbulence": "none"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.5832539000548422,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\thermal_free-surface-D3Q27-TRT-none\\results"
+    },
+    {
+      "feature": "thermal+dynamic-stl",
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "storage": "FP32",
+        "turbulence": "none"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.6116453000577167,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\thermal_dynamic-stl-D3Q27-TRT-none\\results"
+    },
+    {
+      "feature": "free-surface+dynamic-stl",
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "storage": "FP32",
+        "turbulence": "none"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.6465792999370024,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\free-surface_dynamic-stl-D3Q27-TRT-none\\results"
+    },
+    {
+      "feature": "thermal+free-surface+dynamic-stl",
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "storage": "FP32",
+        "turbulence": "none"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.6621074000140652,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\thermal_free-surface_dynamic-stl-D3Q27-TRT-none\\results"
+    },
+    {
+      "feature": "thermal",
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "storage": "FP32",
+        "turbulence": "smagorinsky"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.622971500037238,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\thermal-D3Q27-TRT-smagorinsky\\results"
+    },
+    {
+      "feature": "free-surface",
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "storage": "FP32",
+        "turbulence": "smagorinsky"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.5940801000688225,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\free-surface-D3Q27-TRT-smagorinsky\\results"
+    },
+    {
+      "feature": "dynamic-stl",
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "storage": "FP32",
+        "turbulence": "smagorinsky"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.6312664999859408,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\dynamic-stl-D3Q27-TRT-smagorinsky\\results"
+    },
+    {
+      "feature": "thermal+free-surface",
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "storage": "FP32",
+        "turbulence": "smagorinsky"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.5857220999896526,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\thermal_free-surface-D3Q27-TRT-smagorinsky\\results"
+    },
+    {
+      "feature": "thermal+dynamic-stl",
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "storage": "FP32",
+        "turbulence": "smagorinsky"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.6143113999860361,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\thermal_dynamic-stl-D3Q27-TRT-smagorinsky\\results"
+    },
+    {
+      "feature": "free-surface+dynamic-stl",
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "storage": "FP32",
+        "turbulence": "smagorinsky"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.6572522999485955,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\free-surface_dynamic-stl-D3Q27-TRT-smagorinsky\\results"
+    },
+    {
+      "feature": "thermal+free-surface+dynamic-stl",
+      "solver": {
+        "lattice": "D3Q27",
+        "collision": "TRT",
+        "storage": "FP32",
+        "turbulence": "smagorinsky"
+      },
+      "status": "succeeded",
+      "exit_code": 0,
+      "elapsed_seconds": 0.6680083000101149,
+      "results": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\thermal_free-surface_dynamic-stl-D3Q27-TRT-smagorinsky\\results"
+    }
+  ],
+  "capabilities": {
+    "analysis": [
+      "probes",
+      "surface levels",
+      "temporal statistics",
+      "gauge force on solids"
+    ],
+    "arithmetic": "FP32",
+    "body_force": "constant force density",
+    "boundaries": [
+      "no_slip",
+      "moving_wall",
+      "equilibrium",
+      "periodic",
+      "liquid_inlet",
+      "open_outlet"
+    ],
+    "collision": [
+      "SRT",
+      "TRT"
+    ],
+    "default_storage": "FP16S",
+    "defaults": {
+      "collision": "SRT",
+      "lattice": "D3Q19",
+      "smagorinsky_constant": 0.17326595533835415,
+      "storage": "FP16S",
+      "trt_magic_parameter": 0.1875,
+      "turbulence": "smagorinsky"
+    },
+    "device_bytes_per_cell": {
+      "FP16S": 67,
+      "FP32": 105
+    },
+    "devices_per_run": 1,
+    "geometry": {
+      "format": "binary STL",
+      "object_ids": true,
+      "object_local_thermal_regions": true,
+      "prescribed_motion": [
+        "constant translation",
+        "fixed-axis rotation",
+        "sinusoidal",
+        "trajectory table"
+      ]
+    },
+    "graphics": false,
+    "lattice": [
+      "D3Q19",
+      "D3Q27"
+    ],
+    "model_device_bytes_per_cell": {
+      "D3Q19": {
+        "FP16S": 67,
+        "FP32": 105
+      },
+      "D3Q27": {
+        "FP16S": 83,
+        "FP32": 137
+      }
+    },
+    "outputs": {
+      "conservation": [
+        "liquid mass",
+        "sensible energy",
+        "boundary mass and enthalpy flux"
+      ],
+      "dynamic_objects": [
+        "pose",
+        "velocity",
+        "force",
+        "torque",
+        "temperature"
+      ],
+      "formats": [
+        "VTK",
+        "CSV",
+        "JSON"
+      ],
+      "vtk_fields": [
+        "u",
+        "rho",
+        "flags",
+        "p",
+        "T",
+        "material",
+        "object",
+        "phi"
+      ]
+    },
+    "parameters": {
+      "smagorinsky_constant": {
+        "exclusive_minimum": 0,
+        "maximum": 1,
+        "requires": "smagorinsky"
+      },
+      "trt_magic_parameter": {
+        "exclusive_minimum": 0,
+        "maximum": 1,
+        "requires": "TRT"
+      }
+    },
+    "physics": {
+      "free_surface": {
+        "gas": "fixed environment pressure",
+        "initial_liquid_regions": [
+          "box",
+          "sphere",
+          "stl"
+        ],
+        "initial_liquid_stl_format": "binary STL",
+        "open_boundaries": [
+          "liquid_inlet",
+          "open_outlet"
+        ],
+        "static_contact_angle": "per solid wall in degrees",
+        "storage": "FP32",
+        "surface_tension": true
+      },
+      "thermal": {
+        "model": "conservative finite-volume energy transport with Boussinesq coupling",
+        "storage": "FP32"
+      }
+    },
+    "product": "Solver-IBM",
+    "release_status": "release",
+    "schema_version": 1,
+    "storage": [
+      "FP16S",
+      "FP32"
+    ],
+    "turbulence": [
+      "none",
+      "smagorinsky"
+    ],
+    "units": [
+      "lattice",
+      "si"
+    ],
+    "upstream": {
+      "product": "FluidX3D",
+      "version": "3.8"
+    },
+    "version": "2.0.0"
+  },
+  "completed_at_utc": "2026-09-26T22:14:33.288586+00:00"
+}

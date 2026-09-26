@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "status": "succeeded",
+  "date": "2026-09-27",
+  "build": {
+    "status": "succeeded",
+    "buildName": "solver-ibm-v2.0.0",
+    "productName": "Solver-IBM",
+    "productVersion": "2.0.0",
+    "gitCommit": "a039a20d32dd4571ebfcd27cd8125c77f7b049f4",
+    "sourceTree": "b3b27571e3578e6237986260b1dcbee8774702da",
+    "executableSha256": "3ab5c696aa38e5fd919a6b1236e0b330347058a097f99f40b2a606d3d908c4cd",
+    "configuration": "Release",
+    "platform": "x64",
+    "platformToolset": "v142",
+    "startedAtUtc": "2026-09-26T22:04:17.8342455Z",
+    "completedAtUtc": "2026-09-26T22:04:29.7356593Z"
+  },
+  "suites": [
+    {
+      "name": "p1",
+      "status": "succeeded",
+      "counts": {
+        "tests": 29
+      },
+      "report": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\config-validation\\20260926T220524Z\\report.json",
+      "report_sha256": "0963324599494d2275fb25dac9dbde6180a3ae0695fb917168ddbde0d9300acd"
+    },
+    {
+      "name": "p2",
+      "status": "succeeded",
+      "counts": {
+        "tests": 25,
+        "profiles": 6
+      },
+      "report": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p2-validation\\20260926T220558335292Z\\report.json",
+      "report_sha256": "eca4f3ddb0f58328788306e8e6e8a62f0d656ed75f1d87c4f78ae8fe004e93c7"
+    },
+    {
+      "name": "runtime-storage",
+      "status": "succeeded",
+      "counts": {
+        "tests": 14,
+        "comparisons": 5
+      },
+      "report": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\storage-validation\\20260926T220748819783Z\\report.json",
+      "report_sha256": "438561a4573186b86e3daa72ad84d60f8bae8ce5c74f442ba5780300a4615040"
+    },
+    {
+      "name": "p3",
+      "status": "succeeded",
+      "counts": {
+        "tests": 214,
+        "profiles": 96,
+        "matrix": 16,
+        "comparisons": 25
+      },
+      "report": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\p3-validation\\20260926T220807454198Z\\report.json",
+      "report_sha256": "d0314467f0987e1d2a71f9d4905c3c8b67d3b7f3a9aab849c73ce1e54a2234ca"
+    },
+    {
+      "name": "parameter-study",
+      "status": "succeeded",
+      "counts": {
+        "checks": 9
+      },
+      "report": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\study-validation\\20260926T221113Z\\report.json",
+      "report_sha256": "76d2ca380f3c9d0a0005475cd294d28bd5933502f40a0e2ef51ba1f26c2da82c"
+    },
+    {
+      "name": "v2-physics",
+      "status": "succeeded",
+      "counts": {
+        "tests": 14
+      },
+      "report": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-physics\\20260926T221127950790Z\\report.json",
+      "report_sha256": "27dcea6b9cd4cfafd07db685aa8216396e706e7b76bb1ffe85e7e1857d904e0e"
+    },
+    {
+      "name": "v2-scenarios",
+      "status": "succeeded",
+      "counts": {
+        "tests": 13
+      },
+      "report": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-scenarios\\20260926T221252163798Z\\report.json",
+      "report_sha256": "1a2b521c69929aeba2c88a3c310ebe79acce04de6ec6c6e8473f915defe7a4e7"
+    },
+    {
+      "name": "v2-matrix",
+      "status": "succeeded",
+      "counts": {
+        "matrix": 56
+      },
+      "report": "F:\\01-Project\\Opensource\\01-FluidX3D\\workingdir\\v2-validation\\20260926T221357681828Z\\report.json",
+      "report_sha256": "d874c806c14f004942e583b3c0479676643232c6c0dece369f374e4896eecb7d"
+    }
+  ],
+  "selected_results": {
+    "thermal_diffusion_relative_l2": 0.001050535764167713,
+    "forced_convection_relative_l2": 0.004769499080010184,
+    "multilayer_heat_flux_relative_error": 0.002304315567050881,
+    "ra1000_nusselt_relative_error": 0.0035306695109235927,
+    "hydrostatic_pressure_relative_error": 3.7087334505553343e-07,
+    "static_droplet_pressure_relative_error": 0.015078486203457059,
+    "contact_angle_errors_degrees": [
+      1.979795814457887,
+      2.303970135395886,
+      2.8549396489101184
+    ],
+    "small_sloshing_frequency_relative_error": 0.009000000000000077,
+    "moving_temperature_relative_l2": 0.00011684170481129726,
+    "marin_normalized_rmse": 0.10314540877734528,
+    "combined_mass_residual_fraction": 2.6992186516194075e-14,
+    "combined_sensible_energy_residual_fraction": 1.0737907402366688e-08,
+    "fp32_feature_matrix_passed": 56
+  }
+}

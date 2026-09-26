@@ -287,9 +287,10 @@ def seal(args):
         for path, expected in evidence['verification_inputs'].items():
             if sha(root / path) != expected:
                 raise ValueError(f'Acceptance input changed: {path}')
-    if suites.get('suites_skipped', True) or len(suites.get('suites', [])) != 5:
-        raise ValueError('All five acceptance suites must have executed')
-    if {s['name'] for s in suites['suites']} != {'p1', 'p2', 'p3', 'storage', 'study'}:
+    expected_suites = {'p1', 'p2', 'p3', 'storage', 'study', 'v2-physics', 'v2-scenarios', 'v2-matrix'}
+    if suites.get('suites_skipped', True) or len(suites.get('suites', [])) != len(expected_suites):
+        raise ValueError('All eight acceptance suites must have executed')
+    if {s['name'] for s in suites['suites']} != expected_suites:
         raise ValueError('Acceptance suite names are incomplete')
     for result in suites['suites']:
         report = Path(result['report'])
@@ -328,7 +329,7 @@ def main():
     create_parser.add_argument('--repository-root', type=Path, required=True)
     create_parser.add_argument('--workspace-root', type=Path, required=True)
     create_parser.add_argument('--output', type=Path, required=True)
-    create_parser.add_argument('--build-name', default='solver-ibm-v1.0.0')
+    create_parser.add_argument('--build-name', default='solver-ibm-v2.0.0')
     create_parser.add_argument('--fp16-reference', type=Path, required=True)
     create_parser.add_argument('--additional-evidence', type=Path)
     verify_parser = sub.add_parser('verify')
