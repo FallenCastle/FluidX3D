@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "case": { "name": "dynamic-thermal-cycle-lattice" },
+  "solver": { "lattice": "D3Q19", "collision": "TRT", "storage": "FP32", "turbulence": "none" },
+  "physics": {
+    "thermal": {
+      "reference_temperature": 300,
+      "initial_temperature": 300,
+      "specific_heat": 1,
+      "conductivity": 0.01,
+      "materials": [
+        {
+          "id": "moving-solid",
+          "density": 2,
+          "specific_heat": 1,
+          "conductivity": 0.02,
+          "heat_source": 0,
+          "initial_temperature": 300
+        }
+      ]
+    }
+  },
+  "units": { "mode": "lattice" },
+  "domain": { "cells": [40, 28, 24] },
+  "fluid": { "rho": 1.0, "nu": 0.08 },
+  "initial": {
+    "velocity": [0, 0, 0],
+    "regions": [
+      {
+        "box_min": [15, 10, 8],
+        "box_max": [19.999, 18, 16],
+        "rho": 1,
+        "velocity": [0, 0, 0],
+        "temperature": 360
+      }
+    ]
+  },
+  "geometry": [
+    {
+      "id": "thermal-box",
+      "file": "assets/rectangular-box-2x1x1-binary.stl",
+      "material": "moving-solid",
+      "transform": { "mode": "fit", "size": 10.0, "center": [20, 14, 12] },
+      "motion": {
+        "translation": { "type": "sinusoidal", "amplitude": [3, 0, 0], "period": 80 },
+        "rotation": {
+          "type": "sinusoidal",
+          "axis": [0, 0, 1],
+          "amplitude_degrees": 30,
+          "period": 80
+        }
+      }
+    }
+  ],
+  "boundaries": [
+    {
+      "id": "walls",
+      "faces": ["xmin", "xmax", "ymin", "ymax", "zmin", "zmax"],
+      "type": "no_slip",
+      "thermal": { "type": "adiabatic" }
+    }
+  ],
+  "run": { "steps": 80, "monitor_every": 10 },
+  "output": { "vtk_fields": ["object", "material", "T", "u", "rho", "flags"], "vtk_every": 20, "initial": true }
+}

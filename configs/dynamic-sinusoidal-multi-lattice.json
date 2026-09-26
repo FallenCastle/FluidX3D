@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "case": { "name": "dynamic-sinusoidal-multi-lattice" },
+  "solver": { "lattice": "D3Q19", "collision": "SRT", "storage": "FP32", "turbulence": "none" },
+  "units": { "mode": "lattice" },
+  "domain": { "cells": [48, 32, 24] },
+  "fluid": { "rho": 1.0, "nu": 0.08 },
+  "initial": { "velocity": [0, 0, 0] },
+  "geometry": [
+    {
+      "id": "oscillating-cube",
+      "file": "assets/unit-cube-binary.stl",
+      "transform": { "mode": "fit", "size": 5.0, "center": [13, 10, 12] },
+      "motion": {
+        "translation": { "type": "sinusoidal", "amplitude": [3, 0, 0], "period": 80 }
+      }
+    },
+    {
+      "id": "combined-box",
+      "file": "assets/rectangular-box-2x1x1-binary.stl",
+      "transform": { "mode": "fit", "size": 8.0, "center": [34, 22, 12] },
+      "motion": {
+        "translation": { "type": "sinusoidal", "amplitude": [0, 2, 0], "period": 100 },
+        "rotation": {
+          "type": "sinusoidal",
+          "axis": [0, 0, 1],
+          "amplitude_degrees": 30,
+          "period": 100
+        }
+      }
+    }
+  ],
+  "boundaries": [
+    { "id": "walls", "faces": ["xmin", "xmax", "ymin", "ymax", "zmin", "zmax"], "type": "no_slip" }
+  ],
+  "run": { "steps": 100, "monitor_every": 10 },
+  "output": { "vtk_fields": ["object", "flags", "u", "rho"], "vtk_every": 20, "initial": true }
+}

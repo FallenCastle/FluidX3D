@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "case": { "name": "dynamic-trajectory-lattice" },
+  "solver": { "lattice": "D3Q19", "collision": "TRT", "storage": "FP32", "turbulence": "smagorinsky" },
+  "units": { "mode": "lattice" },
+  "domain": { "cells": [40, 30, 24] },
+  "fluid": { "rho": 1.0, "nu": 0.08 },
+  "initial": { "velocity": [0, 0, 0] },
+  "geometry": [
+    {
+      "id": "trajectory-box",
+      "file": "assets/rectangular-box-2x1x1-binary.stl",
+      "transform": { "mode": "fit", "size": 8.0, "center": [16, 15, 12] },
+      "motion": {
+        "trajectory_axis": [0, 0, 1],
+        "trajectory": [
+          { "time": 0, "translation": [0, 0, 0], "degrees": 0 },
+          { "time": 30, "translation": [3, 0, 0], "degrees": 25 },
+          { "time": 60, "translation": [3, 2, 0], "degrees": -15 },
+          { "time": 90, "translation": [0, 0, 0], "degrees": 0 }
+        ]
+      }
+    }
+  ],
+  "boundaries": [
+    { "id": "walls", "faces": ["xmin", "xmax", "ymin", "ymax", "zmin", "zmax"], "type": "no_slip" }
+  ],
+  "run": { "steps": 100, "monitor_every": 10 },
+  "output": { "vtk_fields": ["object", "flags", "u", "rho"], "vtk_every": 10, "initial": true }
+}

@@ -492,6 +492,20 @@ static void write_object_motion(LBM &lbm, const Config &c, const std::vector<Dyn
             file << ',' << value;
         for (double value : torque)
             file << ',' << value;
+        if (c.model.temperature) {
+            double minimum = std::numeric_limits<double>::infinity();
+            double maximum = -std::numeric_limits<double>::infinity();
+            double energy = 0;
+            for (ulong n = 0; n < lbm.get_N(); n++)
+                if (lbm.lbm_domain[0]->object_id[n] == object) {
+                    minimum = std::min(minimum, static_cast<double>(lbm.T[n]));
+                    maximum = std::max(maximum, static_cast<double>(lbm.T[n]));
+                    energy += lbm.lbm_domain[0]->thermal_capacity[n] * lbm.T[n];
+                }
+            require(std::isfinite(minimum) && std::isfinite(maximum) && std::isfinite(energy),
+                    "Non-finite dynamic-object thermal diagnostic: " + body.geometry->id);
+            file << ',' << minimum * c.temperature_scale << ',' << maximum * c.temperature_scale << ',' << energy;
+        }
         file << '\n';
     }
     file.flush();
@@ -1003,7 +1017,10 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
                "translation_z_lattice,pivot_x_lattice,pivot_y_lattice,pivot_z_lattice,axis_x,axis_y,axis_z,"
                "degrees,linear_velocity_x_lattice,linear_velocity_y_lattice,linear_velocity_z_lattice,"
                "angular_velocity_radians_per_step,force_x_lattice,force_y_lattice,force_z_lattice,"
-               "torque_x_lattice,torque_y_lattice,torque_z_lattice\n";
+               "torque_x_lattice,torque_y_lattice,torque_z_lattice";
+        if (c.model.temperature)
+            object_motion << ",temperature_min,temperature_max,sensible_energy_lattice";
+        object_motion << '\n';
     }
     monitor(lbm, c, stats, flux_surfaces, flux_file);
     if (c.model.dynamic_geometry)

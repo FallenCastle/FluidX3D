@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "case": { "name": "dynamic-rotation-lattice" },
+  "solver": { "lattice": "D3Q19", "collision": "TRT", "storage": "FP32", "turbulence": "none" },
+  "units": { "mode": "lattice" },
+  "domain": { "cells": [40, 28, 24] },
+  "fluid": { "rho": 1.0, "nu": 0.08 },
+  "initial": { "velocity": [0, 0, 0] },
+  "geometry": [
+    {
+      "id": "rotating-box",
+      "file": "assets/rectangular-box-2x1x1-binary.stl",
+      "transform": { "mode": "fit", "size": 10.0, "center": [20, 14, 12] },
+      "motion": {
+        "rotation": {
+          "type": "constant_angular_velocity",
+          "axis": [0, 0, 1],
+          "angular_velocity_degrees": 1.0,
+          "stop_time": 90
+        }
+      }
+    }
+  ],
+  "boundaries": [
+    { "id": "walls", "faces": ["xmin", "xmax", "ymin", "ymax", "zmin", "zmax"], "type": "no_slip" }
+  ],
+  "run": { "steps": 110, "monitor_every": 10 },
+  "output": { "vtk_fields": ["object", "flags", "u", "rho"], "vtk_every": 10, "initial": true }
+}
