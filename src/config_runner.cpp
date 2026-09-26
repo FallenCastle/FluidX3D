@@ -1360,6 +1360,98 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
     for (size_t i = 0; i < c.liquid_regions.size(); i++)
         if (c.liquid_regions[i].shape == "stl")
             liquid_meshes[i] = mesh(c, liquid_region_geometry(c.liquid_regions[i], i));
+    std::vector<float> initial_liquid_fill(c.model.free_surface ? static_cast<size_t>(lbm.get_N()) : 0u, 0.0f);
+    std::vector<uchar> initial_interface_guard(c.model.free_surface ? static_cast<size_t>(lbm.get_N()) : 0u, 0u);
+    if (c.model.free_surface) {
+        constexpr int sphere_samples = 4, stl_samples = 2;
+        const double half_diagonal = 0.5 * std::sqrt(3.0) * c.dx;
+        for (ulong n = 0; n < lbm.get_N(); n++) {
+            uint x, y, z;
+            lbm.coordinates(n, x, y, z);
+            const auto center = point(c, x, y, z);
+            double fill = 0;
+            for (size_t region_index = 0; region_index < c.liquid_regions.size(); region_index++) {
+                const auto &region = c.liquid_regions[region_index];
+                double geometric_fill = 0;
+                if (region.shape == "box") {
+                    geometric_fill = 1;
+                    const unsigned xyz[3]{x, y, z};
+                    for (int axis = 0; axis < 3; axis++) {
+                        const double lower = c.origin[axis] + xyz[axis] * c.dx;
+                        const double upper = lower + c.dx;
+                        const double overlap = std::max(0.0, std::min(upper, region.upper[axis]) -
+                                                                std::max(lower, region.lower[axis]));
+                        geometric_fill *= std::clamp(overlap / c.dx, 0.0, 1.0);
+                    }
+                } else if (region.shape == "sphere") {
+                    const double dx = center[0] - region.center[0], dy = center[1] - region.center[1],
+                                 dz = center[2] - region.center[2];
+                    const double distance = std::sqrt(dx * dx + dy * dy + dz * dz);
+                    if (distance <= region.radius - half_diagonal)
+                        geometric_fill = 1;
+                    else if (distance < region.radius + half_diagonal) {
+                        int inside = 0;
+                        for (int sz = 0; sz < sphere_samples; sz++)
+                            for (int sy = 0; sy < sphere_samples; sy++)
+                                for (int sx = 0; sx < sphere_samples; sx++) {
+                                    const double px = c.origin[0] +
+                                                      (x + (sx + 0.5) / sphere_samples) * c.dx;
+                                    const double py = c.origin[1] +
+                                                      (y + (sy + 0.5) / sphere_samples) * c.dx;
+                                    const double pz = c.origin[2] +
+                                                      (z + (sz + 0.5) / sphere_samples) * c.dx;
+                                    const double rx = px - region.center[0], ry = py - region.center[1],
+                                                 rz = pz - region.center[2];
+                                    inside += rx * rx + ry * ry + rz * rz <= region.radius * region.radius;
+                                }
+                        geometric_fill = static_cast<double>(inside) /
+                                         (sphere_samples * sphere_samples * sphere_samples);
+                    }
+                } else {
+                    const auto &mask = *liquid_meshes[region_index];
+                    if (x + 0.5 >= mask.pmin.x && x - 0.5 <= mask.pmax.x && y + 0.5 >= mask.pmin.y &&
+                        y - 0.5 <= mask.pmax.y && z + 0.5 >= mask.pmin.z && z - 0.5 <= mask.pmax.z) {
+                        int inside = 0;
+                        for (int sz = 0; sz < stl_samples; sz++)
+                            for (int sy = 0; sy < stl_samples; sy++)
+                                for (int sx = 0; sx < stl_samples; sx++)
+                                    inside += point_inside_mesh(
+                                        mask, float3(static_cast<float>(x - 0.5 + (sx + 0.5) / stl_samples),
+                                                     static_cast<float>(y - 0.5 + (sy + 0.5) / stl_samples),
+                                                     static_cast<float>(z - 0.5 + (sz + 0.5) / stl_samples)));
+                        geometric_fill = static_cast<double>(inside) /
+                                         (stl_samples * stl_samples * stl_samples);
+                    }
+                }
+                fill = std::max(fill, region.fill * geometric_fill);
+            }
+            initial_liquid_fill[static_cast<size_t>(n)] = static_cast<float>(std::clamp(fill, 0.0, 1.0));
+        }
+        for (ulong n = 0; n < lbm.get_N(); n++) {
+            if (initial_liquid_fill[static_cast<size_t>(n)] > 0)
+                continue;
+            uint x, y, z;
+            lbm.coordinates(n, x, y, z);
+            for (int dz = -1; dz <= 1 && !initial_interface_guard[static_cast<size_t>(n)]; dz++)
+                for (int dy = -1; dy <= 1 && !initial_interface_guard[static_cast<size_t>(n)]; dy++)
+                    for (int dx = -1; dx <= 1; dx++) {
+                        if (dx == 0 && dy == 0 && dz == 0)
+                            continue;
+                        const int nx = static_cast<int>(x) + dx, ny = static_cast<int>(y) + dy,
+                                  nz = static_cast<int>(z) + dz;
+                        if (nx < 0 || ny < 0 || nz < 0 || nx >= static_cast<int>(c.cells[0]) ||
+                            ny >= static_cast<int>(c.cells[1]) || nz >= static_cast<int>(c.cells[2]))
+                            continue;
+                        const ulong neighbor = static_cast<ulong>(nx) +
+                                               (static_cast<ulong>(ny) + static_cast<ulong>(nz) * c.cells[1]) *
+                                                   c.cells[0];
+                        if (initial_liquid_fill[static_cast<size_t>(neighbor)] >= 1.0f) {
+                            initial_interface_guard[static_cast<size_t>(n)] = 1u;
+                            break;
+                        }
+                    }
+        }
+    }
     std::vector<unsigned long long> coverage(c.boundaries.size(), 0);
     std::vector<BoundaryFluxSurface> flux_surfaces;
     std::vector<int> flux_surface_for_boundary(c.boundaries.size(), -1);
@@ -1484,28 +1576,14 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
             lbm.lbm_domain[0]->contact_angle[n] = static_cast<float>(angle * 0.017453292519943295769);
         }
         if (c.model.free_surface && (!(lbm.flags[n] & TYPE_S) || c.model.dynamic_geometry)) {
-            double fill = 0;
-            for (size_t region_index = 0; region_index < c.liquid_regions.size(); region_index++) {
-                const auto &r = c.liquid_regions[region_index];
-                const auto *mask = liquid_meshes[region_index].get();
-                const bool inside_stl = mask != nullptr && x >= mask->pmin.x && x <= mask->pmax.x &&
-                                        y >= mask->pmin.y && y <= mask->pmax.y && z >= mask->pmin.z &&
-                                        z <= mask->pmax.z &&
-                                        point_inside_mesh(*mask, float3(static_cast<float>(x), static_cast<float>(y),
-                                                                       static_cast<float>(z)));
-                if ((r.shape == "box" && p[0] >= r.lower[0] && p[0] <= r.upper[0] && p[1] >= r.lower[1] &&
-                     p[1] <= r.upper[1] && p[2] >= r.lower[2] && p[2] <= r.upper[2]) ||
-                    (r.shape == "sphere" &&
-                     (p[0] - r.center[0]) * (p[0] - r.center[0]) +
-                             (p[1] - r.center[1]) * (p[1] - r.center[1]) +
-                             (p[2] - r.center[2]) * (p[2] - r.center[2]) <=
-                         r.radius * r.radius) || inside_stl)
-                    fill = std::max(fill, r.fill);
-            }
+            double fill = initial_liquid_fill[static_cast<size_t>(n)];
             if (b >= 0 && c.boundaries[b].type == "liquid_inlet")
                 fill = 1.0;
             lbm.flags[n] = static_cast<uchar>((lbm.flags[n] & ~(TYPE_F | TYPE_I | TYPE_G)) |
-                                               (fill >= 1 ? TYPE_F : fill > 0 ? TYPE_I : TYPE_G));
+                                               (fill >= 1 ? TYPE_F
+                                                : fill > 0 || initial_interface_guard[static_cast<size_t>(n)]
+                                                    ? TYPE_I
+                                                    : TYPE_G));
             lbm.phi[n] = static_cast<float>(fill);
         }
         lbm.rho[n] = static_cast<float>(rho);
