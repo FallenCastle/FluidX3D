@@ -2465,8 +2465,10 @@ string opencl_c_container() { return R( // ########################## begin of O
 } // voxelize_mesh()
 
 )+"#ifdef DYNAMIC_GEOMETRY"+R(
-kernel void reconcile_dynamic_object_mask(global fpxx* fi, global float* u, global uchar* flags, const ulong t,
+kernel void reconcile_dynamic_object_mask(global fpxx* fi, global float* rho, global float* u,
+                                           global uchar* flags, const ulong t,
                                            global uchar* object_id, const global uchar* desired_object_id,
+                                           const global float* release_density, const global float* release_velocity,
                                            const uchar object, const float cx, const float cy, const float cz,
                                            const float ux, const float uy, const float uz,
                                            const float rx, const float ry, const float rz) {
@@ -2488,14 +2490,16 @@ kernel void reconcile_dynamic_object_mask(global fpxx* fi, global float* u, glob
 		store3(u, n, u_set);
 		object_id[n] = object;
 	} else if(!wanted&&previous_object==object) {
-		const float3 un = load3(u, n);
+		const float rhon = release_density[n];
+		const float3 un = load3(release_velocity, n);
 		uxx j[def_velocity_set];
 		neighbors(n, j);
 		float feq[def_velocity_set];
-		calculate_f_eq(1.0f, un.x, un.y, un.z, feq);
+		calculate_f_eq(rhon, un.x, un.y, un.z, feq);
 		store_f(n, feq, fi, j, t);
 		flags[n] &= ~TYPE_S;
-		store3(u, n, (float3)(0.0f, 0.0f, 0.0f));
+		rho[n] = rhon;
+		store3(u, n, un);
 		object_id[n] = 0u;
 	}
 }

@@ -470,6 +470,8 @@ static double sample_object_temperature(const Config &c, const std::vector<float
 static void update_dynamic_geometry(LBM &lbm, Config &c, std::vector<DynamicBody> &bodies, double time) {
     auto *domain = lbm.lbm_domain[0];
     domain->object_id.read_from_device();
+    lbm.rho.read_from_device();
+    lbm.u.read_from_device();
     lbm.flags.read_from_device();
     std::vector<uchar> old_objects(static_cast<size_t>(lbm.get_N()));
     for (ulong n = 0; n < lbm.get_N(); n++)
@@ -538,12 +540,54 @@ static void update_dynamic_geometry(LBM &lbm, Config &c, std::vector<DynamicBody
     for (const auto &body : bodies)
         enforce_object_volume(c, *body.current, body.target_cells, static_cast<uchar>(body.geometry->object_index),
                               desired_objects, &current_flags);
+    std::vector<float> release_density(static_cast<size_t>(lbm.get_N()), 1.0f);
+    std::vector<float> release_velocity(static_cast<size_t>(3u * lbm.get_N()), 0.0f);
+    for (const auto &body : bodies) {
+        const uchar object = static_cast<uchar>(body.geometry->object_index);
+        std::vector<ulong> occupied, released;
+        for (ulong n = 0; n < lbm.get_N(); n++) {
+            if (old_objects[static_cast<size_t>(n)] != object && desired_objects[static_cast<size_t>(n)] == object)
+                occupied.push_back(n);
+            if (old_objects[static_cast<size_t>(n)] == object && desired_objects[static_cast<size_t>(n)] != object)
+                released.push_back(n);
+        }
+        require(occupied.size() == released.size(), "Prescribed STL remap changed object volume: " + body.geometry->id);
+        std::vector<bool> used(occupied.size(), false);
+        for (ulong destination : released) {
+            uint dx, dy, dz;
+            lbm.coordinates(destination, dx, dy, dz);
+            size_t nearest = occupied.size();
+            unsigned long long nearest_distance = std::numeric_limits<unsigned long long>::max();
+            for (size_t i = 0; i < occupied.size(); i++) {
+                if (used[i])
+                    continue;
+                uint sx, sy, sz;
+                lbm.coordinates(occupied[i], sx, sy, sz);
+                const long long x = static_cast<long long>(sx) - dx, y = static_cast<long long>(sy) - dy,
+                                z = static_cast<long long>(sz) - dz;
+                const unsigned long long distance = static_cast<unsigned long long>(x * x + y * y + z * z);
+                if (distance < nearest_distance) {
+                    nearest = i;
+                    nearest_distance = distance;
+                }
+            }
+            require(nearest < occupied.size(), "Prescribed STL remap could not pair boundary cells");
+            used[nearest] = true;
+            const ulong source = occupied[nearest];
+            release_density[static_cast<size_t>(destination)] = lbm.rho[source];
+            release_velocity[static_cast<size_t>(destination)] = lbm.u.x[source];
+            release_velocity[static_cast<size_t>(lbm.get_N() + destination)] = lbm.u.y[source];
+            release_velocity[static_cast<size_t>(2u * lbm.get_N() + destination)] = lbm.u.z[source];
+        }
+    }
     for (const auto &body : bodies) {
         const float3 center = f3(body.pivot) + f3(body.state.translation);
         const float3 linear = f3(body.state.linear_velocity);
         const float3 angular = f3(body.state.axis) * static_cast<float>(body.state.angular_velocity_radians);
-        domain->reconcile_dynamic_object_mask(desired_objects.data(), static_cast<uchar>(body.geometry->object_index),
-                                              center, linear, angular);
+        domain->reconcile_dynamic_object_mask(desired_objects.data(), release_density.data(),
+                                              release_velocity.data(),
+                                              static_cast<uchar>(body.geometry->object_index), center, linear,
+                                              angular);
     }
     lbm.update_moving_boundaries();
     domain->object_id.read_from_device();
