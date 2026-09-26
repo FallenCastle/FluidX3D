@@ -1117,7 +1117,7 @@ static MonitorSnapshot monitor(LBM &lbm, const Config &c, std::ofstream &file,
               << "]; max speed=" << umax << std::endl;
     return {mass, energy};
 }
-static std::pair<double, double> boundary_flow(const LBM &lbm, const Config &c,
+static std::pair<double, double> boundary_flow(LBM &lbm, const Config &c,
                                                const std::vector<BoundaryFluxSurface> &surfaces) {
     double mass_flow = 0, enthalpy_flow = 0;
     for (const auto &surface : surfaces)
