@@ -345,6 +345,14 @@ void LBM_Domain::voxelize_mesh_on_device(const Mesh* mesh, const uchar flag, con
 	bounding_box_and_velocity.write_to_device();
 	kernel_voxelize_mesh.run();
 }
+void LBM_Domain::reconcile_dynamic_object_mask(uchar* desired_object_id, const uchar object, const float3& rotation_center, const float3& linear_velocity, const float3& rotational_velocity) { // reconcile a prescribed moving object to a host-selected constant-volume mask
+	Memory<uchar> desired(device, get_N(), 1u, desired_object_id);
+	Kernel kernel(device, get_N(), "reconcile_dynamic_object_mask", fi, u, flags, t+1ull, object_id, desired, object,
+	              rotation_center.x, rotation_center.y, rotation_center.z,
+	              linear_velocity.x, linear_velocity.y, linear_velocity.z,
+	              rotational_velocity.x, rotational_velocity.y, rotational_velocity.z);
+	kernel.run();
+}
 void LBM_Domain::enqueue_unvoxelize_mesh_on_device(const Mesh* mesh, const uchar flag) { // remove voxelized triangle mesh from LBM grid
 	const float x0=mesh->pmin.x, y0=mesh->pmin.y, z0=mesh->pmin.z, x1=mesh->pmax.x, y1=mesh->pmax.y, z1=mesh->pmax.z; // remove all flags in bounding box of mesh
 	Kernel kernel_unvoxelize_mesh(device, get_N(), "unvoxelize_mesh", flags, flag, x0, y0, z0, x1, y1, z1);

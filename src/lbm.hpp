@@ -169,6 +169,7 @@ public:
 	void set_f(const float fx, const float fy, const float fz) { set_fx(fx); set_fy(fy); set_fz(fz); } // set global froce per volume
 
 	void voxelize_mesh_on_device(const Mesh* mesh, const uchar flag=TYPE_S, const float3& rotation_center=float3(0.0f), const float3& linear_velocity=float3(0.0f), const float3& rotational_velocity=float3(0.0f), const uchar object=0u); // voxelize mesh
+	void reconcile_dynamic_object_mask(uchar* desired_object_id, const uchar object, const float3& rotation_center, const float3& linear_velocity, const float3& rotational_velocity); // reconcile a prescribed moving object to a host-selected constant-volume mask
 	void enqueue_unvoxelize_mesh_on_device(const Mesh* mesh, const uchar flag=TYPE_S); // remove voxelized triangle mesh from LBM grid
 
 #ifdef GRAPHICS

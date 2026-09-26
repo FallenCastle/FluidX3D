@@ -266,11 +266,101 @@ static std::unique_ptr<Mesh> transform_mesh(const Mesh &base, const Vec &pivot, 
     result->center = pivot3 + shift;
     return result;
 }
+static double mesh_volume(const Mesh &mesh) {
+    double volume = 0;
+    for (uint triangle = 0; triangle < mesh.triangle_number; triangle++) {
+        const float3 &a = mesh.p0[triangle], &b = mesh.p1[triangle], &c = mesh.p2[triangle];
+        volume += static_cast<double>(a.x) * (static_cast<double>(b.y) * c.z - static_cast<double>(b.z) * c.y) +
+                  static_cast<double>(a.y) * (static_cast<double>(b.z) * c.x - static_cast<double>(b.x) * c.z) +
+                  static_cast<double>(a.z) * (static_cast<double>(b.x) * c.y - static_cast<double>(b.y) * c.x);
+    }
+    return std::abs(volume) / 6.0;
+}
+static double point_triangle_distance_squared(const float3 &point, const float3 &a, const float3 &b,
+                                              const float3 &c) {
+    const float3 ab = b - a, ac = c - a, ap = point - a;
+    const double d1 = dot(ab, ap), d2 = dot(ac, ap);
+    if (d1 <= 0 && d2 <= 0)
+        return static_cast<double>(dot(ap, ap));
+    const float3 bp = point - b;
+    const double d3 = dot(ab, bp), d4 = dot(ac, bp);
+    if (d3 >= 0 && d4 <= d3)
+        return static_cast<double>(dot(bp, bp));
+    const double vc = d1 * d4 - d3 * d2;
+    if (vc <= 0 && d1 >= 0 && d3 <= 0) {
+        const float3 difference = point - (a + ab * static_cast<float>(d1 / (d1 - d3)));
+        return static_cast<double>(dot(difference, difference));
+    }
+    const float3 cp = point - c;
+    const double d5 = dot(ab, cp), d6 = dot(ac, cp);
+    if (d6 >= 0 && d5 <= d6)
+        return static_cast<double>(dot(cp, cp));
+    const double vb = d5 * d2 - d1 * d6;
+    if (vb <= 0 && d2 >= 0 && d6 <= 0) {
+        const float3 difference = point - (a + ac * static_cast<float>(d2 / (d2 - d6)));
+        return static_cast<double>(dot(difference, difference));
+    }
+    const double va = d3 * d6 - d5 * d4;
+    if (va <= 0 && d4 - d3 >= 0 && d5 - d6 >= 0) {
+        const float3 difference = point - (b + (c - b) * static_cast<float>((d4 - d3) / ((d4 - d3) + (d5 - d6))));
+        return static_cast<double>(dot(difference, difference));
+    }
+    const double denominator = 1.0 / (va + vb + vc), v = vb * denominator, w = vc * denominator;
+    const float3 difference = point - (a + ab * static_cast<float>(v) + ac * static_cast<float>(w));
+    return static_cast<double>(dot(difference, difference));
+}
+static double mesh_surface_distance_squared(const Mesh &mesh, const float3 &point) {
+    double distance = std::numeric_limits<double>::infinity();
+    for (uint triangle = 0; triangle < mesh.triangle_number; triangle++)
+        distance = std::min(distance,
+                            point_triangle_distance_squared(point, mesh.p0[triangle], mesh.p1[triangle],
+                                                            mesh.p2[triangle]));
+    return distance;
+}
+static ulong enforce_object_volume(const Config &c, const Mesh &mesh, const ulong target, const uchar object,
+                                   std::vector<uchar> &objects, const std::vector<uchar> *flags = nullptr) {
+    ulong count = static_cast<ulong>(std::count(objects.begin(), objects.end(), object));
+    if (count == target)
+        return count;
+    struct Candidate {
+        ulong index;
+        double distance;
+    };
+    std::vector<Candidate> candidates;
+    const int lower[3]{std::max(0, static_cast<int>(std::floor(mesh.pmin.x)) - 2),
+                       std::max(0, static_cast<int>(std::floor(mesh.pmin.y)) - 2),
+                       std::max(0, static_cast<int>(std::floor(mesh.pmin.z)) - 2)};
+    const int upper[3]{std::min(static_cast<int>(c.cells[0]) - 1, static_cast<int>(std::ceil(mesh.pmax.x)) + 2),
+                       std::min(static_cast<int>(c.cells[1]) - 1, static_cast<int>(std::ceil(mesh.pmax.y)) + 2),
+                       std::min(static_cast<int>(c.cells[2]) - 1, static_cast<int>(std::ceil(mesh.pmax.z)) + 2)};
+    for (int z = lower[2]; z <= upper[2]; z++)
+        for (int y = lower[1]; y <= upper[1]; y++)
+            for (int x = lower[0]; x <= upper[0]; x++) {
+                const ulong n = static_cast<ulong>(x) +
+                                (static_cast<ulong>(y) + static_cast<ulong>(z) * c.cells[1]) * c.cells[0];
+                const bool removable = count > target && objects[static_cast<size_t>(n)] == object;
+                const bool addable = count < target && objects[static_cast<size_t>(n)] == 0u &&
+                                     (!flags || !is_solid((*flags)[static_cast<size_t>(n)]));
+                if (removable || addable)
+                    candidates.push_back({n, mesh_surface_distance_squared(
+                                                  mesh, float3(static_cast<float>(x), static_cast<float>(y),
+                                                               static_cast<float>(z)))});
+            }
+    std::sort(candidates.begin(), candidates.end(), [](const Candidate &a, const Candidate &b) {
+        return a.distance < b.distance || (a.distance == b.distance && a.index < b.index);
+    });
+    const ulong difference = count > target ? count - target : target - count;
+    require(candidates.size() >= difference, "Insufficient cells to conserve prescribed STL volume");
+    for (ulong i = 0; i < difference; i++)
+        objects[static_cast<size_t>(candidates[static_cast<size_t>(i)].index)] = count > target ? 0u : object;
+    return target;
+}
 struct DynamicBody {
     const Geometry *geometry = nullptr;
     Vec pivot{};
     std::unique_ptr<Mesh> base, current;
     MotionState state;
+    ulong target_cells = 0;
 };
 static std::string quote_csv_field(const std::string &value);
 static float3x3 motion_rotation(const MotionState &state) {
@@ -331,11 +421,18 @@ static void update_dynamic_geometry(LBM &lbm, Config &c, std::vector<DynamicBody
     for (ulong n = 0; n < lbm.get_N(); n++)
         old_objects[static_cast<size_t>(n)] = domain->object_id[n];
     std::vector<float> old_temperature;
+    double energy_before_remap = 0;
     if (c.model.temperature) {
         domain->T.read_from_device();
         old_temperature.resize(static_cast<size_t>(lbm.get_N()));
-        for (ulong n = 0; n < lbm.get_N(); n++)
+        for (ulong n = 0; n < lbm.get_N(); n++) {
             old_temperature[static_cast<size_t>(n)] = domain->T[n];
+            const bool active = domain->material[n] != 255u &&
+                                (!c.model.free_surface || domain->material[n] > 0u ||
+                                 (lbm.flags[n] & (TYPE_F | TYPE_I)));
+            if (active)
+                energy_before_remap += static_cast<double>(domain->thermal_capacity[n]) * domain->T[n];
+        }
     }
     for (auto &body : bodies) {
         MotionState next_state = motion_state(*body.geometry, time);
@@ -377,6 +474,32 @@ static void update_dynamic_geometry(LBM &lbm, Config &c, std::vector<DynamicBody
     for (ulong n = 0; n < lbm.get_N(); n++)
         require(domain->object_id[n] != 255u,
                 "Prescribed STL objects overlap at step " + std::to_string(static_cast<unsigned long long>(time)));
+    std::vector<uchar> desired_objects(static_cast<size_t>(lbm.get_N())), current_flags(static_cast<size_t>(lbm.get_N()));
+    for (ulong n = 0; n < lbm.get_N(); n++) {
+        desired_objects[static_cast<size_t>(n)] = domain->object_id[n];
+        current_flags[static_cast<size_t>(n)] = lbm.flags[n];
+    }
+    for (const auto &body : bodies)
+        enforce_object_volume(c, *body.current, body.target_cells, static_cast<uchar>(body.geometry->object_index),
+                              desired_objects, &current_flags);
+    for (const auto &body : bodies) {
+        const float3 center = f3(body.pivot) + f3(body.state.translation);
+        const float3 linear = f3(body.state.linear_velocity);
+        const float3 angular = f3(body.state.axis) * static_cast<float>(body.state.angular_velocity_radians);
+        domain->reconcile_dynamic_object_mask(desired_objects.data(), static_cast<uchar>(body.geometry->object_index),
+                                              center, linear, angular);
+    }
+    lbm.update_moving_boundaries();
+    domain->object_id.read_from_device();
+    lbm.flags.read_from_device();
+    lbm.u.read_from_device();
+    for (const auto &body : bodies) {
+        const uchar object = static_cast<uchar>(body.geometry->object_index);
+        ulong cells = 0;
+        for (ulong n = 0; n < lbm.get_N(); n++)
+            cells += domain->object_id[n] == object;
+        require(cells == body.target_cells, "Prescribed STL volume reconciliation failed: " + body.geometry->id);
+    }
     if (c.model.free_surface) {
         for (ulong n = 0; n < lbm.get_N(); n++) {
             const uchar object = domain->object_id[n];
@@ -441,6 +564,39 @@ static void update_dynamic_geometry(LBM &lbm, Config &c, std::vector<DynamicBody
                 domain->thermal_conductivity[n] = static_cast<float>(material.conductivity_lattice);
                 domain->thermal_source[n] = static_cast<float>(material.source_lattice);
                 domain->material[n] = static_cast<uchar>(geometry.material_index);
+            }
+        }
+        double energy_after_remap = 0, correction_capacity = 0;
+        for (ulong n = 0; n < lbm.get_N(); n++) {
+            const bool active = domain->material[n] != 255u &&
+                                (!c.model.free_surface || domain->material[n] > 0u ||
+                                 (lbm.flags[n] & (TYPE_F | TYPE_I)));
+            if (active)
+                energy_after_remap += static_cast<double>(domain->thermal_capacity[n]) * domain->T[n];
+            if (active && domain->material[n] == 0u)
+                correction_capacity += domain->thermal_capacity[n];
+        }
+        const bool correct_all_active = correction_capacity == 0;
+        if (correct_all_active) {
+            for (ulong n = 0; n < lbm.get_N(); n++) {
+                const bool active = domain->material[n] != 255u &&
+                                    (!c.model.free_surface || domain->material[n] > 0u ||
+                                     (lbm.flags[n] & (TYPE_F | TYPE_I)));
+                if (active)
+                    correction_capacity += domain->thermal_capacity[n];
+            }
+        }
+        require(correction_capacity > 0, "Dynamic thermal remap has no active heat capacity");
+        const double temperature_correction = (energy_before_remap - energy_after_remap) / correction_capacity;
+        for (ulong n = 0; n < lbm.get_N(); n++) {
+            const bool active = domain->material[n] != 255u &&
+                                (!c.model.free_surface || domain->material[n] > 0u ||
+                                 (lbm.flags[n] & (TYPE_F | TYPE_I)));
+            const bool correct = active && (correct_all_active || domain->material[n] == 0u);
+            if (correct) {
+                domain->T[n] = static_cast<float>(domain->T[n] + temperature_correction);
+                require(std::isfinite(domain->T[n]) && domain->T[n] > 0,
+                        "Dynamic thermal conservation correction produced an invalid temperature");
             }
         }
         domain->T.enqueue_write_to_device();
@@ -735,6 +891,7 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
             body.state = motion_state(g, 0.0);
             initial_motion[static_cast<size_t>(&g - c.geometry.data())] = body.state;
             body.base = std::move(m);
+            body.target_cells = std::max<ulong>(1u, static_cast<ulong>(std::llround(mesh_volume(*body.base))));
             body.current = transform_mesh(*body.base, body.pivot, body.state);
             active_mesh = body.current.get();
             dynamic_bodies.push_back(std::move(body));
@@ -768,6 +925,29 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
                               {"dynamic", g.motion.enabled},
                               {"material", g.material.empty() ? Json(nullptr) : Json(g.material)},
                               {"contact_angle_degrees", c.model.free_surface ? Json(g.contact_angle) : Json(nullptr)}});
+    }
+    if (c.model.dynamic_geometry) {
+        std::vector<uchar> initial_objects(static_cast<size_t>(lbm.get_N()), 0u);
+        for (ulong n = 0; n < lbm.get_N(); n++)
+            if (owner[static_cast<size_t>(n)] >= 0)
+                initial_objects[static_cast<size_t>(n)] =
+                    static_cast<uchar>(c.geometry[static_cast<size_t>(owner[static_cast<size_t>(n)])].object_index);
+        for (const auto &body : dynamic_bodies) {
+            const uchar object = static_cast<uchar>(body.geometry->object_index);
+            const ulong corrected =
+                enforce_object_volume(c, *body.current, body.target_cells, object, initial_objects);
+            geometries[static_cast<size_t>(body.geometry - c.geometry.data())]["solid_cells"] = corrected;
+            geometries[static_cast<size_t>(body.geometry - c.geometry.data())]["target_cells"] = body.target_cells;
+        }
+        std::fill(solid.begin(), solid.end(), 0u);
+        std::fill(owner.begin(), owner.end(), -1);
+        for (ulong n = 0; n < lbm.get_N(); n++) {
+            const uchar object = initial_objects[static_cast<size_t>(n)];
+            if (object == 0u)
+                continue;
+            solid[static_cast<size_t>(n)] = TYPE_S;
+            owner[static_cast<size_t>(n)] = static_cast<int>(object) - 1;
+        }
     }
     std::vector<unsigned long long> coverage(c.boundaries.size(), 0);
     std::vector<BoundaryFluxSurface> flux_surfaces;

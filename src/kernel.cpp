@@ -2464,6 +2464,43 @@ string opencl_c_container() { return R( // ########################## begin of O
 	}
 } // voxelize_mesh()
 
+)+"#ifdef DYNAMIC_GEOMETRY"+R(
+kernel void reconcile_dynamic_object_mask(global fpxx* fi, global float* u, global uchar* flags, const ulong t,
+                                           global uchar* object_id, const global uchar* desired_object_id,
+                                           const uchar object, const float cx, const float cy, const float cz,
+                                           const float ux, const float uy, const float uz,
+                                           const float rx, const float ry, const float rz) {
+	const uxx n = get_global_id(0);
+	if(n>=def_N) return;
+	const uchar previous_object = object_id[n];
+	const bool wanted = desired_object_id[n]==object;
+	if(wanted&&previous_object!=object) {
+		if(previous_object!=0u) {
+			object_id[n] = 255u;
+			return;
+		}
+		const float3 offset = (float3)(0.5f*(float)((int)def_Nx+2*def_Ox)-0.5f,
+		                               0.5f*(float)((int)def_Ny+2*def_Oy)-0.5f,
+		                               0.5f*(float)((int)def_Nz+2*def_Oz)-0.5f);
+		const float3 p = position(coordinates(n))+offset;
+		const float3 u_set = (float3)(ux, uy, uz)+cross((float3)(cx, cy, cz)-p, (float3)(rx, ry, rz));
+		flags[n] = (flags[n]&~TYPE_BO)|TYPE_S;
+		store3(u, n, u_set);
+		object_id[n] = object;
+	} else if(!wanted&&previous_object==object) {
+		const float3 un = load3(u, n);
+		uxx j[def_velocity_set];
+		neighbors(n, j);
+		float feq[def_velocity_set];
+		calculate_f_eq(1.0f, un.x, un.y, un.z, feq);
+		store_f(n, feq, fi, j, t);
+		flags[n] &= ~TYPE_S;
+		store3(u, n, (float3)(0.0f, 0.0f, 0.0f));
+		object_id[n] = 0u;
+	}
+}
+)+"#endif"+R( // DYNAMIC_GEOMETRY
+
 )+R(kernel void unvoxelize_mesh(global uchar* flags, const uchar flag, float x0, float y0, float z0, float x1, float y1, float z1) { // remove voxelized triangle mesh
 	const uxx n = get_global_id(0);
 	const float3 p = position(coordinates(n))+(float3)(0.5f*(float)((int)def_Nx+2*def_Ox)-0.5f, 0.5f*(float)((int)def_Ny+2*def_Oy)-0.5f, 0.5f*(float)((int)def_Nz+2*def_Oz)-0.5f);
