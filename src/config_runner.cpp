@@ -317,6 +317,60 @@ static double mesh_surface_distance_squared(const Mesh &mesh, const float3 &poin
                                                             mesh.p2[triangle]));
     return distance;
 }
+static bool point_inside_mesh(const Mesh &mesh, const float3 &point) {
+    const float3 direction(1.0f, 0.372312f, 0.618034f);
+    std::vector<double> intersections;
+    intersections.reserve(mesh.triangle_number / 2u + 1u);
+    for (uint triangle = 0; triangle < mesh.triangle_number; triangle++) {
+        const float3 &a = mesh.p0[triangle], edge1 = mesh.p1[triangle] - a, edge2 = mesh.p2[triangle] - a;
+        const float3 h = cross(direction, edge2);
+        const double determinant = dot(edge1, h);
+        if (std::abs(determinant) < 1e-10)
+            continue;
+        const double inverse = 1.0 / determinant;
+        const float3 s = point - a;
+        const double u = inverse * dot(s, h);
+        if (u < -1e-8 || u > 1.0 + 1e-8)
+            continue;
+        const float3 q = cross(s, edge1);
+        const double v = inverse * dot(direction, q);
+        if (v < -1e-8 || u + v > 1.0 + 1e-8)
+            continue;
+        const double distance = inverse * dot(edge2, q);
+        if (distance > 1e-8)
+            intersections.push_back(distance);
+    }
+    std::sort(intersections.begin(), intersections.end());
+    size_t unique = 0;
+    for (double distance : intersections)
+        if (unique == 0 || std::abs(distance - intersections[unique - 1]) > 1e-6)
+            intersections[unique++] = distance;
+    return unique % 2u != 0u;
+}
+static void rasterize_object_mask(const Config &c, const Mesh &mesh, const uchar object,
+                                  std::vector<uchar> &objects, const std::vector<uchar> &old_objects,
+                                  const std::vector<uchar> &flags, const std::string &id) {
+    const int lower[3]{std::max(0, static_cast<int>(std::floor(mesh.pmin.x)) - 1),
+                       std::max(0, static_cast<int>(std::floor(mesh.pmin.y)) - 1),
+                       std::max(0, static_cast<int>(std::floor(mesh.pmin.z)) - 1)};
+    const int upper[3]{std::min(static_cast<int>(c.cells[0]) - 1, static_cast<int>(std::ceil(mesh.pmax.x)) + 1),
+                       std::min(static_cast<int>(c.cells[1]) - 1, static_cast<int>(std::ceil(mesh.pmax.y)) + 1),
+                       std::min(static_cast<int>(c.cells[2]) - 1, static_cast<int>(std::ceil(mesh.pmax.z)) + 1)};
+    for (int z = lower[2]; z <= upper[2]; z++)
+        for (int y = lower[1]; y <= upper[1]; y++)
+            for (int x = lower[0]; x <= upper[0]; x++) {
+                const ulong n = static_cast<ulong>(x) +
+                                (static_cast<ulong>(y) + static_cast<ulong>(z) * c.cells[1]) * c.cells[0];
+                if (!point_inside_mesh(mesh, float3(static_cast<float>(x), static_cast<float>(y),
+                                                    static_cast<float>(z))))
+                    continue;
+                require(objects[static_cast<size_t>(n)] == 0u,
+                        "Prescribed STL objects overlap: " + id);
+                require(!is_solid(flags[static_cast<size_t>(n)]) || old_objects[static_cast<size_t>(n)] > 0u,
+                        "Dynamic STL intersects a fixed solid: " + id);
+                objects[static_cast<size_t>(n)] = object;
+            }
+}
 static ulong enforce_object_volume(const Config &c, const Mesh &mesh, const ulong target, const uchar object,
                                    std::vector<uchar> &objects, const std::vector<uchar> *flags = nullptr) {
     ulong count = static_cast<ulong>(std::count(objects.begin(), objects.end(), object));
@@ -461,24 +515,25 @@ static void update_dynamic_geometry(LBM &lbm, Config &c, std::vector<DynamicBody
         }
         require(length(linear) + length(angular) * radius < 0.57735027f,
                 "Dynamic STL surface velocity reaches the lattice speed of sound: " + body.geometry->id);
-        lbm.voxelize_mesh_on_device(next.get(), TYPE_S, center, linear, angular,
-                                    static_cast<uchar>(body.geometry->object_index));
         next->pmin = actual_min;
         next->pmax = actual_max;
         body.current = std::move(next);
         body.state = next_state;
     }
-    domain->object_id.read_from_device();
-    lbm.flags.read_from_device();
-    lbm.u.read_from_device();
-    for (ulong n = 0; n < lbm.get_N(); n++)
-        require(domain->object_id[n] != 255u,
-                "Prescribed STL objects overlap at step " + std::to_string(static_cast<unsigned long long>(time)));
     std::vector<uchar> desired_objects(static_cast<size_t>(lbm.get_N())), current_flags(static_cast<size_t>(lbm.get_N()));
     for (ulong n = 0; n < lbm.get_N(); n++) {
-        desired_objects[static_cast<size_t>(n)] = domain->object_id[n];
-        current_flags[static_cast<size_t>(n)] = lbm.flags[n];
+        desired_objects[static_cast<size_t>(n)] = old_objects[static_cast<size_t>(n)];
+        current_flags[static_cast<size_t>(n)] = old_objects[static_cast<size_t>(n)] > 0u ? 0u : lbm.flags[n];
     }
+    for (const auto &body : bodies) {
+        const uchar object = static_cast<uchar>(body.geometry->object_index);
+        for (uchar &cell : desired_objects)
+            if (cell == object)
+                cell = 0u;
+    }
+    for (const auto &body : bodies)
+        rasterize_object_mask(c, *body.current, static_cast<uchar>(body.geometry->object_index), desired_objects,
+                              old_objects, current_flags, body.geometry->id);
     for (const auto &body : bodies)
         enforce_object_volume(c, *body.current, body.target_cells, static_cast<uchar>(body.geometry->object_index),
                               desired_objects, &current_flags);
@@ -493,6 +548,9 @@ static void update_dynamic_geometry(LBM &lbm, Config &c, std::vector<DynamicBody
     domain->object_id.read_from_device();
     lbm.flags.read_from_device();
     lbm.u.read_from_device();
+    for (ulong n = 0; n < lbm.get_N(); n++)
+        require(domain->object_id[n] != 255u,
+                "Prescribed STL objects overlap at step " + std::to_string(static_cast<unsigned long long>(time)));
     for (const auto &body : bodies) {
         const uchar object = static_cast<uchar>(body.geometry->object_index);
         ulong cells = 0;
@@ -932,6 +990,17 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
             if (owner[static_cast<size_t>(n)] >= 0)
                 initial_objects[static_cast<size_t>(n)] =
                     static_cast<uchar>(c.geometry[static_cast<size_t>(owner[static_cast<size_t>(n)])].object_index);
+        const std::vector<uchar> rough_objects = initial_objects;
+        const std::vector<uchar> no_fixed_flags(static_cast<size_t>(lbm.get_N()), 0u);
+        for (const auto &body : dynamic_bodies) {
+            const uchar object = static_cast<uchar>(body.geometry->object_index);
+            for (uchar &cell : initial_objects)
+                if (cell == object)
+                    cell = 0u;
+        }
+        for (const auto &body : dynamic_bodies)
+            rasterize_object_mask(c, *body.current, static_cast<uchar>(body.geometry->object_index), initial_objects,
+                                  rough_objects, no_fixed_flags, body.geometry->id);
         for (const auto &body : dynamic_bodies) {
             const uchar object = static_cast<uchar>(body.geometry->object_index);
             const ulong corrected =
