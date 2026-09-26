@@ -492,8 +492,13 @@ static void update_dynamic_geometry(LBM &lbm, Config &c, std::vector<DynamicBody
             const bool active = domain->material[n] != 255u &&
                                 (!c.model.free_surface || domain->material[n] > 0u ||
                                  (lbm.flags[n] & (TYPE_F | TYPE_I)));
-            if (active)
-                energy_before_remap += static_cast<double>(domain->thermal_capacity[n]) * domain->T[n];
+            if (active) {
+                const double liquid_fraction = c.model.free_surface && domain->material[n] == 0u
+                                                   ? std::clamp(static_cast<double>(lbm.phi[n]), 0.0, 1.0)
+                                                   : 1.0;
+                energy_before_remap +=
+                    liquid_fraction * static_cast<double>(domain->thermal_capacity[n]) * domain->T[n];
+            }
         }
     }
     for (auto &body : bodies) {
@@ -738,10 +743,14 @@ static void update_dynamic_geometry(LBM &lbm, Config &c, std::vector<DynamicBody
             const bool active = domain->material[n] != 255u &&
                                 (!c.model.free_surface || domain->material[n] > 0u ||
                                  (lbm.flags[n] & (TYPE_F | TYPE_I)));
+            const double liquid_fraction = active && c.model.free_surface && domain->material[n] == 0u
+                                               ? std::clamp(static_cast<double>(lbm.phi[n]), 0.0, 1.0)
+                                               : 1.0;
             if (active)
-                energy_after_remap += static_cast<double>(domain->thermal_capacity[n]) * domain->T[n];
+                energy_after_remap +=
+                    liquid_fraction * static_cast<double>(domain->thermal_capacity[n]) * domain->T[n];
             if (active && domain->material[n] == 0u)
-                correction_capacity += domain->thermal_capacity[n];
+                correction_capacity += liquid_fraction * domain->thermal_capacity[n];
         }
         const bool correct_all_active = correction_capacity == 0;
         if (correct_all_active) {
@@ -749,8 +758,12 @@ static void update_dynamic_geometry(LBM &lbm, Config &c, std::vector<DynamicBody
                 const bool active = domain->material[n] != 255u &&
                                     (!c.model.free_surface || domain->material[n] > 0u ||
                                      (lbm.flags[n] & (TYPE_F | TYPE_I)));
-                if (active)
-                    correction_capacity += domain->thermal_capacity[n];
+                if (active) {
+                    const double liquid_fraction = c.model.free_surface && domain->material[n] == 0u
+                                                       ? std::clamp(static_cast<double>(lbm.phi[n]), 0.0, 1.0)
+                                                       : 1.0;
+                    correction_capacity += liquid_fraction * domain->thermal_capacity[n];
+                }
             }
         }
         require(correction_capacity > 0, "Dynamic thermal remap has no active heat capacity");
@@ -966,7 +979,10 @@ static void monitor(LBM &lbm, const Config &c, std::ofstream &file,
                 require(std::isfinite(temperature), "Non-finite temperature at step " + std::to_string(lbm.get_t()));
                 tmin = std::min(tmin, temperature);
                 tmax = std::max(tmax, temperature);
-                energy += domain->thermal_capacity[n] * temperature;
+                const double liquid_fraction = c.model.free_surface && domain->material[n] == 0u
+                                                   ? std::clamp(static_cast<double>(lbm.phi[n]), 0.0, 1.0)
+                                                   : 1.0;
+                energy += liquid_fraction * domain->thermal_capacity[n] * temperature;
             }
         require(std::isfinite(tmin) && std::isfinite(tmax), "No active thermal cells remain");
     }
