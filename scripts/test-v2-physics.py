@@ -370,7 +370,8 @@ def main():
         moving["run"] = {"steps": 600, "monitor_every": 100}
         moving["output"] = {"vtk_fields": ["material", "T"], "vtk_every": 600, "initial": True}
         static = copy.deepcopy(moving)
-        del static["geometry"][0]["motion"]
+        static["geometry"][0]["motion"]["translation"]["amplitude"] = [0, 0, 0]
+        static["geometry"][0]["motion"]["rotation"]["amplitude_degrees"] = 0
         static["case"]["name"] = "dynamic-thermal-static-reference"
         static_result, static_entry = invoke("moving-temperature-static-reference", static)
         moving_result, moving_entry = invoke("moving-temperature-full-cycle", moving)
