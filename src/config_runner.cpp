@@ -468,7 +468,7 @@ static double sample_object_temperature(const Config &c, const std::vector<float
     return nearest;
 }
 static void update_dynamic_geometry(LBM &lbm, Config &c, std::vector<DynamicBody> &bodies, double time,
-                                    const double mass_target) {
+                                    const double mass_target, const double energy_target) {
     auto *domain = lbm.lbm_domain[0];
     domain->object_id.read_from_device();
     lbm.rho.read_from_device();
@@ -767,7 +767,8 @@ static void update_dynamic_geometry(LBM &lbm, Config &c, std::vector<DynamicBody
             }
         }
         require(correction_capacity > 0, "Dynamic thermal remap has no active heat capacity");
-        const double temperature_correction = (energy_before_remap - energy_after_remap) / correction_capacity;
+        const double desired_energy = std::isfinite(energy_target) ? energy_target : energy_before_remap;
+        const double temperature_correction = (desired_energy - energy_after_remap) / correction_capacity;
         for (ulong n = 0; n < lbm.get_N(); n++) {
             const bool active = domain->material[n] != 255u &&
                                 (!c.model.free_surface || domain->material[n] > 0u ||
@@ -1385,6 +1386,29 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
                     dynamic_mass_target += lbm.rho[n];
         }
     }
+    double dynamic_energy_target = std::numeric_limits<double>::quiet_NaN();
+    double dynamic_energy_source_per_step = 0;
+    bool closed_adiabatic_thermal = closed_dynamic_domain && c.model.temperature;
+    for (const auto &boundary : c.boundaries)
+        closed_adiabatic_thermal = closed_adiabatic_thermal &&
+                                   (!boundary.thermal || boundary.thermal_type == "adiabatic");
+    if (closed_adiabatic_thermal) {
+        dynamic_energy_target = 0;
+        auto *domain = lbm.lbm_domain[0];
+        for (ulong n = 0; n < lbm.get_N(); n++) {
+            const bool active = domain->material[n] != 255u &&
+                                (!c.model.free_surface || domain->material[n] > 0u ||
+                                 (lbm.flags[n] & (TYPE_F | TYPE_I)));
+            if (!active)
+                continue;
+            const double liquid_fraction = c.model.free_surface && domain->material[n] == 0u
+                                               ? std::clamp(static_cast<double>(lbm.phi[n]), 0.0, 1.0)
+                                               : 1.0;
+            dynamic_energy_target +=
+                liquid_fraction * static_cast<double>(domain->thermal_capacity[n]) * lbm.T[n];
+            dynamic_energy_source_per_step += liquid_fraction * domain->thermal_source[n];
+        }
+    }
     auto advance_to = [&](ulong target) {
         if (!c.model.dynamic_geometry) {
             lbm.run(target - lbm.get_t(), c.steps);
@@ -1392,8 +1416,10 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
         }
         while (lbm.get_t() < target) {
             lbm.run(1, c.steps);
+            if (std::isfinite(dynamic_energy_target))
+                dynamic_energy_target += dynamic_energy_source_per_step;
             update_dynamic_geometry(lbm, c, dynamic_bodies, static_cast<double>(lbm.get_t()),
-                                    dynamic_mass_target);
+                                    dynamic_mass_target, dynamic_energy_target);
         }
     };
     std::ofstream stats(output / "monitor.csv", std::ios::binary);
