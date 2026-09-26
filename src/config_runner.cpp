@@ -491,9 +491,14 @@ static void project_closed_surface_mass(LBM &lbm, const double target, const std
     double current = 0;
     for (ulong n = 0; n < lbm.get_N(); n++) {
         const uchar state = lbm.flags[n] & (TYPE_F | TYPE_I | TYPE_G);
-        if (!is_solid(lbm.flags[n]) && (state & (TYPE_F | TYPE_I)))
+        if (!is_solid(lbm.flags[n]) && state == TYPE_F) {
+            mass[static_cast<size_t>(n)] = lbm.rho[n];
             current += mass[static_cast<size_t>(n)];
-        else
+        } else if (!is_solid(lbm.flags[n]) && (state & TYPE_I)) {
+            mass[static_cast<size_t>(n)] =
+                std::clamp(mass[static_cast<size_t>(n)], 0.0f, lbm.rho[n]);
+            current += mass[static_cast<size_t>(n)];
+        } else
             mass[static_cast<size_t>(n)] = 0.0f;
     }
     const double correction = target - current;
