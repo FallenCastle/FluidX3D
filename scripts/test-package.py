@@ -178,7 +178,7 @@ def suite(package, root, device, spec):
     command = [sys.executable, '-B', package / 'source' / 'scripts' / filename,
                '--workspace-root', workspace, '--repository-root', package / 'source',
                '--configs-root', package / 'cases' / 'configs', '--executable', package / 'bin' / 'Solver-IBM.exe',
-               '--device', device]
+               '--build-name', 'packaged-release', '--device', device]
     if needs_reference:
         command += ['--reference-root', package / 'tests' / 'reference']
     invocation = execute(command, root / ('suite-' + name + '.log'), workspace)
