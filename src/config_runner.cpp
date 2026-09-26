@@ -515,9 +515,9 @@ static void project_closed_surface_mass(LBM &lbm, const double target, const std
     for (ulong n = 0; n < lbm.get_N(); n++)
         if (!is_solid(lbm.flags[n])) {
             const uchar state = lbm.flags[n] & (TYPE_F | TYPE_I | TYPE_G);
-            lbm.phi[n] = state == TYPE_F ? 1.0f
-                         : state == TYPE_I ? std::clamp(mass[static_cast<size_t>(n)] / lbm.rho[n], 0.0f, 1.0f)
-                                           : 0.0f;
+            lbm.phi[n] = (state & TYPE_I) ? std::clamp(mass[static_cast<size_t>(n)] / lbm.rho[n], 0.0f, 1.0f)
+                         : (state & TYPE_F) ? 1.0f
+                                            : 0.0f;
         }
     domain->write_dynamic_surface_mass(mass.data());
     lbm.phi.write_to_device();
@@ -1465,11 +1465,10 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
     if (conserve_mass) {
         dynamic_mass_target = 0;
         if (c.model.free_surface) {
-            std::vector<float> initial_surface_mass(static_cast<size_t>(lbm.get_N()));
-            lbm.lbm_domain[0]->settle_dynamic_surface_mass(initial_surface_mass.data());
             for (ulong n = 0; n < lbm.get_N(); n++)
                 if (!is_solid(lbm.flags[n]))
-                    dynamic_mass_target += initial_surface_mass[static_cast<size_t>(n)];
+                    dynamic_mass_target += static_cast<double>(lbm.rho[n]) *
+                                           std::clamp(static_cast<double>(lbm.phi[n]), 0.0, 1.0);
         } else {
             for (ulong n = 0; n < lbm.get_N(); n++)
                 if (!is_solid(lbm.flags[n]))
