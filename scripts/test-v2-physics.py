@@ -368,14 +368,14 @@ def main():
         moving["physics"]["thermal"]["conductivity"] = 1e-6
         moving["physics"]["thermal"]["materials"][0]["conductivity"] = 1e-6
         moving["run"] = {"steps": 600, "monitor_every": 100}
-        moving["output"] = {"vtk_fields": ["object", "T"], "vtk_every": 600, "initial": True}
+        moving["output"] = {"vtk_fields": ["material", "T"], "vtk_every": 600, "initial": True}
         static = copy.deepcopy(moving)
         del static["geometry"][0]["motion"]
         static["case"]["name"] = "dynamic-thermal-static-reference"
         static_result, static_entry = invoke("moving-temperature-static-reference", static)
         moving_result, moving_entry = invoke("moving-temperature-full-cycle", moving)
-        static_object = config_tests.vtk(static_result / "object-000000600.vtk")["values"]
-        moving_object = config_tests.vtk(moving_result / "object-000000600.vtk")["values"]
+        static_object = config_tests.vtk(static_result / "material-000000600.vtk")["values"]
+        moving_object = config_tests.vtk(moving_result / "material-000000600.vtk")["values"]
         assert static_object == moving_object
         static_temperature = config_tests.vtk(static_result / "T-000000600.vtk")["values"]
         moving_temperature = config_tests.vtk(moving_result / "T-000000600.vtk")["values"]
