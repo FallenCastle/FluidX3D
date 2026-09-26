@@ -476,17 +476,6 @@ static void assign_thermal_material_cells(LBM &lbm, DynamicBody &body) {
         body.thermal_cells[sample] = targets[nearest];
     }
 }
-static double liquid_mass(LBM &lbm) {
-    auto *domain = lbm.lbm_domain[0];
-    std::vector<float> mass(static_cast<size_t>(lbm.get_N()));
-    domain->settle_dynamic_surface_mass(mass.data());
-    lbm.flags.read_from_device();
-    double total = 0;
-    for (ulong n = 0; n < lbm.get_N(); n++)
-        if (!is_solid(lbm.flags[n]))
-            total += mass[static_cast<size_t>(n)];
-    return total;
-}
 static void project_closed_surface_mass(LBM &lbm, const double target, const std::string &context) {
     auto *domain = lbm.lbm_domain[0];
     std::vector<float> mass(static_cast<size_t>(lbm.get_N()));
@@ -1752,6 +1741,7 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
         c.resolved["conservation"]["initial_sensible_energy_lattice"] = dynamic_energy_target;
     save_json(output / "resolved-config.json", c.resolved);
     BudgetTotals budget;
+    double open_mass_target = std::numeric_limits<double>::quiet_NaN();
     auto advance_to = [&](ulong target) {
         if (!c.model.dynamic_geometry && !(c.model.free_surface && std::isfinite(dynamic_mass_target)) &&
             flux_surfaces.empty() && !has_thermal_boundary_exchange) {
@@ -1761,9 +1751,6 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
             return;
         }
         while (lbm.get_t() < target) {
-            const double open_mass_before =
-                !flux_surfaces.empty() && c.model.free_surface ? liquid_mass(lbm)
-                                                                : std::numeric_limits<double>::quiet_NaN();
             lbm.run(1, c.steps);
             if (c.model.dynamic_geometry) {
                 if (std::isfinite(dynamic_energy_target))
@@ -1784,8 +1771,12 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
             if (!flux_surfaces.empty()) {
                 sync(lbm);
                 const auto flow = boundary_flow(lbm, c, flux_surfaces);
-                if (c.model.free_surface)
-                    project_closed_surface_mass(lbm, open_mass_before - flow.first, "Open-boundary");
+                if (c.model.free_surface) {
+                    require(std::isfinite(open_mass_target), "Open-boundary mass target is not initialized");
+                    open_mass_target -= flow.first;
+                    if (std::abs(flow.first) > 1.0e-12)
+                        project_closed_surface_mass(lbm, open_mass_target, "Open-boundary");
+                }
                 budget.cumulative_mass_outward += flow.first;
                 budget.cumulative_enthalpy_outward += flow.second;
             }
@@ -1848,6 +1839,8 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
     const MonitorSnapshot initial_snapshot = monitor(lbm, c, stats, flux_surfaces, flux_file);
     budget.initial_mass = initial_snapshot.mass;
     budget.initial_energy = initial_snapshot.sensible_energy;
+    if (!flux_surfaces.empty() && c.model.free_surface)
+        open_mass_target = initial_snapshot.mass;
     if (c.model.free_surface)
         write_free_surface_metrics(lbm, c, initial_snapshot, surface_metrics);
     if (c.model.free_surface || c.model.temperature)
