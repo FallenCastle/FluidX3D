@@ -531,6 +531,20 @@ public:
 			if(safe_length>0ull) cl_queue.enqueueWriteBuffer(device_buffer, blocking, safe_offset*sizeof(T), safe_length*sizeof(T), (void*)(host_buffer+safe_offset), event_waitlist, event_returned);
 		}
 	}
+	inline void read_to_external(void* destination, const ulong offset, const ulong length, const bool blocking=true) { // read a device buffer slice into externally owned memory; works for device-only allocations (no host buffer required)
+		if(!device_buffer_exists || length==0ull) return;
+		const ulong safe_offset=min(offset, range()), safe_length=min(length, range()-safe_offset);
+		if(safe_length==0ull) return;
+		if(is_zero_copy) memcpy(destination, (void*)(host_buffer+safe_offset), safe_length*sizeof(T));
+		else cl_queue.enqueueReadBuffer(device_buffer, blocking, safe_offset*sizeof(T), safe_length*sizeof(T), destination);
+	}
+	inline void write_from_external(const void* source, const ulong offset, const ulong length, const bool blocking=true) { // write externally owned memory into a device buffer slice; works for device-only allocations (no host buffer required)
+		if(!device_buffer_exists || length==0ull) return;
+		const ulong safe_offset=min(offset, range()), safe_length=min(length, range()-safe_offset);
+		if(safe_length==0ull) return;
+		if(is_zero_copy) memcpy((void*)(host_buffer+safe_offset), source, safe_length*sizeof(T));
+		else cl_queue.enqueueWriteBuffer(device_buffer, blocking, safe_offset*sizeof(T), safe_length*sizeof(T), (void*)source);
+	}
 	inline void read_from_device_1d(const ulong x0, const ulong x1, const int dimension=-1, const bool blocking=true, const vector<Event>* event_waitlist=nullptr, Event* event_returned=nullptr) { // read 1D domain from device, either for all vector dimensions (-1) or for a specified dimension
 		if(host_buffer_exists&&device_buffer_exists&&!is_zero_copy) {
 			const uint i0=(uint)max(0, dimension), i1=dimension<0 ? d : i0+1u;

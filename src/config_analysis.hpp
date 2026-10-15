@@ -3,6 +3,7 @@
 #include "lbm.hpp"
 #include <fstream>
 #include <iomanip>
+#include <cmath>
 
 namespace fxconfig {
 inline bool is_solid(uchar flags) { return (flags & (TYPE_S | TYPE_E)) == TYPE_S; }
@@ -47,6 +48,28 @@ struct Moments {
                 {"std_population", count ? Json(std::sqrt(std::max(0.0, m2[i] / count))) : Json(nullptr)}};
         return out;
     }
+    Json to_json() const { return {{"count", count}, {"first", first}, {"last", last}, {"mean", mean}, {"m2", m2}}; }
+    static Moments from_json(const Json &j, const size_t fields) {
+        Moments m;
+        require(j.is_object() && j.contains("count") && j["count"].is_number_integer(), "Invalid moments record");
+        m.count = j["count"].get<unsigned long long>();
+        m.first = j.value("first", 0ull);
+        m.last = j.value("last", 0ull);
+        require(j.contains("mean") && j["mean"].is_array() && j.contains("m2") && j["m2"].is_array(),
+                "Moments arrays missing");
+        require(j["mean"].size() == (m.count ? fields : 0) && j["m2"].size() == (m.count ? fields : 0),
+                "Moments array length mismatch");
+        for (const auto &v : j["mean"]) {
+            require(v.is_number() && std::isfinite(v.get<double>()), "Non-finite restored mean");
+            m.mean.push_back(v.get<double>());
+        }
+        for (const auto &v : j["m2"]) {
+            require(v.is_number() && std::isfinite(v.get<double>()) && v.get<double>() >= 0, "Invalid restored m2");
+            m.m2.push_back(v.get<double>());
+        }
+        require(m.count == 0 || m.first <= m.last, "Moments step order invalid");
+        return m;
+    }
 };
 class Analysis {
     const Config &c;
@@ -68,25 +91,47 @@ class Analysis {
     }
 
   public:
-    Analysis(const Config &config, const fs::path &dir, std::vector<std::vector<ulong>> targets)
+    Analysis(const Config &config, const fs::path &dir, std::vector<std::vector<ulong>> targets,
+             const Json *restore = nullptr)
         : c(config), output(dir), groups(std::move(targets)), probe_moments(c.probes.size()),
           force_moments(c.forces.size()) {
         if (!c.analysis)
             return;
-        probes.open(output / "probes.csv", std::ios::binary);
-        global.open(output / "analysis.csv", std::ios::binary);
-        forces.open(output / "forces.csv", std::ios::binary);
+        const auto mode = restore ? (std::ios::binary | std::ios::app) : std::ios::binary;
+        probes.open(output / "probes.csv", mode);
+        global.open(output / "analysis.csv", mode);
+        forces.open(output / "forces.csv", mode);
         require(bool(probes) && bool(global) && bool(forces), "Cannot create analysis CSV");
         if (!c.surface_level_probes.empty()) {
-            surface_levels.open(output / "surface-levels.csv", std::ios::binary);
+            surface_levels.open(output / "surface-levels.csv", mode);
             require(bool(surface_levels), "Cannot create surface-levels.csv");
-            surface_levels << std::setprecision(17)
-                           << "step,time,id,x,y,liquid_height,top_elevation\n";
+            surface_levels << std::setprecision(17);
+            if (!restore)
+                surface_levels << "step,time,id,x,y,liquid_height,top_elevation\n";
         }
-        probes << std::setprecision(17) << "step,time,id,x,y,z,rho,ux,uy,uz,speed,p\n";
-        global << std::setprecision(17)
-               << "step,time,fluid_cells,mass,rho_mean,ux_mean,uy_mean,uz_mean,speed_mean,p_mean,kinetic_energy\n";
-        forces << std::setprecision(17) << "step,time,id,fx,fy,fz\n";
+        probes << std::setprecision(17);
+        global << std::setprecision(17);
+        forces << std::setprecision(17);
+        if (!restore) {
+            probes << "step,time,id,x,y,z,rho,ux,uy,uz,speed,p\n";
+            global << "step,time,fluid_cells,mass,rho_mean,ux_mean,uy_mean,uz_mean,speed_mean,p_mean,kinetic_energy\n";
+            forces << "step,time,id,fx,fy,fz\n";
+            return;
+        }
+        require(restore->contains("moments"), "Restore state lacks moments");
+        const auto &moments = (*restore)["moments"];
+        require(moments.is_object() && moments.contains("global"), "Restore state lacks global moments");
+        global_moments = Moments::from_json(moments["global"], global_names.size());
+        require(moments.contains("probes") && moments["probes"].is_array() &&
+                    moments["probes"].size() == probe_moments.size(),
+                "Probe moments count mismatch");
+        for (size_t i = 0; i < probe_moments.size(); i++)
+            probe_moments[i] = Moments::from_json(moments["probes"][i], probe_names.size());
+        require(moments.contains("forces") && moments["forces"].is_array() &&
+                    moments["forces"].size() == force_moments.size(),
+                "Force moments count mismatch");
+        for (size_t i = 0; i < force_moments.size(); i++)
+            force_moments[i] = Moments::from_json(moments["forces"][i], force_names.size());
     }
     void sample(LBM &lbm) {
         if (!c.analysis)
@@ -199,6 +244,26 @@ class Analysis {
         for (size_t i = 0; i < c.forces.size(); i++)
             result["forces"][c.forces[i].id] = force_moments[i].json(force_names);
         save_json(output / "statistics.json", result);
+    }
+    void flush_all() {
+        if (!c.analysis)
+            return;
+        probes.flush();
+        global.flush();
+        forces.flush();
+        if (surface_levels.is_open())
+            surface_levels.flush();
+    }
+    Json serialize_moments() const {
+        Json out;
+        out["global"] = global_moments.to_json();
+        out["probes"] = Json::array();
+        for (const auto &m : probe_moments)
+            out["probes"].push_back(m.to_json());
+        out["forces"] = Json::array();
+        for (const auto &m : force_moments)
+            out["forces"].push_back(m.to_json());
+        return out;
     }
 };
 } // namespace fxconfig

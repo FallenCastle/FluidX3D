@@ -134,6 +134,7 @@ struct Config {
     std::array<bool, 3> periodic{};
     unsigned long long steps = 0, monitor_every = 100, vtk_every = 0;
     bool initial_output = true;
+    unsigned long long checkpoint_every = 0, checkpoint_keep = 2;
     std::vector<std::string> vtk_fields{"u", "rho", "flags"};
     Json resolved;
 };
@@ -141,6 +142,7 @@ void require(bool ok, const std::string &message);
 double number(const Json &j, const std::string &where);
 void save_json(const fs::path &path, const Json &value);
 std::string sha256(const fs::path &path);
+std::string sha256_bytes(const std::string &data);
 Config read_config(const fs::path &path);
 Json capabilities();
 Json solver_description(const Config &c);

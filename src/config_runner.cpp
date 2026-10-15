@@ -1,5 +1,6 @@
 #include "config.hpp"
 #include "config_analysis.hpp"
+#include "config_checkpoint.hpp"
 #include "info.hpp"
 #include "lbm.hpp"
 #include "version.hpp"
@@ -925,6 +926,14 @@ static std::string stamp(unsigned long long t) {
     s << std::setw(9) << std::setfill('0') << t;
     return s.str();
 }
+static unsigned long long next_grid_point(const unsigned long long t, const unsigned long long start,
+                                          const unsigned long long every) {
+    if (every == 0)
+        return std::numeric_limits<unsigned long long>::max();
+    if (t < start)
+        return start;
+    return start + ((t - start) / every + 1) * every;
+}
 static void vtk(LBM &lbm, const Config &c, const fs::path &output, const std::string &fieldname) {
     unsigned dim = fieldname == "u" ? 3 : 1;
     bool bytes = fieldname == "flags" || fieldname == "material" || fieldname == "object";
@@ -1192,7 +1201,13 @@ static void write_budget(LBM &lbm, const Config &c, const MonitorSnapshot &snaps
     file.flush();
     require(bool(file), "Conservation budget write failed");
 }
-static void solve(Config &c, const fs::path &output, int device, bool prepare) {
+struct RestartContext {
+    Json previous_completion;        // parsed completion.json of the previous run segment (may be null)
+    std::string original_config_sha; // SHA256 of inputs/original-config.json
+    std::string current_config_sha;  // SHA256 of the user-supplied config used for this restart
+    bool used_snapshot_assets = false;
+};
+static void solve(Config &c, const fs::path &output, int device, bool prepare, const RestartContext *restart) {
     const auto devices = get_devices(false); // verify the explicit device instead of silently falling back
     if (device >= 0) {
         bool found = false;
@@ -1623,7 +1638,7 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
             }
         }
     }
-    if (c.model.dynamic_geometry && c.model.temperature) {
+    if (!restart && c.model.dynamic_geometry && c.model.temperature) {
         auto *domain = lbm.lbm_domain[0];
         for (auto &body : dynamic_bodies) {
             const uchar object = static_cast<uchar>(body.geometry->object_index);
@@ -1671,13 +1686,77 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
                      static_cast<float>(c.dt));
     lbm.run(0, c.steps);
     sync(lbm);
+    Json restart_chain = Json::array();
+    std::unique_ptr<SelectedCheckpoint> loaded;
+    CheckpointIdentity identity;
+    if (c.checkpoint_every || restart) {
+        identity.numerical_identity = sha256_bytes(lbm.get_numerical_identity_source());
+        identity.original_config_sha = sha256(output / "original-config.json");
+        identity.current_config_sha = restart ? restart->current_config_sha : identity.original_config_sha;
+        identity.executable_sha = executable_sha256();
+        identity.device_name = c.resolved.value("device_name", std::string());
+        identity.device_driver = c.resolved.value("device_driver", std::string());
+        identity.accepted_target_steps = c.steps;
+        if (c.checkpoint_every) {
+            std::vector<unsigned long long> body_targets;
+            for (const auto &body : dynamic_bodies)
+                body_targets.push_back(body.target_cells);
+            require_disk_headroom(output, checkpoint_estimate_bytes(lbm, c, body_targets));
+        }
+    }
+    if (restart) {
+        loaded = std::make_unique<SelectedCheckpoint>(
+            select_checkpoint(lbm, c, output, identity.numerical_identity, dynamic_bodies.size()));
+        for (const auto &warning : loaded->warnings)
+            std::cout << "Warning: " << warning << "\n";
+        apply_checkpoint(lbm, c, output, *loaded);
+        sync(lbm);
+        const unsigned long long source_step = loaded->step;
+        if (restart->previous_completion.is_object() && restart->previous_completion.contains("restarts") &&
+            restart->previous_completion["restarts"].is_array())
+            restart_chain = restart->previous_completion["restarts"];
+        restart_chain.push_back({{"restart_index", restart_chain.size() + 1},
+                                 {"source_step", source_step},
+                                 {"requested_steps", c.steps},
+                                 {"config_sha256", restart->current_config_sha},
+                                 {"started_utc", utc_stamp()}});
+        for (auto &body : dynamic_bodies) {
+            body.state = motion_state(*body.geometry, static_cast<double>(source_step));
+            body.current = transform_mesh(*body.base, body.pivot, body.state);
+        }
+        if (c.model.dynamic_geometry && c.model.temperature) {
+            require(loaded->state.bodies.size() == dynamic_bodies.size(), "Checkpoint body count mismatch");
+            for (size_t i = 0; i < dynamic_bodies.size(); i++) {
+                auto &body = dynamic_bodies[i];
+                const auto &saved = loaded->state.bodies[i];
+                require(saved.target_cells == body.target_cells,
+                        "Checkpoint body target cells mismatch: " + body.geometry->id);
+                require(saved.cells.size() == static_cast<size_t>(saved.target_cells) &&
+                            saved.positions.size() == static_cast<size_t>(saved.target_cells) * 3 &&
+                            saved.temperatures.size() == static_cast<size_t>(saved.target_cells),
+                        "Checkpoint body arrays inconsistent");
+                body.thermal_cells = saved.cells;
+                body.thermal_material_positions.resize(static_cast<size_t>(saved.target_cells));
+                for (size_t s = 0; s < saved.positions.size() / 3; s++)
+                    body.thermal_material_positions[s] =
+                        float3(saved.positions[s * 3], saved.positions[s * 3 + 1], saved.positions[s * 3 + 2]);
+                body.thermal_material_temperature = saved.temperatures;
+            }
+        }
+        std::cout << "Restarted from checkpoint step " << source_step << "\n";
+    }
     double dynamic_mass_target = std::numeric_limits<double>::quiet_NaN();
     bool closed_domain = true;
     for (const auto &boundary : c.boundaries)
         closed_domain = closed_domain && (boundary.type == "no_slip" || boundary.type == "moving_wall" ||
                                           boundary.type == "periodic");
     const bool conserve_mass = closed_domain && c.model.dynamic_geometry;
-    if (conserve_mass) {
+    if (restart) {
+        require(loaded->state.dynamic_mass_enabled == conserve_mass,
+                "Checkpoint mass-projection mode differs from the configuration");
+        if (conserve_mass)
+            dynamic_mass_target = loaded->state.dynamic_mass_target;
+    } else if (conserve_mass) {
         dynamic_mass_target = 0;
         if (c.model.free_surface) {
             for (ulong n = 0; n < lbm.get_N(); n++)
@@ -1697,7 +1776,13 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
     for (const auto &boundary : c.boundaries)
         closed_adiabatic_thermal = closed_adiabatic_thermal &&
                                    (!boundary.thermal || boundary.thermal_type == "adiabatic");
-    if (closed_adiabatic_thermal) {
+    if (restart) {
+        require(loaded->state.dynamic_energy_enabled == closed_adiabatic_thermal,
+                "Checkpoint energy-projection mode differs from the configuration");
+        if (closed_adiabatic_thermal)
+            dynamic_energy_target = loaded->state.dynamic_energy_target;
+        dynamic_energy_source_per_step = loaded->state.source_per_step;
+    } else if (closed_adiabatic_thermal) {
         dynamic_energy_target = 0;
         auto *domain = lbm.lbm_domain[0];
         for (ulong n = 0; n < lbm.get_N(); n++) {
@@ -1713,7 +1798,7 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
                 liquid_fraction * static_cast<double>(domain->thermal_capacity[n]) * lbm.T[n];
         }
     }
-    if (c.model.temperature) {
+    if (!restart && c.model.temperature) {
         auto *domain = lbm.lbm_domain[0];
         for (ulong n = 0; n < lbm.get_N(); n++) {
             const bool active = domain->material[n] != 255u &&
@@ -1742,11 +1827,32 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
         c.resolved["conservation"]["initial_mass_lattice"] = dynamic_mass_target;
     if (std::isfinite(dynamic_energy_target))
         c.resolved["conservation"]["initial_sensible_energy_lattice"] = dynamic_energy_target;
+    if (restart)
+        c.resolved["restart"] = {{"from_step", loaded->step},
+                                 {"fallback_used", loaded->used_fallback},
+                                 {"finish_only", loaded->finish_only}};
     save_json(output / "resolved-config.json", c.resolved);
     BudgetTotals budget;
     double open_mass_target = std::numeric_limits<double>::quiet_NaN();
     double open_energy_target = std::numeric_limits<double>::quiet_NaN();
-    if (c.model.temperature && c.model.free_surface && !std::isfinite(dynamic_energy_target)) {
+    if (restart) {
+        budget.initial_mass = loaded->state.initial_mass;
+        budget.initial_energy = loaded->state.initial_energy;
+        budget.cumulative_mass_outward = loaded->state.cumulative_mass_outward;
+        budget.cumulative_enthalpy_outward = loaded->state.cumulative_enthalpy_outward;
+        budget.cumulative_source_in = loaded->state.cumulative_source_in;
+        budget.cumulative_boundary_heat_in = loaded->state.cumulative_boundary_heat_in;
+        require(loaded->state.open_mass_enabled == (!flux_surfaces.empty() && c.model.free_surface),
+                "Checkpoint open-boundary mass mode differs from the configuration");
+        if (loaded->state.open_mass_enabled)
+            open_mass_target = loaded->state.open_mass_target;
+        const bool open_energy_projection =
+            c.model.temperature && c.model.free_surface && !std::isfinite(dynamic_energy_target);
+        require(loaded->state.open_energy_enabled == open_energy_projection,
+                "Checkpoint open-boundary energy mode differs from the configuration");
+        if (loaded->state.open_energy_enabled)
+            open_energy_target = loaded->state.open_energy_target;
+    } else if (c.model.temperature && c.model.free_surface && !std::isfinite(dynamic_energy_target)) {
         auto *domain = lbm.lbm_domain[0];
         open_energy_target = 0;
         for (ulong n = 0; n < lbm.get_N(); n++) {
@@ -1811,84 +1917,162 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
             }
         }
     };
-    std::ofstream stats(output / "monitor.csv", std::ios::binary);
+    const auto csv_mode = restart ? (std::ios::binary | std::ios::app) : std::ios::binary;
+    std::vector<std::pair<std::string, std::ofstream *>> tracked_outputs;
+    std::ofstream stats(output / "monitor.csv", csv_mode);
     require(bool(stats), "Cannot create monitor.csv");
-    stats << "step,time,fluid_cells,mass_lattice,rho_min_lattice,rho_max_lattice,speed_max_lattice";
-    if (c.model.temperature)
-        stats << ",temperature_min_lattice,temperature_max_lattice,sensible_energy_lattice";
-    stats << '\n';
+    tracked_outputs.emplace_back("monitor.csv", &stats);
+    if (!restart) {
+        stats << "step,time,fluid_cells,mass_lattice,rho_min_lattice,rho_max_lattice,speed_max_lattice";
+        if (c.model.temperature)
+            stats << ",temperature_min_lattice,temperature_max_lattice,sensible_energy_lattice";
+        stats << '\n';
+    }
     std::ofstream flux;
     std::ofstream *flux_file = nullptr;
     if (!flux_surfaces.empty()) {
-        flux.open(output / "boundary-flux.csv", std::ios::binary);
+        flux.open(output / "boundary-flux.csv", csv_mode);
         require(bool(flux), "Cannot create boundary-flux.csv");
-        flux << "step,time,boundary_id,boundary_type,mass_flow_outward_lattice";
-        if (c.model.temperature)
-            flux << ",sensible_enthalpy_flow_outward_lattice";
-        flux << '\n';
+        tracked_outputs.emplace_back("boundary-flux.csv", &flux);
+        if (!restart) {
+            flux << "step,time,boundary_id,boundary_type,mass_flow_outward_lattice";
+            if (c.model.temperature)
+                flux << ",sensible_enthalpy_flow_outward_lattice";
+            flux << '\n';
+        }
         flux_file = &flux;
     }
     std::ofstream surface_metrics;
     if (c.model.free_surface) {
-        surface_metrics.open(output / "free-surface.csv", std::ios::binary);
+        surface_metrics.open(output / "free-surface.csv", csv_mode);
         require(bool(surface_metrics), "Cannot create free-surface.csv");
-        surface_metrics << "step,time,liquid_mass_lattice,liquid_volume_lattice,centroid_x_lattice,"
-                           "centroid_y_lattice,centroid_z_lattice,"
-                           "level_min_lattice,level_max_lattice,wet_area_lattice,dry_area_lattice\n";
+        tracked_outputs.emplace_back("free-surface.csv", &surface_metrics);
+        if (!restart)
+            surface_metrics << "step,time,liquid_mass_lattice,liquid_volume_lattice,centroid_x_lattice,"
+                               "centroid_y_lattice,centroid_z_lattice,"
+                               "level_min_lattice,level_max_lattice,wet_area_lattice,dry_area_lattice\n";
     }
     std::ofstream conservation_budget;
     if (c.model.free_surface || c.model.temperature) {
-        conservation_budget.open(output / "conservation-budget.csv", std::ios::binary);
+        conservation_budget.open(output / "conservation-budget.csv", csv_mode);
         require(bool(conservation_budget), "Cannot create conservation-budget.csv");
-        conservation_budget << "step,time";
-        if (c.model.free_surface)
-            conservation_budget << ",mass_initial_lattice,mass_current_lattice,cumulative_mass_outward_lattice,"
-                                   "mass_residual_lattice";
-        if (c.model.temperature)
-            conservation_budget << ",sensible_energy_initial_lattice,sensible_energy_current_lattice,"
-                                   "cumulative_sensible_enthalpy_outward_lattice,cumulative_heat_source_in_lattice,"
-                                   "cumulative_boundary_heat_in_lattice,"
-                                   "sensible_energy_residual_lattice";
-        conservation_budget << '\n';
+        tracked_outputs.emplace_back("conservation-budget.csv", &conservation_budget);
+        if (!restart) {
+            conservation_budget << "step,time";
+            if (c.model.free_surface)
+                conservation_budget << ",mass_initial_lattice,mass_current_lattice,cumulative_mass_outward_lattice,"
+                                       "mass_residual_lattice";
+            if (c.model.temperature)
+                conservation_budget << ",sensible_energy_initial_lattice,sensible_energy_current_lattice,"
+                                       "cumulative_sensible_enthalpy_outward_lattice,cumulative_heat_source_in_lattice,"
+                                       "cumulative_boundary_heat_in_lattice,"
+                                       "sensible_energy_residual_lattice";
+            conservation_budget << '\n';
+        }
     }
     std::ofstream object_motion;
     if (c.model.dynamic_geometry) {
-        object_motion.open(output / "object-motion.csv", std::ios::binary);
+        object_motion.open(output / "object-motion.csv", csv_mode);
         require(bool(object_motion), "Cannot create object-motion.csv");
-        object_motion
-            << "step,time,geometry_id,object_index,solid_cells,translation_x_lattice,translation_y_lattice,"
-               "translation_z_lattice,pivot_x_lattice,pivot_y_lattice,pivot_z_lattice,axis_x,axis_y,axis_z,"
-               "degrees,linear_velocity_x_lattice,linear_velocity_y_lattice,linear_velocity_z_lattice,"
-               "angular_velocity_radians_per_step,force_x_lattice,force_y_lattice,force_z_lattice,"
-               "torque_x_lattice,torque_y_lattice,torque_z_lattice";
-        if (c.model.temperature)
-            object_motion << ",temperature_min,temperature_max,sensible_energy_lattice";
-        object_motion << '\n';
+        tracked_outputs.emplace_back("object-motion.csv", &object_motion);
+        if (!restart) {
+            object_motion
+                << "step,time,geometry_id,object_index,solid_cells,translation_x_lattice,translation_y_lattice,"
+                   "translation_z_lattice,pivot_x_lattice,pivot_y_lattice,pivot_z_lattice,axis_x,axis_y,axis_z,"
+                   "degrees,linear_velocity_x_lattice,linear_velocity_y_lattice,linear_velocity_z_lattice,"
+                   "angular_velocity_radians_per_step,force_x_lattice,force_y_lattice,force_z_lattice,"
+                   "torque_x_lattice,torque_y_lattice,torque_z_lattice";
+            if (c.model.temperature)
+                object_motion << ",temperature_min,temperature_max,sensible_energy_lattice";
+            object_motion << '\n';
+        }
     }
-    const MonitorSnapshot initial_snapshot = monitor(lbm, c, stats, flux_surfaces, flux_file);
-    budget.initial_mass = initial_snapshot.mass;
-    budget.initial_energy = initial_snapshot.sensible_energy;
-    if (!flux_surfaces.empty() && c.model.free_surface)
-        open_mass_target = initial_snapshot.mass;
-    if (c.model.free_surface)
-        write_free_surface_metrics(lbm, c, initial_snapshot, surface_metrics);
-    if (c.model.free_surface || c.model.temperature)
-        write_budget(lbm, c, initial_snapshot, budget, conservation_budget);
-    if (c.model.dynamic_geometry)
-        write_object_motion(lbm, c, dynamic_bodies, object_motion);
-    Analysis analysis(c, output, std::move(force_groups));
+    std::vector<std::pair<std::string, unsigned long long>> vtk_written;
+    if (restart)
+        vtk_written = loaded->state.vtk_frames;
+    if (!restart) {
+        const MonitorSnapshot initial_snapshot = monitor(lbm, c, stats, flux_surfaces, flux_file);
+        budget.initial_mass = initial_snapshot.mass;
+        budget.initial_energy = initial_snapshot.sensible_energy;
+        if (!flux_surfaces.empty() && c.model.free_surface)
+            open_mass_target = initial_snapshot.mass;
+        if (c.model.free_surface)
+            write_free_surface_metrics(lbm, c, initial_snapshot, surface_metrics);
+        if (c.model.free_surface || c.model.temperature)
+            write_budget(lbm, c, initial_snapshot, budget, conservation_budget);
+        if (c.model.dynamic_geometry)
+            write_object_motion(lbm, c, dynamic_bodies, object_motion);
+    }
+    Json analysis_restore;
+    if (restart && c.analysis)
+        analysis_restore = {{"moments", loaded->state.moments}};
+    Analysis analysis(c, output, std::move(force_groups), restart && c.analysis ? &analysis_restore : nullptr);
+    if (c.analysis) {
+        tracked_outputs.emplace_back("probes.csv", nullptr);
+        tracked_outputs.emplace_back("analysis.csv", nullptr);
+        tracked_outputs.emplace_back("forces.csv", nullptr);
+        if (!c.surface_level_probes.empty())
+            tracked_outputs.emplace_back("surface-levels.csv", nullptr);
+    }
+    auto finish_run = [&]() {
+        analysis.finish();
+        std::ofstream status(output / "status.txt", std::ios::binary);
+        status << SOLVER_IBM_NAME " " SOLVER_IBM_VERSION_STRING "\nBased on " SOLVER_IBM_UPSTREAM_NAME " "
+                  SOLVER_IBM_UPSTREAM_VERSION "\nCase = " << c.name << "\nSteps = " << lbm.get_t()
+               << "\nRequested steps = " << c.steps << "\nLattice viscosity = " << std::setprecision(17) << c.nu
+               << "\nTime per step = " << c.dt << "\nStorage = " << ddf_storage_name(c.storage)
+               << "\nSolver = " << solver_description(c).dump() << "\n";
+        status.close();
+        require(bool(status), "Cannot write status report");
+        Json completion = {{"product", SOLVER_IBM_NAME},
+                           {"version", SOLVER_IBM_VERSION_STRING},
+                           {"release_status", SOLVER_IBM_RELEASE_STATUS},
+                           {"status", prepare ? "prepared" : "succeeded"},
+                           {"storage", ddf_storage_name(c.storage)},
+                           {"solver", solver_description(c)},
+                           {"steps", lbm.get_t()},
+                           {"requested_steps", c.steps},
+                           {"actual_time", lbm.get_t() * c.dt}};
+        if (restart) {
+            completion["restarts"] = restart_chain;
+            completion["restarted_from_step"] = loaded->step;
+            if (restart->used_snapshot_assets)
+                completion["used_snapshot_assets"] = true;
+        }
+        if (c.checkpoint_every)
+            completion["checkpoint"] = {{"every", c.checkpoint_every}, {"keep", c.checkpoint_keep}};
+        save_json(output / "completion.json", completion);
+    };
+    if (restart && loaded->finish_only) {
+        finish_run();
+        return;
+    }
     auto next_sample = c.sample_start;
-    if (!prepare && c.analysis && next_sample == 0) {
+    if (restart) {
+        if (c.analysis)
+            next_sample = next_grid_point(loaded->step, c.sample_start, c.sample_every);
+    } else if (!prepare && c.analysis && next_sample == 0) {
         analysis.sample(lbm);
         next_sample = c.sample_every;
     }
-    if (prepare || c.initial_output) {
-        for (const auto &name : c.vtk_fields)
+    if (!restart && (prepare || c.initial_output)) {
+        for (const auto &name : c.vtk_fields) {
             vtk(lbm, c, output, name);
-        if (prepare && std::find(c.vtk_fields.begin(), c.vtk_fields.end(), "flags") == c.vtk_fields.end())
+            vtk_written.emplace_back(name, lbm.get_t());
+        }
+        if (prepare && std::find(c.vtk_fields.begin(), c.vtk_fields.end(), "flags") == c.vtk_fields.end()) {
             vtk(lbm, c, output, "flags");
+            vtk_written.emplace_back("flags", lbm.get_t());
+        }
     }
     auto next_monitor = c.monitor_every, next_vtk = c.vtk_every;
+    if (restart) {
+        next_monitor = next_grid_point(loaded->step, 0, c.monitor_every);
+        next_vtk = c.vtk_every ? next_grid_point(loaded->step, 0, c.vtk_every) : 0;
+    }
+    unsigned long long next_checkpoint = 0;
+    if (c.checkpoint_every)
+        next_checkpoint = restart ? next_grid_point(loaded->step, 0, c.checkpoint_every) : c.checkpoint_every;
     ulong last_output = 0;
     while (!prepare && lbm.get_t() < c.steps) {
         auto next = std::min(c.steps, next_monitor);
@@ -1896,6 +2080,8 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
             next = std::min(next, next_sample);
         if (c.vtk_every)
             next = std::min(next, next_vtk);
+        if (c.checkpoint_every)
+            next = std::min(next, next_checkpoint);
         advance_to(next);
         sync(lbm);
         if (c.analysis && next == next_sample) {
@@ -1913,32 +2099,79 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare) {
             next_monitor = next > c.steps - std::min(c.monitor_every, c.steps) ? c.steps : next + c.monitor_every;
         }
         if ((c.vtk_every && next == next_vtk) || next == c.steps) {
-            for (const auto &name : c.vtk_fields)
+            for (const auto &name : c.vtk_fields) {
                 vtk(lbm, c, output, name);
+                vtk_written.emplace_back(name, lbm.get_t());
+            }
             last_output = next;
             if (c.vtk_every)
                 next_vtk = next > c.steps - std::min(c.vtk_every, c.steps) ? c.steps : next + c.vtk_every;
         }
+        if (c.checkpoint_every && (next == next_checkpoint || next == c.steps)) {
+            for (auto &tracked : tracked_outputs)
+                if (tracked.second)
+                    tracked.second->flush();
+            analysis.flush_all();
+            CheckpointHostState state;
+            state.t = lbm.get_t();
+            state.initial_mass = budget.initial_mass;
+            state.initial_energy = budget.initial_energy;
+            state.cumulative_mass_outward = budget.cumulative_mass_outward;
+            state.cumulative_enthalpy_outward = budget.cumulative_enthalpy_outward;
+            state.cumulative_source_in = budget.cumulative_source_in;
+            state.cumulative_boundary_heat_in = budget.cumulative_boundary_heat_in;
+            state.dynamic_mass_enabled = std::isfinite(dynamic_mass_target);
+            state.dynamic_mass_target = state.dynamic_mass_enabled ? dynamic_mass_target : 0;
+            state.dynamic_energy_enabled = std::isfinite(dynamic_energy_target);
+            state.dynamic_energy_target = state.dynamic_energy_enabled ? dynamic_energy_target : 0;
+            state.open_mass_enabled = std::isfinite(open_mass_target);
+            state.open_mass_target = state.open_mass_enabled ? open_mass_target : 0;
+            state.open_energy_enabled = std::isfinite(open_energy_target);
+            state.open_energy_target = state.open_energy_enabled ? open_energy_target : 0;
+            state.source_per_step = dynamic_energy_source_per_step;
+            state.analysis_enabled = c.analysis;
+            if (c.analysis)
+                state.moments = analysis.serialize_moments();
+            if (c.model.dynamic_geometry && c.model.temperature)
+                for (const auto &body : dynamic_bodies) {
+                    BodyThermalState entry;
+                    const std::string prefix = "body-" + std::to_string(state.bodies.size());
+                    entry.target_cells = body.target_cells;
+                    entry.cells_file = prefix + "-cells.bin";
+                    entry.positions_file = prefix + "-positions.bin";
+                    entry.temperatures_file = prefix + "-temperatures.bin";
+                    entry.cells = body.thermal_cells;
+                    entry.positions.reserve(body.thermal_material_positions.size() * 3);
+                    for (const auto &position : body.thermal_material_positions) {
+                        entry.positions.push_back(position.x);
+                        entry.positions.push_back(position.y);
+                        entry.positions.push_back(position.z);
+                    }
+                    entry.temperatures = body.thermal_material_temperature;
+                    state.bodies.push_back(std::move(entry));
+                }
+            for (const auto &tracked : tracked_outputs) {
+                OutputFileRecord record;
+                record.path = tracked.first;
+                record.bytes = fs::file_size(output / tracked.first);
+                record.last_step = state.t;
+                state.outputs.push_back(record);
+            }
+            state.vtk_frames = vtk_written;
+            state.restart_count = restart ? loaded->state.restart_count + 1 : 0;
+            state.final_checkpoint = state.t == c.steps;
+            state.restarts = restart_chain;
+            identity.accepted_target_steps = c.steps;
+            std::vector<std::string> warnings;
+            save_checkpoint(lbm, c, output, state, identity, warnings);
+            for (const auto &warning : warnings)
+                std::cout << "Warning: " << warning << "\n";
+            if (next == next_checkpoint)
+                next_checkpoint = next + c.checkpoint_every;
+        }
     }
     (void)last_output;
-    analysis.finish();
-    std::ofstream status(output / "status.txt", std::ios::binary);
-    status << SOLVER_IBM_NAME " " SOLVER_IBM_VERSION_STRING "\nBased on " SOLVER_IBM_UPSTREAM_NAME " "
-              SOLVER_IBM_UPSTREAM_VERSION "\nCase = " << c.name << "\nSteps = " << lbm.get_t()
-           << "\nRequested steps = " << c.steps << "\nLattice viscosity = " << std::setprecision(17) << c.nu
-           << "\nTime per step = " << c.dt << "\nStorage = " << ddf_storage_name(c.storage)
-           << "\nSolver = " << solver_description(c).dump() << "\n";
-    status.close();
-    require(bool(status), "Cannot write status report");
-    save_json(output / "completion.json", {{"product", SOLVER_IBM_NAME},
-                                           {"version", SOLVER_IBM_VERSION_STRING},
-                                           {"release_status", SOLVER_IBM_RELEASE_STATUS},
-                                           {"status", prepare ? "prepared" : "succeeded"},
-                                           {"storage", ddf_storage_name(c.storage)},
-                                           {"solver", solver_description(c)},
-                                           {"steps", lbm.get_t()},
-                                           {"requested_steps", c.steps},
-                                           {"actual_time", lbm.get_t() * c.dt}});
+    finish_run();
 }
 static std::vector<std::string> arguments(int argc, char *argv[]) {
     std::vector<std::string> out;
@@ -1964,16 +2197,17 @@ int entry(int argc, char *argv[]) {
     console_batch_mode = true;
     fs::path output;
     bool owns_output = false;
+    OutputLock lock;
     try {
         auto args = arguments(argc, argv);
         fs::path config_path;
         int device = -1;
-        bool validate = false, prepare = false;
+        bool validate = false, prepare = false, restart = false;
         std::set<std::string> seen;
         if (args.empty() || (args.size() == 1 && args[0] == "--help")) {
             std::cout << SOLVER_IBM_NAME " " SOLVER_IBM_VERSION_STRING "\n"
-                         SOLVER_IBM_EXECUTABLE " --config FILE [--device ID] [--output DIR] [--validate | "
-                         "--prepare-only]\n" SOLVER_IBM_EXECUTABLE
+                         SOLVER_IBM_EXECUTABLE " --config FILE [--device ID] [--output DIR] [--restart] "
+                         "[--validate | --prepare-only]\n" SOLVER_IBM_EXECUTABLE
                          " --capabilities | --list-devices | --version | --help\n"
                          "Based on " SOLVER_IBM_UPSTREAM_NAME " " SOLVER_IBM_UPSTREAM_VERSION "; "
                          SOLVER_IBM_UPSTREAM_CREDIT ".\n";
@@ -1998,6 +2232,8 @@ int entry(int argc, char *argv[]) {
                 validate = true;
             else if (arg == "--prepare-only")
                 prepare = true;
+            else if (arg == "--restart")
+                restart = true;
             else {
                 require(arg == "--config" || arg == "--device" || arg == "--output", "Unknown command option: " + arg);
                 require(i + 1 < args.size(), "Missing value for " + arg);
@@ -2017,8 +2253,88 @@ int entry(int argc, char *argv[]) {
         }
         require(!config_path.empty(), "--config is required");
         require(!(validate && prepare), "--validate and --prepare-only are mutually exclusive");
+        require(!(restart && (validate || prepare)),
+                "--restart cannot be combined with --validate or --prepare-only");
         Config c = read_config(config_path);
         validate_faces(c);
+        if (restart) {
+            if (output.empty())
+                output = c.path.parent_path() / "results";
+            output = fs::absolute(output);
+            require(fs::is_directory(output),
+                    "Restart requires the original run output directory: " + output.u8string());
+            const auto original = output / "original-config.json";
+            const auto manifest_path = output / "manifest.json";
+            require(fs::exists(original) && fs::exists(manifest_path) && fs::is_directory(output / "checkpoint"),
+                    "Restart target is not a checkpointed Solver-IBM run directory: " + output.u8string());
+            std::ifstream manifest_stream(manifest_path, std::ios::binary);
+            require(bool(manifest_stream), "Cannot read manifest.json");
+            const Json manifest = Json::parse(manifest_stream);
+            require(manifest.value("product", "") == std::string(SOLVER_IBM_NAME), "Run directory product mismatch");
+            require(sha256(original) == manifest.value("config_sha256", ""), "Stored original config changed");
+            std::ifstream original_stream(original, std::ios::binary);
+            require(bool(original_stream), "Cannot read original-config.json");
+            const Json original_json = Json::parse(original_stream);
+            std::vector<std::string> diffs;
+            collect_diff_paths(original_json, c.source, "", diffs);
+            for (const auto &diff : diffs)
+                require(diff == "/run/steps" || diff == "/run/duration" || diff == "/run/checkpoint_every" ||
+                            diff == "/run/checkpoint_keep",
+                        "Restart config differs outside the allowed whitelist: " + diff);
+            require(original_json.contains("run") && c.source.contains("run") &&
+                        original_json["run"].contains("steps") == c.source["run"].contains("steps"),
+                    "Restart cannot switch between run.steps and run.duration");
+            bool used_snapshot_assets = false;
+            require(manifest.contains("assets") && manifest["assets"].is_array(), "Manifest lacks asset records");
+            for (const auto &asset : manifest["assets"]) {
+                const std::string original_path = asset.value("original_path", "");
+                const std::string hash = asset.value("sha256", "");
+                if (original_path.empty())
+                    continue;
+                const fs::path source_path = fs::u8path(original_path);
+                std::error_code ec;
+                if (!fs::exists(source_path, ec)) {
+                    used_snapshot_assets = true;
+                    std::cout << "Warning: original asset missing, using sealed snapshot: " << original_path << "\n";
+                    continue;
+                }
+                require(sha256(source_path) == hash, "Asset changed since the original run: " + original_path);
+            }
+            lock.acquire(output, true);
+            Json effective = c.source;
+            for (size_t i = 0; i < c.geometry.size(); i++)
+                effective["geometry"][i]["file"] = "inputs/assets/" + std::to_string(i) + ".stl";
+            for (size_t i = 0; i < c.liquid_regions.size(); i++)
+                if (c.liquid_regions[i].shape == "stl")
+                    effective["initial"]["liquid_regions"][i]["file"] =
+                        "inputs/assets/liquid-" + std::to_string(i) + ".stl";
+            save_json(output / "effective-config.json", effective);
+            const std::string current_config_sha = sha256(config_path);
+            c = read_config(output / "effective-config.json");
+            validate_faces(c);
+            c.resolved["geometry_inspection"] = inspect_meshes(c);
+            c.resolved["requested_device"] = device;
+            if (used_snapshot_assets)
+                c.resolved["used_snapshot_assets"] = true;
+            Json previous_completion;
+            {
+                std::ifstream completion_stream(output / "completion.json", std::ios::binary);
+                if (completion_stream)
+                    try {
+                        previous_completion = Json::parse(completion_stream);
+                    } catch (...) {
+                    }
+            }
+            RestartContext context;
+            context.previous_completion = previous_completion;
+            context.original_config_sha = sha256(original);
+            context.current_config_sha = current_config_sha;
+            context.used_snapshot_assets = used_snapshot_assets;
+            info.print_logo();
+            solve(c, output, device, false, &context);
+            running = false;
+            return 0;
+        }
         auto geometry = inspect_meshes(c);
         c.resolved["geometry_inspection"] = geometry;
         if (validate) {
@@ -2032,6 +2348,7 @@ int entry(int argc, char *argv[]) {
                 "Output directory must be empty: " + output.u8string());
         fs::create_directories(output / "inputs" / "assets");
         owns_output = true;
+        lock.acquire(output, false);
         auto original = output / "original-config.json";
         fs::copy_file(c.path, original);
         require(sha256(c.path) == sha256(original), "Config changed while snapshotting");
@@ -2086,9 +2403,22 @@ int entry(int argc, char *argv[]) {
                                                {"requested_steps", c.steps},
                                                {"steps", 0}});
         info.print_logo();
-        solve(c, output, device, prepare);
+        solve(c, output, device, prepare, nullptr);
         running = false;
         return 0;
+    } catch (const checkpoint_error &e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        if (!output.empty())
+            try {
+                save_json(output / "completion.json", {{"product", SOLVER_IBM_NAME},
+                                                       {"version", SOLVER_IBM_VERSION_STRING},
+                                                       {"status", "failed"},
+                                                       {"error", e.what()},
+                                                       {"exit_code", e.code}});
+            } catch (...) {
+            }
+        running = false;
+        return e.code;
     } catch (const std::exception &e) {
         std::cerr << "Error: " << e.what() << std::endl;
         if (owns_output)

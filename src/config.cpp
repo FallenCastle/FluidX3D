@@ -110,6 +110,46 @@ std::string sha256(const fs::path &path) {
     throw std::runtime_error("Configuration runner hashing currently requires the Windows NUC build");
 #endif
 }
+std::string sha256_bytes(const std::string &data) {
+#ifdef _WIN32
+    HCRYPTPROV provider = 0;
+    HCRYPTHASH hash = 0;
+    require(CryptAcquireContextW(&provider, nullptr, nullptr, PROV_RSA_AES, CRYPT_VERIFYCONTEXT) != 0,
+            "SHA256 provider failure");
+    if (!CryptCreateHash(provider, CALG_SHA_256, 0, 0, &hash)) {
+        CryptReleaseContext(provider, 0);
+        throw std::runtime_error("SHA256 hash failure");
+    }
+    try {
+        for (size_t offset = 0; offset < data.size() || offset == 0;) {
+            const size_t block = std::min<size_t>(data.size() - offset, 1u << 20);
+            if (block > 0)
+                require(CryptHashData(hash, reinterpret_cast<const BYTE *>(data.data() + offset),
+                                      static_cast<DWORD>(block), 0) != 0,
+                        "SHA256 update failure");
+            offset += block;
+            if (block == 0)
+                break;
+        }
+        BYTE result[32];
+        DWORD count = 32;
+        require(CryptGetHashParam(hash, HP_HASHVAL, result, &count, 0) != 0 && count == 32, "SHA256 result failure");
+        std::ostringstream out;
+        out << std::hex << std::setfill('0');
+        for (auto v : result)
+            out << std::setw(2) << unsigned(v);
+        CryptDestroyHash(hash);
+        CryptReleaseContext(provider, 0);
+        return out.str();
+    } catch (...) {
+        CryptDestroyHash(hash);
+        CryptReleaseContext(provider, 0);
+        throw;
+    }
+#else
+    throw std::runtime_error("Configuration runner hashing currently requires the Windows NUC build");
+#endif
+}
 Json capabilities() {
     return {{"product", SOLVER_IBM_NAME},
             {"version", SOLVER_IBM_VERSION_STRING},
@@ -159,6 +199,11 @@ Json capabilities() {
             {"parameters",
              {{"smagorinsky_constant", {{"exclusive_minimum", 0}, {"maximum", 1}, {"requires", "smagorinsky"}}},
               {"trt_magic_parameter", {{"exclusive_minimum", 0}, {"maximum", 1}, {"requires", "TRT"}}}}},
+            {"checkpoint",
+             {{"interval_field", "run.checkpoint_every"},
+              {"retention_field", "run.checkpoint_keep"},
+              {"restart_flag", "--restart"},
+              {"compatibility", "same product version and numerical kernel identity"}}},
             {"graphics", false},
             {"devices_per_run", 1}};
 }
@@ -897,7 +942,7 @@ Config read_config(const fs::path &path) {
         c.periodic[a] = topology[2 * a] == 1;
     }
     const auto &run = field(j, "run");
-    keys(run, {"steps", "duration", "monitor_every"}, "run");
+    keys(run, {"steps", "duration", "monitor_every", "checkpoint_every", "checkpoint_keep"}, "run");
     require(run.contains("steps") != run.contains("duration"), "Choose steps or duration");
     if (run.contains("steps"))
         c.steps = integer(run["steps"], "run.steps");
@@ -914,6 +959,12 @@ Config read_config(const fs::path &path) {
     }
     if (run.contains("monitor_every"))
         c.monitor_every = integer(run["monitor_every"], "monitor_every");
+    if (run.contains("checkpoint_every"))
+        c.checkpoint_every = integer(run["checkpoint_every"], "checkpoint_every", true);
+    if (run.contains("checkpoint_keep")) {
+        c.checkpoint_keep = integer(run["checkpoint_keep"], "checkpoint_keep");
+        require(c.checkpoint_keep >= 1 && c.checkpoint_keep <= 1000, "run.checkpoint_keep must be in [1, 1000]");
+    }
     if (j.contains("output")) {
         const auto &out = j["output"];
         keys(out, {"vtk_fields", "vtk_every", "initial"}, "output");
@@ -1064,6 +1115,8 @@ Config read_config(const fs::path &path) {
                   {"device_field_bytes", count * c.device_cell_bytes()},
                   {"host_field_and_union_bytes", count * (c.host_cell_bytes() + 1)},
                   {"actual_domain_length", {c.cells[0] * c.dx, c.cells[1] * c.dx, c.cells[2] * c.dx}}};
+    if (c.checkpoint_every)
+        c.resolved["checkpoint"] = {{"every", c.checkpoint_every}, {"keep", c.checkpoint_keep}};
     if (c.model.free_surface)
         c.resolved["free_surface"] = {{"lattice_surface_tension", c.surface_tension},
                                        {"environment_pressure", c.environment_pressure},

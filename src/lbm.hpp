@@ -149,7 +149,13 @@ public:
 	const SolverOptions& get_model() const { return model; }
 	uint get_ddf_bytes() const { return ddf_storage_bytes(storage); }
 	ulong get_distribution_capacity() const { return fi.capacity(); }
+	Memory<uchar>& get_fi() { return fi; } // checkpoint staging access to the device-only DDF buffer
+#ifdef SURFACE
+	Memory<float>& get_surface_mass() { return mass; } // checkpoint staging access
+	Memory<float>& get_surface_massex() { return massex; } // checkpoint staging access to the device-only excess-mass buffer
+#endif // SURFACE
 	const Device& get_device() const { return device; }
+	string get_numerical_identity_source() const; // returns the full OpenCL C source string this domain's numerical kernels are compiled from (device-independent; used as checkpoint compatibility identity)
 	uint get_Nx() const { return Nx; } // get (local) lattice dimensions in x-direction
 	uint get_Ny() const { return Ny; } // get (local) lattice dimensions in y-direction
 	uint get_Nz() const { return Nz; } // get (local) lattice dimensions in z-direction
@@ -510,6 +516,7 @@ public:
 	float get_alpha() const { return lbm_domain[0]->get_alpha(); } // get thermal diffusion coefficient
 	float get_beta() const { return lbm_domain[0]->get_beta(); } // get thermal expansion coefficient
 	ulong get_t() const { return lbm_domain[0]->get_t(); } // get discrete time step in LBM units
+	string get_numerical_identity_source() const { return lbm_domain[0]->get_numerical_identity_source(); } // checkpoint compatibility identity of the numerical kernel source
 	uint get_velocity_set() const { return lbm_domain[0]->get_velocity_set(); }
 	void set_fx(const float fx) { for(uint d=0u; d<get_D(); d++) lbm_domain[d]->set_fx(fx); } // set global froce per volume
 	void set_fy(const float fy) { for(uint d=0u; d<get_D(); d++) lbm_domain[d]->set_fy(fy); } // set global froce per volume

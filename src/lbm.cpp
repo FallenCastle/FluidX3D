@@ -544,6 +544,14 @@ string LBM_Domain::device_defines(const Device_Info& device_info) const { return
 #endif // PARTICLES
 ;}
 
+string LBM_Domain::get_numerical_identity_source() const { // mirrors the kernel source assembly in the LBM_Domain constructor; device_defines() does not depend on the device_info argument contents, so the result is device-independent
+#ifdef GRAPHICS
+	return device_defines(device.info)+graphics.device_defines(device.info)+get_opencl_c_code();
+#else // GRAPHICS
+	return device_defines(device.info)+get_opencl_c_code();
+#endif // GRAPHICS
+}
+
 #ifdef GRAPHICS
 void LBM_Domain::Graphics::allocate(Device& device) {
 	bitmap = Memory<int>(device, camera.width*camera.height);
