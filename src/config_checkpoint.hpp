@@ -985,6 +985,27 @@ inline void apply_checkpoint(LBM &lbm, const Config &c, const fs::path &output, 
             field.write(buffer.data(), loaded, length);
             loaded += length;
         }
+        // Defense in depth: read the device buffer back and compare against the file byte-for-byte
+        // before the run continues; any mismatch aborts the restart instead of evolving wrong state.
+        std::rewind(handle);
+        std::vector<char> readback(static_cast<size_t>(std::min(checkpoint_chunk_bytes, field.bytes ? field.bytes : 1ull)));
+        unsigned long long verified = 0;
+        while (verified < field.bytes) {
+            const unsigned long long length = std::min(checkpoint_chunk_bytes, field.bytes - verified);
+            require(std::fread(buffer.data(), 1, static_cast<size_t>(length), handle) == static_cast<size_t>(length),
+                    "Short read " + field.name);
+            field.read(readback.data(), verified, length);
+            if (std::memcmp(readback.data(), buffer.data(), static_cast<size_t>(length)) != 0) {
+                unsigned long long offset = 0;
+                while (offset < length && readback[offset] == buffer[offset])
+                    offset++;
+                std::fclose(handle);
+                throw checkpoint_error(checkpoint_exit_no_usable,
+                                       "Device state load verification failed for field " + field.name + " at byte " +
+                                           std::to_string(verified + offset));
+            }
+            verified += length;
+        }
         std::fclose(handle);
         if (field.sync_host)
             field.sync_host();
