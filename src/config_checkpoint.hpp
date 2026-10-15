@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cstring>
 #include <fstream>
+#include <iostream>
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
@@ -76,6 +77,39 @@ inline const std::string &checkpoint_fault_stage() {
 #endif
     }();
     return value;
+}
+
+// Development diagnostics: when SOLVER_IBM_DEBUG_HASH_AT=<step> is set, print SHA256 hashes of every
+// checkpointed device field at the given time step. Used to localize restart divergences; no effect
+// when the variable is unset.
+inline void debug_state_hash(const char *phase, LBM &lbm, const Config &c) {
+    std::string value;
+#ifdef _WIN32
+    char *buffer = nullptr;
+    size_t length = 0;
+    if (_dupenv_s(&buffer, &length, "SOLVER_IBM_DEBUG_HASH_AT") != 0 || buffer == nullptr)
+        return;
+    value.assign(buffer);
+    std::free(buffer);
+#else
+    const char *environment = std::getenv("SOLVER_IBM_DEBUG_HASH_AT");
+    if (environment == nullptr)
+        return;
+    value.assign(environment);
+#endif
+    if (value.empty())
+        return;
+    const unsigned long long at = std::strtoull(value.c_str(), nullptr, 10);
+    if (lbm.get_t() != at)
+        return;
+    std::string line = std::string("DEBUGHASH t=") + std::to_string(lbm.get_t()) + " phase=" + phase;
+    std::vector<char> scratch;
+    for (const auto &field : checkpoint_fields(lbm, c)) {
+        scratch.resize(static_cast<size_t>(field.bytes));
+        field.read(scratch.data(), 0, field.bytes);
+        line += " " + field.name + "=" + sha256_bytes(std::string(scratch.data(), scratch.size())).substr(0, 16);
+    }
+    std::cout << line << std::endl;
 }
 inline bool checkpoint_fault(const char *stage) { return checkpoint_fault_stage() == stage; }
 

@@ -1877,6 +1877,7 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare, c
         }
         while (lbm.get_t() < target) {
             lbm.run(1, c.steps);
+            debug_state_hash("post_stream", lbm, c);
             if (c.model.dynamic_geometry) {
                 if (std::isfinite(dynamic_energy_target))
                     dynamic_energy_target += dynamic_energy_source_per_step;
@@ -1890,6 +1891,7 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare, c
                     project_closed_sensible_energy(lbm, c, dynamic_energy_target, "Closed-domain");
                 }
             }
+            debug_state_hash("post_update", lbm, c);
             const double step_source = dynamic_energy_source_per_step;
             budget.cumulative_source_in += step_source;
             double step_boundary_heat = 0;
