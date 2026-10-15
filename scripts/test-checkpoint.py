@@ -314,6 +314,8 @@ def main():
     parser.add_argument("--configs-root", type=Path)
     parser.add_argument("--executable", type=Path)
     parser.add_argument("--device", default="0")
+    parser.add_argument("--baseline-executable", type=Path,
+                        help="V2.0.0 release Solver-IBM.exe for the frozen same-GPU disabled-path baseline comparison")
     args = parser.parse_args()
     if os.name != "nt":
         parser.error("Run on the Windows server only")
@@ -845,6 +847,54 @@ def main():
                     "wall_ratio": round(ratio, 3), "checkpoint_bytes": total,
                     "note": "informational; no pass/fail gate (r2 plan T4-26)"}
         suite.test("t4-overhead", t4_overhead)
+
+        # ------------------------------------------------------------------
+        # T5-29: baseline comparison (frozen case set, checkpointing disabled,
+        # same GPU): V2.0.0 release EXE vs candidate, data artifacts byte-identical
+        # ------------------------------------------------------------------
+        if args.baseline_executable:
+            def t5_baseline_comparison():
+                baseline = Path(args.baseline_executable).resolve()
+                assert baseline.exists(), f"baseline executable missing: {baseline}"
+                version = subprocess.run([str(baseline), "--version"], capture_output=True, text=True)
+                frozen = [
+                    ("fp16s-singlephase", "periodic-lattice.json"),
+                    ("thermal", "conjugate-heated-cube-lattice.json"),
+                    ("free-surface", "free-surface-sloshing-lattice.json"),
+                    ("combined-container", "thermal-free-surface-dynamic-fill-drain-lattice.json"),
+                ]
+                summary = {}
+                for case_name, filename in frozen:
+                    cfg = read(configs / filename)
+                    absolute_assets(cfg, configs)
+                    results = {}
+                    for label, exe in (("baseline", baseline), ("candidate", suite.executable)):
+                        d = suite.root / f"t5-baseline-{case_name}-{label}"
+                        d.mkdir(parents=True)
+                        write(d / "case.json", cfg)
+                        env = os.environ.copy()
+                        env.pop("SOLVER_IBM_CHECKPOINT_FAULT", None)
+                        with (d / "stdout.log").open("wb") as out, (d / "stderr.log").open("wb") as err:
+                            done = subprocess.run([str(exe), "--config", str(d / "case.json"),
+                                                   "--output", str(d / "results"), "--device", str(args.device)],
+                                                  cwd=d, stdout=out, stderr=err, env=env, timeout=3600)
+                        assert done.returncode == 0, f"{case_name}/{label}: exit {done.returncode}"
+                        results[label] = d / "results"
+                    names = sorted(p.name for p in results["baseline"].iterdir()
+                                   if p.suffix in (".vtk", ".csv") or p.name == "statistics.json")
+                    assert names, f"{case_name}: no data artifacts produced"
+                    diffs = []
+                    for n in names:
+                        b, c = results["baseline"] / n, results["candidate"] / n
+                        if not c.exists() or sha_file(b) != sha_file(c):
+                            diffs.append(n)
+                    assert not diffs, f"{case_name}: baseline/candidate differ: {diffs[:6]}"
+                    summary[case_name] = {"files_compared": len(names)}
+                return {"baseline_version": version.stdout.strip(),
+                        "baseline_sha256": sha_file(baseline),
+                        "frozen_set": summary,
+                        "note": "identity files (completion/status/resolved/manifest) excluded: version strings differ by design"}
+            suite.test("t5-baseline-comparison", t5_baseline_comparison)
 
     finally:
         suite.cleanup()
