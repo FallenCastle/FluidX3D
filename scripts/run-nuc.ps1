@@ -13,7 +13,8 @@ param(
     [switch]$ExpectBenchmark,
     [string]$ConfigPath,
     [switch]$PrepareOnly,
-    [string]$ExecutablePath
+    [string]$ExecutablePath,
+    [string]$RestartFromRunId
 )
 
 Set-StrictMode -Version Latest
@@ -81,6 +82,26 @@ if ($PSBoundParameters.ContainsKey('DeviceId')) {
     $requestedDevice = $DeviceId
     $programArguments = @($DeviceId.ToString([Globalization.CultureInfo]::InvariantCulture))
 }
+$priorRunDirectory = $null
+$priorResultsDirectory = $null
+if ($RestartFromRunId) {
+    if (-not $ConfigPath) { throw 'RestartFromRunId requires ConfigPath.' }
+    if ($PrepareOnly) { throw 'RestartFromRunId and PrepareOnly cannot be combined.' }
+    if ($ExpectBenchmark) { throw 'RestartFromRunId and ExpectBenchmark cannot be combined.' }
+    $priorRunDirectory = Join-Path $caseDirectory $RestartFromRunId
+    $priorResultsDirectory = Join-Path $priorRunDirectory 'results'
+    foreach ($required in @((Join-Path $priorResultsDirectory 'original-config.json'),
+            (Join-Path $priorResultsDirectory 'manifest.json'),
+            (Join-Path $priorResultsDirectory 'checkpoint'),
+            (Join-Path $priorRunDirectory 'run.json'))) {
+        if (-not (Test-Path -LiteralPath $required)) {
+            throw "Restart source is not a completed checkpointed run: missing $required"
+        }
+    }
+    # A restart continues the original results directory (single timeline); this run still gets
+    # its own RunId directory for logs, run.json and the executable snapshot.
+    $resultsDirectory = $priorResultsDirectory
+}
 if ($ConfigPath) {
     if ($ExpectBenchmark) { throw 'ConfigPath and ExpectBenchmark cannot be combined.' }
     $ConfigPath = (Resolve-Path -LiteralPath $ConfigPath -ErrorAction Stop).ProviderPath
@@ -89,6 +110,7 @@ if ($ConfigPath) {
         $programArguments += @('--device', $DeviceId.ToString([Globalization.CultureInfo]::InvariantCulture))
     }
     if ($PrepareOnly) { $programArguments += '--prepare-only' }
+    if ($RestartFromRunId) { $programArguments += '--restart' }
 } elseif ($PrepareOnly) { throw 'PrepareOnly requires ConfigPath.' }
 
 # Never reuse another run's directory or export mapping.
@@ -98,7 +120,9 @@ if ((Test-Path -LiteralPath $runDirectory) -or (Test-Path -LiteralPath $runtimeD
     throw "Run ID already exists; run the command again: $runId"
 }
 New-Item -ItemType Directory -Path $runDirectory | Out-Null
-foreach ($directory in @($logsDirectory, $resultsDirectory, $inputsDirectory)) {
+$directoriesToCreate = @($logsDirectory, $inputsDirectory)
+if (-not $RestartFromRunId) { $directoriesToCreate += $resultsDirectory }
+foreach ($directory in $directoriesToCreate) {
     New-Item -ItemType Directory -Path $directory | Out-Null
 }
 
@@ -115,6 +139,11 @@ $record = [ordered]@{
     exitCode = $null
     timeoutSeconds = $TimeoutSeconds
     deviceIdRequested = $requestedDevice
+    restart = $(if ($RestartFromRunId) { [ordered]@{
+            sourceRunId      = $RestartFromRunId
+            sourceRunDirectory = $priorRunDirectory
+            sourceResults    = $priorResultsDirectory
+        } } else { $null })
     build = [ordered]@{
         manifestPath = $buildManifestPath
         productName = $build.productName

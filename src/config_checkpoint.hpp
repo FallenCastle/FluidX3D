@@ -78,7 +78,27 @@ inline const std::string &checkpoint_fault_stage() {
     }();
     return value;
 }
-inline bool checkpoint_fault(const char *stage) { return checkpoint_fault_stage() == stage; }
+inline unsigned long long &checkpoint_save_counter() { // number of save_checkpoint calls in this process
+    static unsigned long long value = 0;
+    return value;
+}
+inline bool checkpoint_fault(const char *stage) {
+    // Value syntax: "<stage>" fires on every save; "<stage>#<n>" fires only on the n-th save of this
+    // process (1-based), enabling "first checkpoint commits, second crashes" test scenarios.
+    const std::string &value = checkpoint_fault_stage();
+    if (value.empty())
+        return false;
+    std::string name = value;
+    unsigned long long index = 0;
+    const auto separator = value.find('#');
+    if (separator != std::string::npos) {
+        name = value.substr(0, separator);
+        index = std::strtoull(value.c_str() + separator + 1, nullptr, 10);
+    }
+    if (name != stage)
+        return false;
+    return index == 0 || index == checkpoint_save_counter();
+}
 
 // ---------------------------------------------------------------------------
 // Low-level persistent I/O helpers
@@ -250,12 +270,6 @@ inline void debug_state_hash(const char *phase, LBM &lbm, const Config &c) {
         scratch.resize(static_cast<size_t>(field.bytes));
         field.read(scratch.data(), 0, field.bytes);
         line += " " + field.name + "=" + sha256_bytes(std::string(scratch.data(), scratch.size())).substr(0, 16);
-    }
-    {
-        auto &F = lbm.lbm_domain[0]->F;
-        std::vector<char> fscratch(static_cast<size_t>(F.capacity()));
-        F.read_to_external(fscratch.data(), 0, fscratch.size());
-        line += " F=" + sha256_bytes(std::string(fscratch.data(), fscratch.size())).substr(0, 16);
     }
     std::cout << line << std::endl;
 }
@@ -649,6 +663,7 @@ inline std::string checkpoint_dir_name(const unsigned long long step) {
 inline unsigned long long save_checkpoint(LBM &lbm, const Config &c, const fs::path &output,
                                           const CheckpointHostState &state, const CheckpointIdentity &identity,
                                           std::vector<std::string> &warnings) {
+    ++checkpoint_save_counter();
     const fs::path root = output / "checkpoint";
     std::error_code ec;
     fs::create_directories(root, ec);
@@ -848,23 +863,9 @@ inline SelectedCheckpoint select_checkpoint(LBM &lbm, const Config &c, const fs:
     if (candidates.empty())
         throw checkpoint_error(checkpoint_exit_no_usable, "No published checkpoints found in " + root.u8string());
     std::sort(candidates.begin(), candidates.end(), [](const auto &a, const auto &b) { return a.first > b.first; });
-    // latest.json is an advisory hint only; prefer it when it names an existing candidate
-    {
-        std::ifstream latest(root / "latest.json", std::ios::binary);
-        if (latest) {
-            try {
-                const Json hint = Json::parse(latest);
-                const auto step = hint.value("step", ~0ull);
-                for (size_t i = 0; i < candidates.size(); i++)
-                    if (candidates[i].first == step && i != 0) {
-                        std::swap(candidates[0], candidates[i]);
-                        break;
-                    }
-            } catch (...) {
-                // corrupt hint: fall through to newest-first scanning
-            }
-        }
-    }
+    // latest.json is purely advisory (tooling convenience): a published step directory is the commit
+    // record, so scanning newest-first is authoritative and tolerates a stale, missing, or corrupt hint
+    // (e.g. a crash between the W4 directory rename and the W5 pointer update).
     SelectedCheckpoint selected;
     selected.warnings.reserve(4);
     auto fields = checkpoint_fields(lbm, c);

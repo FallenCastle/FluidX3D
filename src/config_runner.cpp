@@ -2202,6 +2202,7 @@ int entry(int argc, char *argv[]) {
     console_batch_mode = true;
     fs::path output;
     bool owns_output = false;
+    bool lock_held = false;
     OutputLock lock;
     try {
         auto args = arguments(argc, argv);
@@ -2306,6 +2307,7 @@ int entry(int argc, char *argv[]) {
                 require(sha256(source_path) == hash, "Asset changed since the original run: " + original_path);
             }
             lock.acquire(output, true);
+            lock_held = true;
             Json effective = c.source;
             for (size_t i = 0; i < c.geometry.size(); i++)
                 effective["geometry"][i]["file"] = "inputs/assets/" + std::to_string(i) + ".stl";
@@ -2354,6 +2356,7 @@ int entry(int argc, char *argv[]) {
         fs::create_directories(output / "inputs" / "assets");
         owns_output = true;
         lock.acquire(output, false);
+        lock_held = true;
         auto original = output / "original-config.json";
         fs::copy_file(c.path, original);
         require(sha256(c.path) == sha256(original), "Config changed while snapshotting");
@@ -2413,7 +2416,7 @@ int entry(int argc, char *argv[]) {
         return 0;
     } catch (const checkpoint_error &e) {
         std::cerr << "Error: " << e.what() << std::endl;
-        if (!output.empty())
+        if (owns_output || lock_held)
             try {
                 save_json(output / "completion.json", {{"product", SOLVER_IBM_NAME},
                                                        {"version", SOLVER_IBM_VERSION_STRING},
@@ -2426,7 +2429,7 @@ int entry(int argc, char *argv[]) {
         return e.code;
     } catch (const std::exception &e) {
         std::cerr << "Error: " << e.what() << std::endl;
-        if (owns_output)
+        if (owns_output || lock_held)
             try {
                 save_json(output / "completion.json", {{"product", SOLVER_IBM_NAME},
                                                        {"version", SOLVER_IBM_VERSION_STRING},
