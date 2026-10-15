@@ -61,8 +61,19 @@ inline std::string utc_stamp() {
 // ---------------------------------------------------------------------------
 inline const std::string &checkpoint_fault_stage() {
     static const std::string value = [] {
+#ifdef _WIN32
+        char *buffer = nullptr;
+        size_t length = 0;
+        if (_dupenv_s(&buffer, &length, "SOLVER_IBM_CHECKPOINT_FAULT") == 0 && buffer != nullptr) {
+            const std::string result(buffer);
+            std::free(buffer);
+            return result;
+        }
+        return std::string();
+#else
         const char *environment = std::getenv("SOLVER_IBM_CHECKPOINT_FAULT");
         return environment ? std::string(environment) : std::string();
+#endif
     }();
     return value;
 }
@@ -766,7 +777,8 @@ inline void quarantine_checkpoint(const fs::path &root, const fs::path &director
     const fs::path target = root / "quarantine" /
                             (directory.filename().string() + "-" + utc_stamp() + "-" +
                              std::to_string(static_cast<unsigned long long>(std::time(nullptr)) % 1000));
-    if (!fs::rename(directory, target, ec))
+    fs::rename(directory, target, ec);
+    if (!ec)
         warnings.push_back("Quarantined invalid checkpoint " + directory.filename().string() + " (" + reason + ")");
     else
         warnings.push_back("Could not quarantine invalid checkpoint " + directory.filename().string() + ": " +
