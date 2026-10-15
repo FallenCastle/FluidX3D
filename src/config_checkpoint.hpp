@@ -31,7 +31,7 @@
 namespace fxconfig {
 
 // Bumped whenever the on-disk checkpoint layout or its semantics change.
-constexpr int checkpoint_format_version_value = 1;
+constexpr int checkpoint_format_version_value = 2; // v2: force field F added to the saved state (stale per-cell values are consumed by stream_collide in dynamic-geometry profiles)
 
 // Dedicated nonzero exit codes (1 remains the generic error code of entry()).
 constexpr int checkpoint_exit_no_usable = 3;   // every candidate failed integrity validation
@@ -212,6 +212,12 @@ inline std::vector<FieldIo> checkpoint_fields(LBM &lbm, const Config &c) {
 #endif // TEMPERATURE
     if (c.model.dynamic_geometry)
         fields.push_back(make_field_io<uchar>("object_id", domain->object_id, N, true));
+#ifdef FORCE_FIELD
+    // F is cross-step numerical state, not output scratch: config_force_field writes it on TYPE_S cells only,
+    // cells freed by moving objects keep stale nonzero values, and stream_collide adds F[n] on every
+    // non-solid cell. V2.0.0 baseline dynamics consume these values; restart must reproduce them exactly.
+    fields.push_back(make_field_io<float>("F", domain->F, N * 3, true));
+#endif // FORCE_FIELD
     return fields;
 }
 
