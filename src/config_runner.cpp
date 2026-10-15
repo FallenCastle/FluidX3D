@@ -1710,7 +1710,9 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare, c
         for (const auto &warning : loaded->warnings)
             std::cout << "Warning: " << warning << "\n";
         apply_checkpoint(lbm, c, output, *loaded);
+        debug_state_hash("post_apply", lbm, c);
         sync(lbm);
+        debug_state_hash("post_sync", lbm, c);
         const unsigned long long source_step = loaded->step;
         if (restart->previous_completion.is_object() && restart->previous_completion.contains("restarts") &&
             restart->previous_completion["restarts"].is_array())
