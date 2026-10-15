@@ -245,6 +245,12 @@ inline void debug_state_hash(const char *phase, LBM &lbm, const Config &c) {
         field.read(scratch.data(), 0, field.bytes);
         line += " " + field.name + "=" + sha256_bytes(std::string(scratch.data(), scratch.size())).substr(0, 16);
     }
+    {
+        auto &F = lbm.lbm_domain[0]->F;
+        std::vector<char> fscratch(static_cast<size_t>(F.capacity()));
+        F.read_to_external(fscratch.data(), 0, fscratch.size());
+        line += " F=" + sha256_bytes(std::string(fscratch.data(), fscratch.size())).substr(0, 16);
+    }
     std::cout << line << std::endl;
 }
 

@@ -1876,6 +1876,7 @@ static void solve(Config &c, const fs::path &output, int device, bool prepare, c
             return;
         }
         while (lbm.get_t() < target) {
+            debug_state_hash("pre_stream", lbm, c);
             lbm.run(1, c.steps);
             debug_state_hash("post_stream", lbm, c);
             if (c.model.dynamic_geometry) {
