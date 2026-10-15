@@ -122,15 +122,16 @@ inline void write_json_persistent(const fs::path &path, const Json &value) {
 
 inline void flush_directory_metadata(const fs::path &directory, std::vector<std::string> &warnings) {
 #ifdef _WIN32
-    const HANDLE handle = CreateFileW(directory.c_str(), GENERIC_READ,
-                                      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
-                                      FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+    const HANDLE handle = CreateFileW(directory.c_str(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                      nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
     if (handle == INVALID_HANDLE_VALUE) {
-        warnings.push_back("Cannot open checkpoint directory for metadata flush");
+        warnings.push_back("Cannot open checkpoint directory for metadata flush (error " +
+                           std::to_string(GetLastError()) + ")");
         return;
     }
     if (!FlushFileBuffers(handle))
-        warnings.push_back("Checkpoint directory metadata flush failed");
+        warnings.push_back("Checkpoint directory metadata flush failed (error " +
+                           std::to_string(GetLastError()) + "); the checkpoint remains committed via the journaled rename");
     CloseHandle(handle);
 #else
     const int descriptor = ::open(directory.string().c_str(), O_RDONLY | O_DIRECTORY);
