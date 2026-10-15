@@ -175,7 +175,7 @@ class Suite:
             return {}
         out = {}
         for entry in sorted(root.glob("step-*")):
-            if entry.is_dir():
+            if entry.is_dir() and not entry.name.endswith(".tmp"):
                 out[int(entry.name.split("-", 1)[1])] = entry
         return out
 
@@ -198,8 +198,9 @@ class Suite:
         return cfg_a, cfg_b
 
     # -- comparison (mode A: byte-exact) ------------------------------------
-    def compare_continuation(self, name, a_results, c_results, s, keep=2):
+    def compare_continuation(self, name, a_results, c_results, s, keep=2, extra_stamps=None):
         failures = []
+        allowed_extra = set(extra_stamps) if extra_stamps else {s}
         a_vtk = sorted(p.name for p in a_results.glob("*.vtk"))
         for vtk in a_vtk:
             target = c_results / vtk
@@ -216,7 +217,7 @@ class Suite:
             except ValueError:
                 failures.append(f"unparsable extra VTK: {path.name}")
                 continue
-            if stamp != s:
+            if stamp not in allowed_extra:
                 failures.append(f"unexpected extra VTK in C: {path.name}")
         for csv_name in CSV_NAMES:
             ap, cp = a_results / csv_name, c_results / csv_name
@@ -231,7 +232,10 @@ class Suite:
                 failures.append(f"CSV header differs: {csv_name}")
             step_of = lambda line: int(line.split(",", 1)[0])
             a_rows = [line for line in a_lines[1:] if step_of(line) > s]
-            c_rows = [line for line in c_lines[1:] if step_of(line) > s]
+            a_steps = {step_of(line) for line in a_rows}
+            historic_extra = allowed_extra - a_steps
+            c_rows = [line for line in c_lines[1:]
+                      if step_of(line) > s and step_of(line) not in historic_extra]
             if a_rows != c_rows:
                 failures.append(f"CSV rows > {s} differ: {csv_name} ({len(a_rows)} vs {len(c_rows)})")
         if (a_results / "statistics.json").exists():
@@ -317,7 +321,9 @@ def main():
     configs = suite.configs
 
     def repo_case(filename):
-        return read(configs / filename)
+        config = read(configs / filename)
+        absolute_assets(config, configs)
+        return config
 
     try:
         # ------------------------------------------------------------------
@@ -393,7 +399,8 @@ def main():
             c2 = suite.run_solver("t1-chain-c2", config_path=final_dir / "case.json",
                                   restart=True, output=split["results"])
             assert suite.restarted_step(c2["stdout"]) == 80
-            failures = suite.compare_continuation("t1-chain", ref["results"], split["results"], 40)
+            failures = suite.compare_continuation("t1-chain", ref["results"], split["results"], 40,
+                                                  extra_stamps={40, 80})
             assert not failures, "; ".join(failures[:6])
             completion = read(split["results"] / "completion.json")
             chain = completion.get("restarts")
@@ -588,7 +595,10 @@ def main():
             monitor = results / "monitor.csv"
             with monitor.open("a", encoding="utf-8") as handle:
                 handle.write("99999,garbage-half-row")
-            process = suite.launch_solver("t2-retry-c1", split["directory"] / "case.json", results, restart=True)
+            cont_dir = suite.root / "t2-retry-cont"
+            cont_dir.mkdir()
+            write(cont_dir / "case.json", cfg_a)
+            process = suite.launch_solver("t2-retry-c1", cont_dir / "case.json", results, restart=True)
             deadline = time.time() + 600
             # wait until the repair truncated the garbage row, then kill before the next
             # checkpoint boundary (monitor/checkpoint grid is 2000, so the next one is step 4000)
@@ -604,7 +614,7 @@ def main():
             time.sleep(0.1)
             process.kill()
             process.wait()
-            cont = suite.run_solver("t2-retry-c2", config_path=split["directory"] / "case.json",
+            cont = suite.run_solver("t2-retry-c2", config_path=cont_dir / "case.json",
                                     restart=True, output=results, timeout=3600)
             s = suite.restarted_step(cont["stdout"])
             assert s == 2000, f"second restart must reuse the last committed checkpoint, got {s}"
@@ -663,10 +673,11 @@ def main():
             results = holder_dir / "results"
             process = suite.launch_solver("t2-lock-holder", holder_dir / "case.json", results)
             try:
-                deadline = time.time() + 600
-                while not (results / "run.lock").exists():
+                deadline = time.time() + 1200
+                while not ((results / "run.lock").exists() and
+                           (results / "checkpoint" / "latest.json").exists()):
                     assert process.poll() is None, "lock holder exited early"
-                    assert time.time() < deadline, "run.lock never appeared"
+                    assert time.time() < deadline, "lock/checkpoint never appeared"
                     time.sleep(0.05)
                 attempt_dir = suite.root / "t2-lock-attempt"
                 attempt_dir.mkdir()

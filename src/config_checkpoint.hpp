@@ -43,6 +43,11 @@ struct checkpoint_error : std::runtime_error {
     checkpoint_error(int exit_code, const std::string &message) : std::runtime_error(message), code(exit_code) {}
 };
 
+inline void require_reject(const bool ok, const std::string &message) { // like require(), but signals a contractual restart rejection (exit code 5) instead of a generic error
+    if (!ok)
+        throw checkpoint_error(checkpoint_exit_rejected, message);
+}
+
 inline std::string utc_stamp() {
     const auto now = std::time(nullptr);
     std::tm tm{};

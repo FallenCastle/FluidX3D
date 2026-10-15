@@ -287,9 +287,9 @@ def seal(args):
         for path, expected in evidence['verification_inputs'].items():
             if sha(root / path) != expected:
                 raise ValueError(f'Acceptance input changed: {path}')
-    expected_suites = {'p1', 'p2', 'p3', 'storage', 'study', 'v2-physics', 'v2-scenarios', 'v2-matrix'}
+    expected_suites = {'p1', 'p2', 'p3', 'storage', 'study', 'v2-physics', 'v2-scenarios', 'v2-matrix', 'checkpoint'}
     if suites.get('suites_skipped', True) or len(suites.get('suites', [])) != len(expected_suites):
-        raise ValueError('All eight acceptance suites must have executed')
+        raise ValueError('All nine acceptance suites must have executed')
     if {s['name'] for s in suites['suites']} != expected_suites:
         raise ValueError('Acceptance suite names are incomplete')
     for result in suites['suites']:

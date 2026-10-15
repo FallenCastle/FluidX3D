@@ -12,7 +12,8 @@ param(
     [int]$DeviceId,
     [ValidateRange(1, 86400)]
     [int]$TimeoutSeconds = 900,
-    [switch]$PrepareOnly
+    [switch]$PrepareOnly,
+    [string]$RestartFromRunId
 )
 
 Set-StrictMode -Version Latest
@@ -73,4 +74,5 @@ $parameters = @{
     PrepareOnly = $PrepareOnly
 }
 if ($PSBoundParameters.ContainsKey('DeviceId')) { $parameters.DeviceId = $DeviceId }
+if ($PSBoundParameters.ContainsKey('RestartFromRunId')) { $parameters.RestartFromRunId = $RestartFromRunId }
 & (Join-Path $PackageRoot 'source\scripts\run-nuc.ps1') @parameters

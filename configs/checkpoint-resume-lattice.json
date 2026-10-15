@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "case": {
+    "name": "checkpoint-resume-demo"
+  },
+  "solver": {
+    "lattice": "D3Q19",
+    "collision": "SRT",
+    "storage": "FP32",
+    "turbulence": "none"
+  },
+  "units": {
+    "mode": "lattice"
+  },
+  "domain": {
+    "cells": [32, 32, 32]
+  },
+  "fluid": {
+    "rho": 1.0,
+    "nu": 0.02
+  },
+  "initial": {
+    "velocity": [0.02, 0.0, 0.0],
+    "regions": [
+      {
+        "box_min": [0.0, 0.0, 0.0],
+        "box_max": [32.0, 32.0, 16.0],
+        "rho": 1.0,
+        "velocity": [-0.02, 0.0, 0.0]
+      }
+    ]
+  },
+  "geometry": [],
+  "boundaries": [
+    {
+      "id": "periodic",
+      "faces": ["xmin", "xmax", "ymin", "ymax", "zmin", "zmax"],
+      "type": "periodic"
+    }
+  ],
+  "run": {
+    "steps": 2000,
+    "monitor_every": 100,
+    "checkpoint_every": 500,
+    "checkpoint_keep": 2
+  },
+  "output": {
+    "vtk_fields": ["u", "rho", "flags"],
+    "vtk_every": 500,
+    "initial": true
+  },
+  "analysis": {
+    "every": 250,
+    "start_step": 100,
+    "statistics": true,
+    "probes": [
+      {
+        "id": "center",
+        "position": [16.0, 16.0, 16.0]
+      }
+    ]
+  }
+}

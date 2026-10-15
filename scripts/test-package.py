@@ -21,6 +21,7 @@ SUITES = [
     ('v2-physics', 'test-v2-physics.py', 'v2-physics', False),
     ('v2-scenarios', 'test-v2-scenarios.py', 'v2-scenarios', False),
     ('v2-matrix', 'test-v2.py', 'v2-validation', False),
+    ('checkpoint', 'test-checkpoint.py', 'checkpoint-validation', False),
 ]
 
 

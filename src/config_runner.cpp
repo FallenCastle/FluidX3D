@@ -2276,20 +2276,21 @@ int entry(int argc, char *argv[]) {
             std::ifstream manifest_stream(manifest_path, std::ios::binary);
             require(bool(manifest_stream), "Cannot read manifest.json");
             const Json manifest = Json::parse(manifest_stream);
-            require(manifest.value("product", "") == std::string(SOLVER_IBM_NAME), "Run directory product mismatch");
-            require(sha256(original) == manifest.value("config_sha256", ""), "Stored original config changed");
+            require_reject(manifest.value("product", "") == std::string(SOLVER_IBM_NAME),
+                           "Run directory product mismatch");
+            require_reject(sha256(original) == manifest.value("config_sha256", ""), "Stored original config changed");
             std::ifstream original_stream(original, std::ios::binary);
             require(bool(original_stream), "Cannot read original-config.json");
             const Json original_json = Json::parse(original_stream);
             std::vector<std::string> diffs;
             collect_diff_paths(original_json, c.source, "", diffs);
             for (const auto &diff : diffs)
-                require(diff == "/run/steps" || diff == "/run/duration" || diff == "/run/checkpoint_every" ||
-                            diff == "/run/checkpoint_keep",
-                        "Restart config differs outside the allowed whitelist: " + diff);
-            require(original_json.contains("run") && c.source.contains("run") &&
-                        original_json["run"].contains("steps") == c.source["run"].contains("steps"),
-                    "Restart cannot switch between run.steps and run.duration");
+                require_reject(diff == "/run/steps" || diff == "/run/duration" ||
+                                   diff == "/run/checkpoint_every" || diff == "/run/checkpoint_keep",
+                               "Restart config differs outside the allowed whitelist: " + diff);
+            require_reject(original_json.contains("run") && c.source.contains("run") &&
+                               original_json["run"].contains("steps") == c.source["run"].contains("steps"),
+                           "Restart cannot switch between run.steps and run.duration");
             bool used_snapshot_assets = false;
             require(manifest.contains("assets") && manifest["assets"].is_array(), "Manifest lacks asset records");
             for (const auto &asset : manifest["assets"]) {
@@ -2304,7 +2305,8 @@ int entry(int argc, char *argv[]) {
                     std::cout << "Warning: original asset missing, using sealed snapshot: " << original_path << "\n";
                     continue;
                 }
-                require(sha256(source_path) == hash, "Asset changed since the original run: " + original_path);
+                require_reject(sha256(source_path) == hash,
+                               "Asset changed since the original run: " + original_path);
             }
             lock.acquire(output, true);
             lock_held = true;
