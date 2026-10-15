@@ -791,6 +791,8 @@ def main():
             cfg_b["run"]["steps"] = 30
             split = suite.run_solver("t3-asset-b", config=cfg_b)
             results = split["results"]
+            # reference continuous run must happen while the asset is still intact
+            ref = suite.run_solver("t3-asset-ref", config=cfg_a)
             # changed asset -> rejection
             with local_asset.open("ab") as handle:
                 handle.write(b"\x00")
@@ -810,7 +812,6 @@ def main():
             assert completion.get("used_snapshot_assets") is True, completion
             resolved = read(results / "resolved-config.json")
             assert resolved.get("used_snapshot_assets") is True
-            ref = suite.run_solver("t3-asset-ref", config=cfg_a)
             failures = suite.compare_continuation("t3-asset", ref["results"], results, 30)
             assert not failures, "; ".join(failures[:6])
             return {"fallback": "inputs/assets snapshot"}

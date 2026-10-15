@@ -2,7 +2,7 @@
 
 本手册面向基于 FluidX3D 开发的 **Solver-IBM V2.0.0**，覆盖流固共轭传热、自由液面、规定运动 STL、编译、JSON 配置、命令行运行和结果检查。三项新增能力可分别、两两或同时启用；修改配置中的模型、参数、网格、边界、运动或 STL 后，可直接复用同一个 EXE。OpenCL 内核仍会在运行时由设备驱动编译或从驱动缓存加载。
 
-正式版本由 Git 标签 `v2.0.0` 固定；产品版本的唯一代码来源为 `src/version.hpp`。发布包的 `manifest.json` 和构建记录 `build.json` 保存具体提交、源码树和可执行文件 SHA256。`Solver-IBM.exe --version` 查询程序版本；`schema_version: 1` 仍表示 JSON 配置格式版本，与产品版本号分开管理。项目仓库和 NUC 工作目录仍沿用现有 `FluidX3D` 路径。
+正式版本由 Git 标签 `v2.0.0` 固定；产品版本的唯一代码来源为 `src/version.hpp`。发布包的 `manifest.json` 和构建记录 `build.json` 保存具体提交、源码树和可执行文件 SHA256。`Solver-IBM.exe --version` 查询程序版本；`schema_version: 1` 仍表示 JSON 配置格式版本，与产品版本号分开管理。项目仓库和服务器工作目录仍沿用现有 `FluidX3D` 路径。当前 Windows 服务器为 `desktop-msi`（旧 NUC 已失效；脚本与文档文件名中的 `nuc` 为历史遗留，不代表当前主机）。
 
 当前支持单 GPU 三维流动、静态与规定运动的多个刚体 STL、流固共轭传热、Boussinesq 自然对流、单液相自由液面、表面张力、固定静态接触角以及液体注入/排出。新增物理功能使用 FP32，可选 D3Q19/D3Q27 × SRT/TRT × Smagorinsky 开/关，共 8 种组合；未启用新增功能的旧配置继续支持 FP16S/FP32 共 16 种组合。气体按固定环境压强处理；本版不求解气相运动、相变、变形、碰撞或流固受力驱动的自由运动。
 
@@ -23,20 +23,20 @@
 
 ### 1.1 工作分工
 
-Mac 用于编辑代码、配置和文档，并通过 Git 提交、推送。**Solver-IBM 的编译、可执行程序调用和计算均在 Windows NUC 上完成**，包括 `--validate`。Mac 不编译或运行求解器。
+Mac 用于编辑代码、配置和文档，并通过 Git 提交、推送。**Solver-IBM 的编译、可执行程序调用和计算均在 Windows 服务器（desktop-msi）上完成**，包括 `--validate`。Mac 不编译或运行求解器。
 
 | 用途 | 位置 |
 |---|---|
 | Mac 源码仓库 | `/Users/czy/Data/01-work/02-project/02-opensource/05-FluidX3D/FluidX3D` |
-| 连接 NUC | 在 Mac 终端执行 `ssh NUC` |
-| NUC 工作根目录 | `F:\01-Project\Opensource\01-FluidX3D` |
-| NUC 源码仓库 | `F:\01-Project\Opensource\01-FluidX3D\src` |
+| 连接服务器 | 在 Mac 终端执行 `ssh desktop-msi` |
+| 服务器工作根目录 | `F:\01-Project\Opensource\01-FluidX3D` |
+| 服务器源码仓库 | `F:\01-Project\Opensource\01-FluidX3D\src` |
 | 正式 EXE 和构建记录 | `bin/<BuildName>/Solver-IBM.exe`、`build.json` |
 | 算例运行记录 | `workingdir/<CaseName>/<RunId>/` |
 | 每次运行的 EXE 快照 | `bin/_runs/<CaseName>/<RunId>/` |
 | V2.0.0 正式发布归档 | `package/V2.0.0/`，发布后不在其中写入新结果 |
 
-后文 PowerShell 示例均在 **NUC 的 64 位 Windows PowerShell** 中执行。若 SSH 登录后进入 `cmd.exe`，先输入 `powershell.exe -NoProfile`。PowerShell 中行尾反引号 `` ` `` 表示续行，其后不能再有空格。
+后文 PowerShell 示例均在 **desktop-msi 的 64 位 Windows PowerShell** 中执行。若 SSH 登录后进入 `cmd.exe`，先输入 `powershell.exe -NoProfile`。PowerShell 中行尾反引号 `` ` `` 表示续行，其后不能再有空格。
 
 ### 1.2 编译和运行依赖
 
@@ -50,7 +50,7 @@ Mac 用于编辑代码、配置和文档，并通过 Git 提交、推送。**Sol
 | OpenCL | 安装目标 GPU 的驱动及 OpenCL 运行时；仓库随附编译使用的 OpenCL 头文件和库 |
 | Python | 仅参数扫描及 Python 验收脚本需要；本手册使用 Python 3.9+，扫描器仅用标准库 |
 
-已验收 NUC 构建使用 MSVC `14.29.30133`、Windows SDK `10.0.22621.0`、`Release|x64`。不需要为了切换 D3Q19/D3Q27、SRT/TRT 或 FP16S/FP32 手动编辑 `defines.hpp`；当前编译配置是运行时选择功能的宿主配置。
+V2.0.0 正式验收构建（旧 NUC）使用 MSVC `14.29.30133`、Windows SDK `10.0.22621.0`、`Release|x64`；当前 desktop-msi 实测工具链为 MSVC `14.29.30133`、Windows SDK `10.0.26100.0`，以每次 `build.json` 记录为准。不需要为了切换 D3Q19/D3Q27、SRT/TRT 或 FP16S/FP32 手动编辑 `defines.hpp`；当前编译配置是运行时选择功能的宿主配置。
 
 ## 2. 编译与快速运行
 
@@ -67,7 +67,7 @@ git branch --show-current
 git rev-parse HEAD
 ```
 
-NUC 上检查并拉取同一分支：
+服务器上检查并拉取同一分支：
 
 ```powershell
 $root = 'F:\01-Project\Opensource\01-FluidX3D'
@@ -81,7 +81,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Git pull failed.' }
 git rev-parse HEAD
 ```
 
-核对 Mac/NUC 提交一致。不要通过强制重置覆盖本地修改。配置和 STL 可放在仓库外的算例目录；构建前源码仓库必须干净，包含未跟踪文件也会被检查。
+核对 Mac/服务器提交一致。不要通过强制重置覆盖本地修改。配置和 STL 可放在仓库外的算例目录；构建前源码仓库必须干净，包含未跟踪文件也会被检查。
 
 ### 2.2 编译一次
 
@@ -118,12 +118,12 @@ $exe = "$root\bin\solver-ibm-v2.0.0\Solver-IBM.exe"
 $devices = powershell.exe -NoProfile -ExecutionPolicy Bypass `
   -File .\scripts\get-opencl-devices.ps1 | ConvertFrom-Json
 $devices | Format-Table id, platform, name, driver
-$gpu = @($devices | Where-Object { $_.name -eq 'NVIDIA GeForce RTX 3060' -and $_.platform -eq 'NVIDIA CUDA' })
+$gpu = @($devices | Where-Object { $_.name -eq 'NVIDIA GeForce RTX 4070 Ti SUPER' -and $_.platform -eq 'NVIDIA CUDA' })
 if ($gpu.Count -ne 1) { throw 'Inspect the device list and select the intended OpenCL device.' }
 $deviceId = [int]$gpu[0].id
 ```
 
-`--device` 使用 **OpenCL 设备编号**，不能用 `nvidia-smi` 编号代替。上例按本 NUC 的 RTX 3060 名称选择；更换硬件时按实际列表修改筛选条件。`--version` 输出 `Solver-IBM 2.0.0`。`--capabilities` 返回 JSON，其中 `product`、`version` 标识产品，`upstream` 保留来源，`defaults` 是模型默认值，`parameters` 是条件参数范围，`model_device_bytes_per_cell` 是各模型的字段内存估算。
+`--device` 使用 **OpenCL 设备编号**，不能用 `nvidia-smi` 编号代替。上例按当前 desktop-msi 的 RTX 4070 Ti SUPER 名称选择（device 0，2026-10-15 实测）；更换硬件或驱动后必须按实际列表重新核对，不沿用旧 NUC 的 RTX 3060 结果。`--version` 输出 `Solver-IBM 2.0.0`。`--capabilities` 返回 JSON，其中 `product`、`version` 标识产品，`upstream` 保留来源，`defaults` 是模型默认值，`parameters` 是条件参数范围，`model_device_bytes_per_cell` 是各模型的字段内存估算。
 
 ### 2.4 校验并运行第一个算例
 
@@ -146,7 +146,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Run failed; inspect run.json and logs.' }
 
 V2.0.0 完整归档位于 `F:\01-Project\Opensource\01-FluidX3D\package\V2.0.0`。已有可执行文件，无需重新编译。包内 `cases/configs/` 保存可移植配置，`cases/models/` 保存全部已有模型输入；模型目录还包含未完成几何准备的素材，不表示每个模型都已通过计算验收。完整内容及限制见 [V2.0.0 发布说明](releases/V2.0.0.md)。
 
-在 NUC 上运行包内配置：
+在服务器上运行包内配置：
 
 ```powershell
 $root = 'F:\01-Project\Opensource\01-FluidX3D'
@@ -154,7 +154,7 @@ $package = "$root\package\V2.0.0"
 $exe = "$package\bin\Solver-IBM.exe"
 & $exe --version
 & $exe --list-devices
-# 按刚才的 OpenCL 列表选择设备，当前 NUC 的 RTX 3060 为设备 0。
+# 按刚才的 OpenCL 列表选择设备，当前 desktop-msi 的 RTX 4070 Ti SUPER 为设备 0。
 $deviceId = 0
 & $exe --config "$package\cases\configs\periodic-lattice.json" --validate
 if ($LASTEXITCODE -ne 0) { throw 'Packaged configuration validation failed.' }
@@ -427,8 +427,12 @@ STL 不能与最终生效的 `equilibrium` 或 `moving_wall` 边界相交；静�
 | `run.steps` | 正整数 `1..Imax` | 与 `duration` 恰好提供一个；没有默认步数 |
 | `run.duration` | 正数，s | 仅 SI 可用；与 `steps` 互斥 |
 | `run.monitor_every` | 正整数 `1..Imax`，步数间隔 | `100` |
+| `run.checkpoint_every` | 非负整数 `0..Imax`，检查点步数间隔；`0` 或缺省 = 禁用 | 禁用 |
+| `run.checkpoint_keep` | 整数 `1..1000`，保留最近检查点个数 | `2` |
 
 `duration` 转换为 `ceil(duration/dt)` 步，接近整数时使用与网格同类的 `1e-10` 相对容差；结果必须为 `1..Imax`，实际终止时间是 `steps*dt`。`monitor.csv` 包含初始第 0 步、监控间隔和最终步。监控间隔、VTK 间隔、分析间隔是三个独立设置。
+
+启用 `checkpoint_every` 后，求解器在间隔整数倍步及正常完成时保存检查点到 `checkpoint/` 子目录，`--restart` 可从最新有效检查点续算；详见 6.4 节。检查点占用与保留策略见 6.4 的磁盘估算。
 
 零步检查使用 `--prepare-only`，配置里的目标步数仍必须为正，不能填 `steps:0`。
 
@@ -697,7 +701,7 @@ my-case/
 
 ### 5.6 Poiseuille / Couette 与已有配置
 
-仓库已有完整通道配置，无需从零组合字段。沿用 2.3 的设备选择，在 NUC 执行：
+仓库已有完整通道配置，无需从零组合字段。沿用 2.3 的设备选择，在服务器执行：
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-nuc.ps1 `
@@ -734,7 +738,7 @@ STL 算例仍以配置中 `geometry[].file` 指向的实际文件为准。`--val
 ### 6.1 直接调用 EXE
 
 ```text
-Solver-IBM.exe --config FILE [--device ID] [--output DIR] [--validate | --prepare-only]
+Solver-IBM.exe --config FILE [--device ID] [--output DIR] [--restart] [--validate | --prepare-only]
 Solver-IBM.exe --version
 Solver-IBM.exe --help
 Solver-IBM.exe --capabilities
@@ -748,6 +752,7 @@ Solver-IBM.exe --list-devices
 | `--output DIR` | 不存在的目录或已有空目录；不能复用非空结果目录 | 配置所在目录下的 `results` |
 | `--validate` | 解析、换算、边界覆盖和 STL 格式/变换检查，不初始化 GPU，不创建结果目录 | 不启用 |
 | `--prepare-only` | 初始化 GPU、体素化、完成几何/探针/受力归属检查，输出第 0 步，不迭代 | 不启用 |
+| `--restart` | 从 `--output` 指向的原运行目录中最新有效检查点续算；原目录必须含 `original-config.json`、`inputs/`、`checkpoint/` | 不启用；与 `--validate`/`--prepare-only` 互斥 |
 | `--version` | 输出产品名称和版本，单独使用 | 不启用 |
 | `--help` | 显示用法，单独使用 | 无参数启动也显示帮助 |
 | `--capabilities` | 输出当前 EXE 支持能力的 JSON，单独使用 | 不启用 |
@@ -755,7 +760,7 @@ Solver-IBM.exe --list-devices
 
 参数不可重复，未知参数报错。`--validate` 与 `--prepare-only` 互斥；`--help` 等查询选项不可与 `--config` 混用。`--validate` 不检查设备是否可用、显存是否足够、STL 是否体素化为零，也不检查探针是否落入体素固体；需要 `--prepare-only` 完成这些检查。其标准输出是 JSON 加一行通过提示，不是纯 JSON 文件。
 
-正常完成返回退出码 0，配置入口捕获错误返回 1；外部运行脚本还会检查完成记录及日志，不只依赖退出码。调用示例：
+正常完成返回退出码 0，配置入口捕获错误返回 1；断点续算另有专用退出码：3 = 无可用检查点（全部候选校验失败，已隔离），4 = 检查点保存失败（运行终止，旧检查点保持可用），5 = 兼容性/配置契约拒绝（不修改任何既有输出）。外部运行脚本还会检查完成记录及日志，不只依赖退出码。调用示例：
 
 ```powershell
 $exe = "$root\bin\solver-ibm-v2.0.0\Solver-IBM.exe"
@@ -780,6 +785,7 @@ $stamp = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')
 | `-TimeoutSeconds` | 整数 `1..86400`，整次进程最长时间，秒 | `900` |
 | `-ConfigPath` | 算例 JSON 路径，相对当前目录或绝对路径 | 无；当前配置驱动 EXE 运行时应提供 |
 | `-PrepareOnly` | 开关，不跟 `true`；只进行零步预处理 | 默认关闭，必须同时提供 `ConfigPath` |
+| `-RestartFromRunId` | 同 `CaseName` 下先前运行的 RunId；从其 `results/` 目录的检查点续算，结果继续写入原 results 目录，本次运行仍有独立 RunId 的日志、EXE 快照与 `run.json`（含 `restart` 溯源块） | 不提供；要求 `ConfigPath`，与 `PrepareOnly`/`ExpectBenchmark` 互斥 |
 | `-ExpectBenchmark` | 上游硬编码 benchmark 专用验收开关 | 默认关闭；与 `ConfigPath` 互斥，当前配置运行不使用 |
 
 `BuildName`、`CaseName` 均为 1–64 字符，首字符字母或数字，余下允许字母、数字、点、下划线和连字符；不能以点结尾，不能使用 Windows 保留名。脚本要求对应 `build.json` 成功且 EXE SHA256 一致；普通构建还要求记录中的绝对路径匹配。`-ExecutablePath` 允许迁移定位，但保留原始构建路径作为来源记录，不省略哈希校验。手动替换 EXE 会被拒绝。
@@ -810,6 +816,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-nuc.ps1 `
 | `-DeviceId` | 实际 OpenCL ID，整数 `0..2147483647` | 不提供时由求解器自动选择 |
 | `-TimeoutSeconds` | 整次进程秒数，整数 `1..86400` | `900` |
 | `-PrepareOnly` | 只做零步预处理 | 默认关闭 |
+| `-RestartFromRunId` | 透传给 `run-nuc.ps1`，从先前 RunId 的检查点续算 | 不提供 |
 
 全包文件校验及发布验收使用 `test-package.py`，结果写在包外：
 
@@ -821,11 +828,48 @@ python "$package\source\scripts\test-package.py" `
 if ($LASTEXITCODE -ne 0) { throw 'Package acceptance failed; inspect the printed report.' }
 ```
 
-默认执行文件清单校验、版本/能力核对、包运行入口检查以及 P1/P2/存储/P3/扫描套件。`--skip-suites` 可跳过这五套完整回归，仅执行文件、身份和包运行检查；报告明确记录跳过内容，不能将这种检查当作完整发布验收。程序启动前后均检查包内容没有改变。所有程序调用仍须在 NUC 执行。
+默认执行文件清单校验、版本/能力核对、包运行入口检查以及 P1/P2/存储/P3/扫描/V2 物理/V2 场景/V2 矩阵/断点续算九套回归。`--skip-suites` 可跳过完整回归，仅执行文件、身份和包运行检查；报告明确记录跳过内容，不能将这种检查当作完整发布验收。程序启动前后均检查包内容没有改变。所有程序调用仍须在 Windows 服务器执行。
+
+### 6.4 断点续算（Checkpoint/Restart）
+
+长算例可在固定步数间隔保存检查点，进程崩溃、被终止或正常结束后从最新有效检查点恢复，续算结果与不间断运行一致（同机、同 GPU、同驱动、同构建下为逐字节一致，判据见 `docs/validation/checkpoint-tolerance-thresholds.md`）。
+
+**启用与恢复**：配置 `run.checkpoint_every`（保存间隔步数）与 `run.checkpoint_keep`（保留个数，默认 2）。恢复用原配置（或仅增大 `run.steps`/`run.duration` 的延长配置）加 `--restart`，`--output` 指向原运行结果目录：
+
+```powershell
+# 首次运行（每 5000 步保存，保留 2 份）
+& $exe --config case.json --output "$root\workingdir\long-run\results" --device 0
+# 崩溃/终止后恢复；或将 case.json 的 run.steps 增大后续算
+& $exe --config case.json --output "$root\workingdir\long-run\results" --device 0 --restart
+```
+
+经 `run-nuc.ps1` 恢复使用 `-RestartFromRunId <原RunId>`（同 CaseName），日志与 `run.json` 独立、结果写回原 results 目录；`run-package.ps1` 同名参数透传。
+
+**目录布局与提交协议**：
+
+```text
+<results>/checkpoint/
+├── latest.json           提示性指针；加载器以目录扫描为准，可容忍缺失/损坏
+├── step-000000030000/    已发布 = 已提交（rename 原子发布；逐文件 SHA256 记录于 checkpoint.json）
+│   ├── checkpoint.json   身份（格式版本/产品版本/数值内核身份/网格/存储）、state_layout、步数
+│   ├── host-state.json   时间步、守恒预算与目标、统计累计（Moments）、输出文件字节位置、VTK 帧清单、重启链
+│   ├── fi.bin rho.bin u.bin flags.bin …   全部跨步设备场的原始字节
+│   └── body-*.bin        动态物体热历史（如启用）
+├── step-*.tmp/           写入中的临时目录，加载时一律忽略
+└── quarantine/           校验失败候选的隔离目录，保留取证，人工清理
+```
+
+保存流程为 W1 写临时目录 → W2 逐文件刷盘（`FlushFileBuffers`）→ W3 重读校验 SHA256 → W4 rename 发布（**提交点**）→ W5 更新 latest.json（失败仅警告）→ W6 清理超保留旧检查点（失败仅警告）。W1–W4 失败时删除临时目录并以退出码 4 终止，旧检查点保持可用。Windows 无用户态目录 fsync，rename 持久性由 NTFS 日志保证；崩溃一致性由加载期全量校验兜底，"rename 丢失"与"rename 持久"均为安全结果。
+
+**恢复行为**：加载器按步数从新到旧校验候选（身份/布局/哈希/host-state/输出记录），结构性损坏的候选移入 `quarantine/` 并回退次新（退出码仍为 0，附警告）；身份或配置契约不符直接拒绝（退出码 5，不隔离、不回退、不修改输出）；全部候选损坏退出码 3。恢复成功后：CSV 截断到检查点记录的字节位置（消除崩溃残留的半行/超前重复行），记录之外的 VTK 帧删除，随后以 append 模式续写；原运行在恢复点的强制终态输出（monitor 行与 VTK 帧）作为历史记录保留。`run.steps` 等于检查点步且为终态检查点时执行 finish-only 收尾（只补写 `statistics.json`/`status.txt`/`completion.json`，不推进计算）。
+
+**配置契约**：恢复时配置须与原运行完全一致，白名单仅允许 `run.steps`/`run.duration`（解析后目标步数单调不减，基准为检查点记录的 `accepted_target_steps`）与 `run.checkpoint_every`/`run.checkpoint_keep`；`steps` 与 `duration` 不可互换。STL 资产按封存 `manifest.json` 哈希核验：内容变化拒绝；原文件缺失时自动改用 `inputs/assets/` 快照并警告，`completion.json` 与 `resolved-config.json` 记录 `used_snapshot_assets`。每次重启实际使用的配置留存于 `inputs/restart-configs/`，`completion.json.restarts[]` 记录重启链（序号、来源步、配置哈希、时间戳）。
+
+**资源与限制**：单检查点 ≈ `N × (q×ddf字节 + 17)` + 模块附加（自由液面 +16、热 +13、动态 +1、力场 +12 B/cell）+ 动态热历史 `24 B/样本`；FP32 D3Q27 全模块约 171 B/cell。提交峰值磁盘 ≈ `(keep+1)×单检查点 + quarantine`；启动时预检可用空间不足则拒绝启用。输出目录由 `run.lock` 单写者保护（记录 PID；`--restart` 可破除已死进程的残留锁）。跨设备允许加载续算，但逐位一致仅对同设备成立；跨构建要求数值内核身份一致（同源码重建放行并警告）。检查点格式不跨产品版本兼容。
 
 ## 7. 参数扫描
 
-扫描器把一份基础算例和若干参数轴展开成笛卡尔积，每个组合生成独立 JSON，随后串行通过 `run-nuc.ps1` 执行。下面所有示例在 NUC 运行。
+扫描器把一份基础算例和若干参数轴展开成笛卡尔积，每个组合生成独立 JSON，随后串行通过 `run-nuc.ps1` 执行。下面所有示例在服务器运行。
 
 ### 7.1 扫描规格格式
 
@@ -881,7 +925,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Some study cases failed; inspect summary.json.
 | `generate --spec` | 扫描规格 JSON | 必填 |
 | `generate --output` | 新目录或已有空目录，存放整个扫描快照 | 必填 |
 | `run --study` | 包含生成的 `study.json` 的**目录**，不是文件路径 | 必填 |
-| `run --workspace-root` | NUC 工作根目录 | 必填 |
+| `run --workspace-root` | 服务器工作根目录 | 必填 |
 | `run --build-name` | 成功构建名称；遵循运行脚本名称规则 | `solver-ibm-v2.0.0` |
 | `run --executable` | 显式指定已迁移的 `Solver-IBM.exe`，旁边保留其 `build.json`；用于包内 EXE | 无；默认按 workspace 和 build-name 定位 |
 | `run --device` | 整数；下游运行脚本要求 `0..2147483647` 且设备存在 | `0`，建议查询后显式传入 |
@@ -973,7 +1017,7 @@ Import-Csv "$runDir\results\monitor.csv" | Select-Object -Last 5
 
 | 现象 / 报错 | 处理方式 |
 |---|---|
-| `The source repository must be clean` | Mac 上提交应跟踪的改动并推送，NUC 拉取；自己的算例/结果放在仓库外，检查未跟踪文件，不直接丢弃未知修改 |
+| `The source repository must be clean` | Mac 上提交应跟踪的改动并推送，服务器拉取；自己的算例/结果放在仓库外，检查未跟踪文件，不直接丢弃未知修改 |
 | 找不到 `vswhere`、工具集或 Windows SDK | 安装/补齐 1.2 所列依赖，检查构建日志；使用实际安装的工具集，默认 v142 |
 | EXE 只显示帮助 | 提供 `--config`；不要沿用硬编码版本的位置参数 `Solver-IBM.exe 0` |
 | `Unknown field` / `Missing required field` | 对照第 4 节检查拼写、大小写、必填字段和互斥项；不要用 `null` 代替省略 |
@@ -1004,7 +1048,7 @@ Import-Csv "$runDir\results\monitor.csv" | Select-Object -Last 5
 
 本手册是当前配置驱动接口的统一使用入口。阶段设计和验收记录保留历史信息：
 
-- [NUC 构建、运行目录约定](nuc-workflow.md)
+- [服务器构建、运行目录约定](nuc-workflow.md)（文件名中 nuc 为历史遗留）
 - [V2.0.0 发布说明](releases/V2.0.0.md)、[版本交接文档](handoff-v2.0.0.md)
 - [P0/P1 说明](config-runner.md)、[P2 说明](config-runner-p2.md)、[P3 模型说明](config-runner-p3.md)
 - [P3 验收记录及精度边界](validation/config-runner-p3-2026-09-22.md)

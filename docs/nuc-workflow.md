@@ -1,16 +1,16 @@
-# Solver-IBM：NUC 构建、运行与版本归档
+# Solver-IBM：服务器构建、运行与版本归档（文件名 nuc 为历史遗留）
 
-当前正式版本为 **V2.0.0**，可执行文件为 `Solver-IBM.exe`。完整配置字段和操作说明见 [用户手册](user-manual-zh.md)，发布内容见 [V2.0.0 发布说明](releases/V2.0.0.md)。以下当前流程适用于配置驱动命令行版本；保留的上游/阶段历史文档可能仍写有 `FluidX3D.exe` 或旧 BuildName。
+当前正式版本为 **V2.0.0**（开发分支正在进行 V2.1.0 断点续算），可执行文件为 `Solver-IBM.exe`。本文件名中的 `nuc` 为历史遗留：旧 NUC 已失效，当前 Windows 服务器为 `desktop-msi`，连接一律 `ssh desktop-msi`；工具链、GPU 与 OpenCL 设备编号以服务器实测为准（2026-10-15：VS 18 + MSBuild 18.9 + v142/MSVC 14.29.30133 + SDK 10.0.26100，OpenCL device 0 = NVIDIA GeForce RTX 4070 Ti SUPER，device 1 = AMD 核显）。完整配置字段和操作说明见 [用户手册](user-manual-zh.md)，发布内容见 [V2.0.0 发布说明](releases/V2.0.0.md)。以下当前流程适用于配置驱动命令行版本；保留的上游/阶段历史文档可能仍写有 `FluidX3D.exe` 或旧 BuildName。
 
 ## 工作环境与目录
 
-Mac 用于阅读、编辑、Git 提交和推送；所有求解器编译、程序调用和算例计算在 Windows NUC 完成，包括 `--version`、`--validate` 和测试脚本中启动的程序。连接方式为 `ssh NUC`。项目根目录的 `AGENTS.md` 在 Mac、NUC 各保留一份，暂不纳入 Git；源码、脚本和本说明纳入源码仓库管理。
+Mac 用于阅读、编辑、Git 提交和推送；所有求解器编译、程序调用和算例计算在 Windows 服务器（desktop-msi）完成，包括 `--version`、`--validate` 和测试脚本中启动的程序。连接方式为 `ssh desktop-msi`。项目根目录的 `AGENTS.md` 在 Mac、服务器各保留一份，暂不纳入 Git；源码、脚本和本说明纳入源码仓库管理。
 
-NUC 工作根目录为 `F:\01-Project\Opensource\01-FluidX3D`：
+服务器工作根目录为 `F:\01-Project\Opensource\01-FluidX3D`：
 
 ```text
 01-FluidX3D/
-├── AGENTS.md                         NUC 本地长期规则
+├── AGENTS.md                         服务器本地长期规则
 ├── src/                              Git 仓库，不是仅 C++ src 子目录
 │   ├── src/version.hpp               产品版本的统一来源
 │   ├── scripts/
@@ -36,7 +36,7 @@ NUC 工作根目录为 `F:\01-Project\Opensource\01-FluidX3D`：
 
 `BuildId` 和 `RunId` 使用 UTC 时间戳及 Git 提交前缀。每次运行创建独立目录，不覆盖上次结果。`BuildName`、`CaseName` 只用于选择构建或结果分类；**算例由 `ConfigPath` 指定**，`-CaseName cavity` 不会自动创建方腔流。名称限制详见用户手册第 6 节。
 
-## Mac 修改，经 Git 同步到 NUC
+## Mac 修改，经 Git 同步到服务器
 
 在 Mac 的 `FluidX3D/` 源码仓库内检查实际远端、分支和修改，明确暂存本次文件并提交推送：
 
@@ -50,7 +50,7 @@ git push -u origin <当前工作分支>
 git rev-parse HEAD
 ```
 
-NUC 上核对当前分支和工作区，再拉取同一分支：
+服务器上核对当前分支和工作区，再拉取同一分支：
 
 ```powershell
 $root = 'F:\01-Project\Opensource\01-FluidX3D'
@@ -65,9 +65,9 @@ git rev-parse HEAD
 
 确保两端提交一致，不强制重置未知修改。算例输入、结果和临时测试文件放在仓库外；构建脚本检查未提交和未跟踪文件。正式 V2.0.0 的精确源码基线是 `v2.0.0` 标签；发布包还保存源码快照和可克隆的 Git bundle。
 
-## 在 NUC 编译
+## 在服务器编译
 
-在 NUC 的 64 位 Windows PowerShell 中执行：
+在 desktop-msi 的 64 位 Windows PowerShell 中执行：
 
 ```powershell
 $root = 'F:\01-Project\Opensource\01-FluidX3D'
@@ -79,7 +79,7 @@ Get-Content "$root\bin\solver-ibm-v2.0.0\build.json" -Raw | ConvertFrom-Json
 & "$root\bin\solver-ibm-v2.0.0\Solver-IBM.exe" --version
 ```
 
-脚本使用 `Release|x64` 和默认 `v142`，通过 `vswhere.exe` 查找实际安装的 Visual Studio/MSBuild、VC targets 和 Windows SDK；先核对工具链与输出目录，再执行 `Rebuild`。现有验收环境使用 MSVC `14.29.30133`、Windows SDK `10.0.22621.0`。源码随附 OpenCL 头文件/链接库，运行时仍需 GPU 驱动提供 OpenCL。
+脚本使用 `Release|x64` 和默认 `v142`，通过 `vswhere.exe` 查找实际安装的 Visual Studio/MSBuild、VC targets 和 Windows SDK；先核对工具链与输出目录，再执行 `Rebuild`。V2.0.0 正式验收（旧 NUC，历史记录）使用 MSVC `14.29.30133`、Windows SDK `10.0.22621.0`；desktop-msi 当前实测为 MSVC `14.29.30133`、Windows SDK `10.0.26100.0`，每次构建以 `build.json` 记录为准。源码随附 OpenCL 头文件/链接库，运行时仍需 GPU 驱动提供 OpenCL。
 
 `build.json` 保存 Git 提交、源码树、实际工具链、编译参数和 EXE SHA256。成功必须同时满足脚本退出成功、记录 `status=succeeded` 和 EXE 哈希匹配。不能只看是否存在 EXE。同一 BuildName 重建会替换开发区该名称的产物；每次构建日志和运行快照独立保留。**已经发布的 `package/V2.0.0` 不通过重建覆盖。**
 
@@ -93,7 +93,7 @@ Set-Location "$root\src"
 $devices = powershell.exe -NoProfile -ExecutionPolicy Bypass `
   -File .\scripts\get-opencl-devices.ps1 | ConvertFrom-Json
 $devices | Format-Table id, platform, name, driver
-$gpu = @($devices | Where-Object { $_.name -eq 'NVIDIA GeForce RTX 3060' -and $_.platform -eq 'NVIDIA CUDA' })
+$gpu = @($devices | Where-Object { $_.name -eq 'NVIDIA GeForce RTX 4070 Ti SUPER' -and $_.platform -eq 'NVIDIA CUDA' })
 if ($gpu.Count -ne 1) { throw 'Inspect the OpenCL list and choose the intended device.' }
 $deviceId = [int]$gpu[0].id
 
@@ -117,7 +117,7 @@ OpenCL 设备编号与 `nvidia-smi` 编号不等价，每次按实际列表选�
 
 ## V2 数值与兼容性验收
 
-正式候选 EXE 除 V1 的 P1、P2、存储、P3、参数扫描五套回归外，还执行三套 V2 验收：
+正式候选 EXE 除 V1 的 P1、P2、存储、P3、参数扫描五套回归外，还执行三套 V2 验收；V2.1.0 起再加断点续算套件，共九套（`test-package.py` 与 `package-release.py` 门槛同步为九套）：
 
 ```powershell
 $root = 'F:\01-Project\Opensource\01-FluidX3D'
@@ -127,9 +127,18 @@ Set-Location "$root\src"
 python .\scripts\test-v2-physics.py --workspace-root $root --build-name $build --executable $exe --device 0
 python .\scripts\test-v2-scenarios.py --workspace-root $root --build-name $build --executable $exe --device 0
 python .\scripts\test-v2.py --workspace-root $root --build-name $build --executable $exe --device 0
+python .\scripts\test-checkpoint.py --workspace-root $root --build-name $build --executable $exe --device 0
 ```
 
-`test-v2-physics.py` 检查热、自由液面和随体温度精度阈值；`test-v2-scenarios.py` 检查典型场景、规定运动、质量/显热收支及 MARIN 溃坝外部数据；`test-v2.py` 执行 7 类非空功能组合乘 8 种 FP32 流动模型的 56 项矩阵。报告分别写入 `workingdir/v2-physics/`、`v2-scenarios/`、`v2-validation/` 的独立 UTC 目录。
+`test-v2-physics.py` 检查热、自由液面和随体温度精度阈值；`test-v2-scenarios.py` 检查典型场景、规定运动、质量/显热收支及 MARIN 溃坝外部数据；`test-v2.py` 执行 7 类非空功能组合乘 8 种 FP32 流动模型的 56 项矩阵；`test-checkpoint.py` 执行断点续算验收（数值等价、提交/恢复协议、故障注入、兼容性拒绝与保留策略）。报告分别写入 `workingdir/v2-physics/`、`v2-scenarios/`、`v2-validation/`、`checkpoint-validation/` 的独立 UTC 目录。
+
+## 断点续算运行约定（V2.1.0 起）
+
+- 配置 `run.checkpoint_every`/`run.checkpoint_keep` 启用；检查点写入本次运行的 `results/checkpoint/`，属运行产物，随 RunId 目录归档，不进源码仓库。
+- 经脚本恢复：`run-nuc.ps1 -RestartFromRunId <原RunId>`（同 CaseName），本次运行生成独立 RunId 的日志、EXE 快照与 `run.json`（含 `restart` 溯源块），计算结果继续写入原运行的 `results/` 目录；`run-package.ps1` 以同名参数透传。
+- 直接调用 EXE 恢复：`--restart --output <原results目录>`；专用退出码 3/4/5 的语义见用户手册 6.1/6.4 节。
+- `workingdir` 磁盘预留：提交峰值约 `(keep+1)×单检查点`，估算公式见用户手册 6.4；求解器启动时预检，不足即拒绝启用。
+- 长时间计算建议启用检查点后再启动；崩溃或超时终止后先核对 `run.json` 与 `checkpoint/` 状态，再决定恢复或重跑。
 
 ## 正式发布包
 
@@ -155,6 +164,6 @@ V2.0.0 已完成 V2.0 阶段发布；V1.0.0 的标签和正式包继续固定保
 
 ## 历史产物与 SSH 收尾
 
-过去 `FluidX3D.exe`、`config-runner*` 和 `baseline-original` 对应的构建及验收证据不改名、不伪造版本身份。旧硬编码 benchmark 的 `-ExpectBenchmark`、位置式设备参数及 `setup.cpp` 选算例方式不适用于当前配置驱动 EXE；历史重放使用明确保留的旧程序及配套说明。
+过去 `FluidX3D.exe`、`config-runner*` 和 `baseline-original` 对应的构建及验收证据不改名、不伪造版本身份；历史文档与记录中的 NUC 名称保留原貌。旧硬编码 benchmark 的 `-ExpectBenchmark`、位置式设备参数及 `setup.cpp` 选算例方式不适用于当前配置驱动 EXE；历史重放使用明确保留的旧程序及配套说明。
 
-完成 NUC 操作后，检查本次开启的 SSH 会话、后台连接、隧道及端口转发；用途结束的连接关闭并确认。只处理能确认归属本次操作的连接，不关闭用户或其他任务的会话。如果连接仍承载必要任务，应检查实际状态并说明保留原因。每次回答结束前如实报告检查及清理结果。
+完成服务器操作后，检查本次开启的 SSH 会话、后台连接、隧道及端口转发；用途结束的连接关闭并确认。只处理能确认归属本次操作的连接，不关闭用户或其他任务的会话。如果连接仍承载必要任务，应检查实际状态并说明保留原因。每次回答结束前如实报告检查及清理结果。
