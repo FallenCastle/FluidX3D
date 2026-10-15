@@ -44,6 +44,24 @@ def sha_file(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def vtk_payload(path):
+    """Split a legacy binary VTK into structural header fields and raw payload bytes.
+
+    The second header line embeds the product version string, so cross-version byte
+    comparison of whole files is meaningless; compare structure + payload instead
+    (same criterion as test-runtime-storage.py)."""
+    data = Path(path).read_bytes()
+    marker = b"LOOKUP_TABLE default\n"
+    index = data.index(marker) + len(marker)
+    header = data[:index].decode("ascii", "replace")
+    fields = {}
+    for line in header.splitlines():
+        key = line.split(" ", 1)[0]
+        if key in ("DIMENSIONS", "ORIGIN", "SPACING", "POINT_DATA") or line.startswith("SCALARS"):
+            fields[key + str(len(fields))] = line
+    return fields, data[index:]
+
+
 def absolute_assets(config, configs_root):
     for geometry in config.get("geometry", []):
         source = Path(geometry["file"])
@@ -886,7 +904,14 @@ def main():
                     diffs = []
                     for n in names:
                         b, c = results["baseline"] / n, results["candidate"] / n
-                        if not c.exists() or sha_file(b) != sha_file(c):
+                        if not c.exists():
+                            diffs.append(n)
+                        elif n.endswith(".vtk"):
+                            fb, pb = vtk_payload(b)
+                            fc, pc = vtk_payload(c)
+                            if fb != fc or pb != pc:
+                                diffs.append(n)
+                        elif sha_file(b) != sha_file(c):
                             diffs.append(n)
                     assert not diffs, f"{case_name}: baseline/candidate differ: {diffs[:6]}"
                     summary[case_name] = {"files_compared": len(names)}

@@ -124,7 +124,8 @@ def execute(command, log, cwd, timeout=None):
     start = time.monotonic()
     with log.open('wb') as output:
         with subprocess.Popen([str(x) for x in command], cwd=cwd, stdout=output, stderr=subprocess.STDOUT,
-                              env=dict(os.environ, PYTHONDONTWRITEBYTECODE='1', PYTHONUNBUFFERED='1')) as process:
+                              env=dict(os.environ, PYTHONDONTWRITEBYTECODE='1', PYTHONUNBUFFERED='1',
+                                       PYTHONIOENCODING='utf-8')) as process:
             while True:
                 remaining = None if timeout is None else timeout - (time.monotonic() - start)
                 if remaining is not None and remaining <= 0:
