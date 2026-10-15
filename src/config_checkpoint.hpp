@@ -1050,9 +1050,10 @@ inline void apply_checkpoint(LBM &lbm, const Config &c, const fs::path &output, 
         if (field.sync_host)
             field.sync_host();
     }
-    // Time step restore (UPDATE_FIELDS bookkeeping included via increment_time_step)
-    lbm.lbm_domain[0]->reset_time_step();
-    lbm.lbm_domain[0]->increment_time_step(state.t);
+    // Time step restore: set_time_step also aligns t_last_update_fields so the next container
+    // read_from_device() does not fire a redundant kernel_update_fields (not idempotent for TYPE_MS
+    // cells; it would clobber the restored rho/u). Mirrors a continuous run at the checkpoint save point.
+    lbm.lbm_domain[0]->set_time_step(state.t);
 }
 
 } // namespace fxconfig

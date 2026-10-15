@@ -156,6 +156,7 @@ public:
 #endif // SURFACE
 	const Device& get_device() const { return device; }
 	string get_numerical_identity_source() const; // returns the full OpenCL C source string this domain's numerical kernels are compiled from (device-independent; used as checkpoint compatibility identity)
+	void set_time_step(const ulong time_step) { t = time_step; t_last_update_fields = t; } // restore the absolute time step including the update_fields cache (checkpoint restart); mirrors the state a continuous run has after its boundary sync
 	uint get_Nx() const { return Nx; } // get (local) lattice dimensions in x-direction
 	uint get_Ny() const { return Ny; } // get (local) lattice dimensions in y-direction
 	uint get_Nz() const { return Nz; } // get (local) lattice dimensions in z-direction
