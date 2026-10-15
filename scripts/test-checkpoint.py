@@ -686,8 +686,9 @@ def main():
                 write(attempt_dir / "case.json", cfg2)
                 attempt = suite.run_solver("t2-lock-attempt", config_path=attempt_dir / "case.json",
                                            restart=True, output=results, expect_exit=1)
-                assert "Another Solver-IBM run is active" in attempt["stderr"] + attempt["stdout"], \
-                    "active-lock rejection message missing"
+                combined = attempt["stderr"] + attempt["stdout"]
+                assert "Another Solver-IBM run is active" in combined, \
+                    f"active-lock rejection message missing: {combined[-600:]}"
                 return {}
             finally:
                 if process.poll() is None:

@@ -587,8 +587,8 @@ class OutputLock {
 #ifdef _WIN32
         path_ = output / "run.lock";
         for (int attempt = 0;; attempt++) {
-            handle_ = CreateFileW(path_.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, CREATE_NEW,
-                                  FILE_ATTRIBUTE_NORMAL, nullptr);
+            handle_ = CreateFileW(path_.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_NEW,
+                                  FILE_ATTRIBUTE_NORMAL, nullptr); // share read so other processes can probe the PID; write sharing stays denied
             if (handle_ != INVALID_HANDLE_VALUE)
                 break;
             require(GetLastError() == ERROR_FILE_EXISTS, "Cannot create run lock: " + path_.u8string());

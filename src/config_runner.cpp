@@ -2261,11 +2261,9 @@ int entry(int argc, char *argv[]) {
         require(!(validate && prepare), "--validate and --prepare-only are mutually exclusive");
         require(!(restart && (validate || prepare)),
                 "--restart cannot be combined with --validate or --prepare-only");
-        Config c = read_config(config_path);
-        validate_faces(c);
         if (restart) {
             if (output.empty())
-                output = c.path.parent_path() / "results";
+                output = config_path.parent_path() / "results";
             output = fs::absolute(output);
             require(fs::is_directory(output),
                     "Restart requires the original run output directory: " + output.u8string());
@@ -2282,49 +2280,80 @@ int entry(int argc, char *argv[]) {
             std::ifstream original_stream(original, std::ios::binary);
             require(bool(original_stream), "Cannot read original-config.json");
             const Json original_json = Json::parse(original_stream);
+            std::ifstream user_stream(config_path, std::ios::binary);
+            require(bool(user_stream), "Cannot read config: " + config_path.u8string());
+            const Json user_json = Json::parse(user_stream);
             std::vector<std::string> diffs;
-            collect_diff_paths(original_json, c.source, "", diffs);
+            collect_diff_paths(original_json, user_json, "", diffs);
             for (const auto &diff : diffs)
-                require_reject(diff == "/run/steps" || diff == "/run/duration" ||
-                                   diff == "/run/checkpoint_every" || diff == "/run/checkpoint_keep",
+                require_reject(diff == "/run/steps" || diff == "/run/duration" || diff == "/run/checkpoint_every" ||
+                                   diff == "/run/checkpoint_keep",
                                "Restart config differs outside the allowed whitelist: " + diff);
-            require_reject(original_json.contains("run") && c.source.contains("run") &&
-                               original_json["run"].contains("steps") == c.source["run"].contains("steps"),
+            require_reject(original_json.contains("run") && user_json.contains("run") &&
+                               original_json["run"].contains("steps") == user_json["run"].contains("steps"),
                            "Restart cannot switch between run.steps and run.duration");
+            // Absolutize asset paths (the retained restart config lives in the output directory, so
+            // relative paths from the user config would resolve differently), then verify every sealed
+            // asset; missing originals fall back to the snapshot copies with an explicit record.
+            Json patched = user_json;
+            const fs::path config_dir = fs::absolute(config_path).parent_path();
+            auto absolutize = [&](Json &node) {
+                if (node.contains("file") && node["file"].is_string()) {
+                    fs::path asset = fs::u8path(node["file"].get<std::string>());
+                    if (asset.is_relative())
+                        asset = config_dir / asset;
+                    node["file"] = fs::absolute(asset).u8string();
+                }
+            };
+            if (patched.contains("geometry") && patched["geometry"].is_array())
+                for (auto &entry : patched["geometry"])
+                    absolutize(entry);
+            if (patched.contains("initial") && patched["initial"].contains("liquid_regions") &&
+                patched["initial"]["liquid_regions"].is_array())
+                for (auto &entry : patched["initial"]["liquid_regions"])
+                    absolutize(entry);
             bool used_snapshot_assets = false;
-            require(manifest.contains("assets") && manifest["assets"].is_array(), "Manifest lacks asset records");
+            require_reject(manifest.contains("assets") && manifest["assets"].is_array(),
+                           "Manifest lacks asset records");
             for (const auto &asset : manifest["assets"]) {
                 const std::string original_path = asset.value("original_path", "");
                 const std::string hash = asset.value("sha256", "");
+                const std::string snapshot = asset.value("snapshot", "");
                 if (original_path.empty())
                     continue;
                 const fs::path source_path = fs::u8path(original_path);
                 std::error_code ec;
-                if (!fs::exists(source_path, ec)) {
-                    used_snapshot_assets = true;
-                    std::cout << "Warning: original asset missing, using sealed snapshot: " << original_path << "\n";
+                if (fs::exists(source_path, ec)) {
+                    require_reject(sha256(source_path) == hash,
+                                   "Asset changed since the original run: " + original_path);
                     continue;
                 }
-                require_reject(sha256(source_path) == hash,
-                               "Asset changed since the original run: " + original_path);
+                used_snapshot_assets = true;
+                std::cout << "Warning: original asset missing, using sealed snapshot: " << original_path << "\n";
+                const fs::path snapshot_path = output / snapshot;
+                require(fs::exists(snapshot_path), "Sealed snapshot missing for asset: " + original_path);
+                const std::string stem = fs::path(snapshot).stem().string();
+                const bool is_liquid = stem.rfind("liquid-", 0) == 0;
+                const std::string digits = is_liquid ? stem.substr(7) : stem;
+                require(!digits.empty() && digits.find_first_not_of("0123456789") == std::string::npos,
+                        "Unparsable asset snapshot name: " + snapshot);
+                const size_t index = static_cast<size_t>(std::stoul(digits));
+                if (is_liquid) {
+                    require(patched.contains("initial") && patched["initial"].contains("liquid_regions") &&
+                                patched["initial"]["liquid_regions"].is_array() &&
+                                index < patched["initial"]["liquid_regions"].size(),
+                            "Snapshot asset does not match the restart config: " + snapshot);
+                    patched["initial"]["liquid_regions"][index]["file"] = snapshot_path.u8string();
+                } else {
+                    require(patched.contains("geometry") && patched["geometry"].is_array() &&
+                                index < patched["geometry"].size(),
+                            "Snapshot asset does not match the restart config: " + snapshot);
+                    patched["geometry"][index]["file"] = snapshot_path.u8string();
+                }
             }
             lock.acquire(output, true);
             lock_held = true;
-            Json effective = c.source;
-            for (size_t i = 0; i < c.geometry.size(); i++)
-                effective["geometry"][i]["file"] = "inputs/assets/" + std::to_string(i) + ".stl";
-            for (size_t i = 0; i < c.liquid_regions.size(); i++)
-                if (c.liquid_regions[i].shape == "stl")
-                    effective["initial"]["liquid_regions"][i]["file"] =
-                        "inputs/assets/liquid-" + std::to_string(i) + ".stl";
-            save_json(output / "effective-config.json", effective);
-            const std::string current_config_sha = sha256(config_path);
-            c = read_config(output / "effective-config.json");
-            validate_faces(c);
-            c.resolved["geometry_inspection"] = inspect_meshes(c);
-            c.resolved["requested_device"] = device;
-            if (used_snapshot_assets)
-                c.resolved["used_snapshot_assets"] = true;
+            // Retain the config actually used by this restart (r2 plan section 3.3)
             Json previous_completion;
             {
                 std::ifstream completion_stream(output / "completion.json", std::ios::binary);
@@ -2334,6 +2363,32 @@ int entry(int argc, char *argv[]) {
                     } catch (...) {
                     }
             }
+            size_t restart_index = 1;
+            if (previous_completion.is_object() && previous_completion.contains("restarts") &&
+                previous_completion["restarts"].is_array())
+                restart_index = previous_completion["restarts"].size() + 1;
+            const fs::path restart_configs = output / "inputs" / "restart-configs";
+            fs::create_directories(restart_configs);
+            const fs::path retained = restart_configs / ("restart-" + std::to_string(restart_index) + "-" +
+                                                         sha256(config_path).substr(0, 8) + ".json");
+            save_json(retained, patched);
+            const std::string current_config_sha = sha256(config_path);
+            Config c = read_config(retained);
+            validate_faces(c);
+            Json effective = c.source;
+            for (size_t i = 0; i < c.geometry.size(); i++)
+                effective["geometry"][i]["file"] = "inputs/assets/" + std::to_string(i) + ".stl";
+            for (size_t i = 0; i < c.liquid_regions.size(); i++)
+                if (c.liquid_regions[i].shape == "stl")
+                    effective["initial"]["liquid_regions"][i]["file"] =
+                        "inputs/assets/liquid-" + std::to_string(i) + ".stl";
+            save_json(output / "effective-config.json", effective);
+            c = read_config(output / "effective-config.json");
+            validate_faces(c);
+            c.resolved["geometry_inspection"] = inspect_meshes(c);
+            c.resolved["requested_device"] = device;
+            if (used_snapshot_assets)
+                c.resolved["used_snapshot_assets"] = true;
             RestartContext context;
             context.previous_completion = previous_completion;
             context.original_config_sha = sha256(original);
@@ -2344,6 +2399,8 @@ int entry(int argc, char *argv[]) {
             running = false;
             return 0;
         }
+        Config c = read_config(config_path);
+        validate_faces(c);
         auto geometry = inspect_meshes(c);
         c.resolved["geometry_inspection"] = geometry;
         if (validate) {
