@@ -822,6 +822,12 @@ inline SelectedCheckpoint select_checkpoint(LBM &lbm, const Config &c, const fs:
     SelectedCheckpoint selected;
     selected.warnings.reserve(4);
     auto fields = checkpoint_fields(lbm, c);
+    // Incompatible-identity gates reject the restart outright (exit code 5, never quarantine or fall
+    // back); only structural corruption of a candidate quarantines it and tries the next-oldest one.
+    auto reject = [](const bool ok, const std::string &message) {
+        if (!ok)
+            throw checkpoint_error(checkpoint_exit_rejected, message);
+    };
     for (size_t index = 0; index < candidates.size(); index++) {
         const auto &candidate = candidates[index];
         const fs::path &directory = candidate.second;
@@ -830,48 +836,48 @@ inline SelectedCheckpoint select_checkpoint(LBM &lbm, const Config &c, const fs:
             require(bool(metadata_stream), "checkpoint.json missing");
             const Json metadata = Json::parse(metadata_stream);
             // Compatibility gates (r2 section 8): failures here are rejections, never fallbacks
-            require(metadata.value("checkpoint_format_version", -1) == checkpoint_format_version_value,
-                    "Checkpoint format version mismatch");
-            require(metadata.value("endianness", "") == "little", "Checkpoint endianness unsupported");
-            require(metadata.value("product", "") == std::string(SOLVER_IBM_NAME), "Checkpoint product mismatch");
-            require(metadata.value("version", "") == std::string(SOLVER_IBM_VERSION_STRING),
-                    "Checkpoint was written by product version " + metadata.value("version", std::string("?")) +
-                        ", this executable is " SOLVER_IBM_VERSION_STRING);
-            require(metadata.value("release_status", "") == std::string(SOLVER_IBM_RELEASE_STATUS),
-                    "Checkpoint release status mismatch");
-            require(metadata.value("numerical_identity", "") == numerical_identity,
-                    "Checkpoint numerical kernel identity differs (source or model changed); refusing to restart");
-            require(metadata.contains("cells") && metadata["cells"].is_array() && metadata["cells"].size() == 3,
-                    "Checkpoint metadata lacks grid resolution");
+            reject(metadata.value("checkpoint_format_version", -1) == checkpoint_format_version_value,
+                   "Checkpoint format version mismatch");
+            reject(metadata.value("endianness", "") == "little", "Checkpoint endianness unsupported");
+            reject(metadata.value("product", "") == std::string(SOLVER_IBM_NAME), "Checkpoint product mismatch");
+            reject(metadata.value("version", "") == std::string(SOLVER_IBM_VERSION_STRING),
+                   "Checkpoint was written by product version " + metadata.value("version", std::string("?")) +
+                       ", this executable is " SOLVER_IBM_VERSION_STRING);
+            reject(metadata.value("release_status", "") == std::string(SOLVER_IBM_RELEASE_STATUS),
+                   "Checkpoint release status mismatch");
+            reject(metadata.value("numerical_identity", "") == numerical_identity,
+                   "Checkpoint numerical kernel identity differs (source or model changed); refusing to restart");
+            reject(metadata.contains("cells") && metadata["cells"].is_array() && metadata["cells"].size() == 3,
+                   "Checkpoint metadata lacks grid resolution");
             for (int axis = 0; axis < 3; axis++)
-                require(metadata["cells"][axis].is_number_integer() &&
-                            metadata["cells"][axis].get<unsigned>() == c.cells[axis],
-                        "Checkpoint grid resolution differs from configuration");
-            require(metadata.value("storage", "") == std::string(ddf_storage_name(c.storage)),
-                    "Checkpoint DDF storage differs from configuration");
-            require(metadata.value("velocity_set", 0u) == c.model.q, "Checkpoint velocity set differs");
-            require(metadata.value("config_sha256_original", "") == sha256(output / "original-config.json"),
-                    "Run directory original config does not match the checkpoint");
+                reject(metadata["cells"][axis].is_number_integer() &&
+                           metadata["cells"][axis].get<unsigned>() == c.cells[axis],
+                       "Checkpoint grid resolution differs from configuration");
+            reject(metadata.value("storage", "") == std::string(ddf_storage_name(c.storage)),
+                   "Checkpoint DDF storage differs from configuration");
+            reject(metadata.value("velocity_set", 0u) == c.model.q, "Checkpoint velocity set differs");
+            reject(metadata.value("config_sha256_original", "") == sha256(output / "original-config.json"),
+                   "Run directory original config does not match the checkpoint");
             const unsigned long long step = candidate.first;
             require(metadata.value("step", ~0ull) == step, "Checkpoint step differs from directory name");
             const unsigned long long accepted_target = metadata.value("accepted_target_steps", step);
-            require(c.steps >= step,
-                    "Requested steps (" + std::to_string(c.steps) + ") is below the checkpoint step (" +
-                        std::to_string(step) + "); nothing to do");
-            require(c.steps >= accepted_target,
-                    "Requested steps (" + std::to_string(c.steps) + ") is below the previously accepted target (" +
-                        std::to_string(accepted_target) + "); extending runs must not shrink");
+            reject(c.steps >= step,
+                   "Requested steps (" + std::to_string(c.steps) + ") is below the checkpoint step (" +
+                       std::to_string(step) + "); nothing to do");
+            reject(c.steps >= accepted_target,
+                   "Requested steps (" + std::to_string(c.steps) + ") is below the previously accepted target (" +
+                       std::to_string(accepted_target) + "); extending runs must not shrink");
             // state_layout must match the planned fields exactly (names, order-independent, sizes)
-            require(metadata.contains("state_layout") && metadata["state_layout"].is_array(),
-                    "Checkpoint state_layout missing");
+            reject(metadata.contains("state_layout") && metadata["state_layout"].is_array(),
+                   "Checkpoint state_layout missing");
             std::map<std::string, Json> layout;
             for (const auto &entry : metadata["state_layout"])
                 layout[entry.value("name", "")] = entry;
             for (const auto &field : fields) {
                 const std::string file = field.name + ".bin";
-                require(layout.count(file) == 1, "Checkpoint lacks required field " + file);
-                require(layout[file].value("bytes", ~0ull) == field.bytes,
-                        "Field " + file + " size differs from the current model");
+                reject(layout.count(file) == 1, "Checkpoint lacks required field " + file);
+                reject(layout[file].value("bytes", ~0ull) == field.bytes,
+                       "Field " + file + " size differs from the current model");
             }
             for (const auto &entry : layout) {
                 const std::string &name = entry.first;
@@ -881,7 +887,7 @@ inline SelectedCheckpoint select_checkpoint(LBM &lbm, const Config &c, const fs:
                     std::any_of(fields.begin(), fields.end(), [&](const FieldIo &f) { return f.name + ".bin" == name; });
                 const bool known_body = name.rfind("body-", 0) == 0;
                 const bool known_state = name == "host-state.json";
-                require(known_field || known_body || known_state, "Checkpoint contains unknown state file " + name);
+                reject(known_field || known_body || known_state, "Checkpoint contains unknown state file " + name);
             }
             // Integrity: every recorded file must exist with the recorded size and hash
             for (const auto &entry : metadata["state_layout"]) {
