@@ -34,7 +34,7 @@ Mac 用于阅读、编辑、Git 提交和推送；所有求解器编译、程序
     └── V2.0.0/                       固定的正式发布归档
 ```
 
-`BuildId` 和 `RunId` 使用 UTC 时间戳及 Git 提交前缀。每次运行创建独立目录，不覆盖上次结果。`BuildName`、`CaseName` 只用于选择构建或结果分类；**算例由 `ConfigPath` 指定**，`-CaseName cavity` 不会自动创建方腔流。名称限制详见用户手册第 6 节。
+`BuildId` 和 `RunId` 使用 UTC 时间戳及 Git 提交前缀。每次运行创建独立目录，不覆盖上次结果。`BuildName`、`CaseName` 只用于选择构建或结果分类；**算例由 `ConfigPath` 指定**，`-CaseName cavity` 不会自动创建方腔流。名称限制详见用户手册附录 B。
 
 ## Mac 修改，经 Git 同步到服务器
 
@@ -134,10 +134,12 @@ python .\scripts\test-checkpoint.py --workspace-root $root --build-name $build -
 
 ## 断点续算运行约定（V2.1.0 起）
 
+V2.1.0 仍为开发版，缩短续算目标被拒绝时改写原元数据的试用缺陷尚未修复，使用边界见[手册第 10 章](user-manual-zh.md#restart)。
+
 - 配置 `run.checkpoint_every`/`run.checkpoint_keep` 启用；检查点写入本次运行的 `results/checkpoint/`，属运行产物，随 RunId 目录归档，不进源码仓库。
-- 经脚本恢复：`run-nuc.ps1 -RestartFromRunId <原RunId>`（同 CaseName），本次运行生成独立 RunId 的日志、EXE 快照与 `run.json`（含 `restart` 溯源块），计算结果继续写入原运行的 `results/` 目录；`run-package.ps1` 以同名参数透传。
-- 直接调用 EXE 恢复：`--restart --output <原results目录>`；专用退出码 3/4/5 的语义见用户手册 6.1/6.4 节。
-- `workingdir` 磁盘预留：提交峰值约 `(keep+1)×单检查点`，估算公式见用户手册 6.4；求解器启动时预检，不足即拒绝启用。
+- 经脚本恢复：`run-nuc.ps1 -RestartFromRunId <原RunId>`（同 CaseName），本次运行生成独立 RunId 的日志、EXE 快照与 `run.json`（含 `restart` 溯源块），计算结果继续写入原运行的 `results/` 目录；当前源码 `run-package.ps1` 以同名参数透传；固定的 V2.0.0 包不含该能力。
+- 直接调用 EXE 恢复：`--restart --output <原results目录>`；专用退出码 3/4/5 的语义见用户手册第 10 章及附录 B.1。
+- `workingdir` 磁盘预留：提交峰值约 `(keep+1)×单检查点`，大小测量与保留策略见用户手册 10.6；求解器启动时预检，不足即拒绝启用。
 - 长时间计算建议启用检查点后再启动；崩溃或超时终止后先核对 `run.json` 与 `checkpoint/` 状态，再决定恢复或重跑。
 
 ## 正式发布包
@@ -152,7 +154,7 @@ python .\scripts\test-checkpoint.py --workspace-root $root --build-name $build -
 
 包内 `manifest.json` 校验文件清单中的全部文件，清单自身除外。保留必要对照 VTK；不归档全部历史运行流场。历史输入和报告保留原文、失败记录及来源路径，不把旧数据改成当次发布的验证结果。P1/P2 等历史对照程序保留原始程序名和 build.json。
 
-运行正式包使用 `source/scripts/run-package.ps1`，详见[用户手册第 2.5 节](user-manual-zh.md#25-使用正式发布包)。输出写在包外 `workingdir/`，不修改包内文件。包中 `source/` 不含 `.git`，重建时先从 `source.git.bundle` 克隆到新的工作区。
+运行正式包使用 `source/scripts/run-package.ps1`，详见[用户手册第 3.4 节](user-manual-zh.md#25-使用正式发布包)。输出写在包外 `workingdir/`，不修改包内文件。包中 `source/` 不含 `.git`，重建时先从 `source.git.bundle` 克隆到新的工作区。
 
 发布先在独立暂存目录整理并校验，完成包内运行验证后再固定为对应版本目录。若发现已发布版本需要修复，发布新补丁版本，不覆盖已有包或移动标签。Git 标签、代码版本、EXE 版本、文档和 manifest 必须对应同一正式版本。
 

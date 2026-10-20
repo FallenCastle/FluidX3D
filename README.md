@@ -1,11 +1,13 @@
-# Solver-IBM V2.0.0
+# Solver-IBM
+
+当前正式版本 **V2.0.0**；当前开发分支 **V2.1.0 development**（断点续算，仍有试用验收问题，未正式封版）。
 
 Solver-IBM 是基于 [FluidX3D](https://github.com/ProjectPhysX/FluidX3D) 修改的配置驱动命令行求解器。V2.0.0 在保留 V1 配置和模型组合的基础上，加入流固共轭传热、单液相自由液面和多个 STL 的规定刚体运动；三项能力可独立、两两或同时启用。产品名称不改变上游来源；上游作者署名、许可证及第三方许可证继续保留。
 
-- [中文使用手册](docs/user-manual-zh.md)：编译、全部 JSON 字段及默认值、STL、运行命令、参数扫描和输出。
+- [中文使用手册](docs/user-manual-zh.md)：2026-10-20 更新，含首次运行、源码编译、各功能算例、断点续算、后处理、完整字段/命令及核验结果。
 - [V2.0.0 发布说明](docs/releases/V2.0.0.md)：新增能力、验收结论、发布包内容与已知限制。
 - [V2.0.0 交接文档](docs/handoff-v2.0.0.md)：架构、测试依据、版本规则与下一阶段入口。
-- [NUC 工作流程](docs/nuc-workflow.md)：Git 同步、构建、运行及归档。
+- [desktop-msi 工作流程](docs/nuc-workflow.md)：Git 同步、构建、运行及归档。
 
 正式归档目录：`F:\01-Project\Opensource\01-FluidX3D\package\V2.0.0`。版本代码以 Git 标签 `v2.0.0` 固定，版本号统一维护在 `src/version.hpp`；执行 `Solver-IBM.exe --version` 查询程序版本。V1.0.0 的标签和正式包继续保留，不被 V2 覆盖。
 
