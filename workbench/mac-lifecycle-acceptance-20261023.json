@@ -1,0 +1,61 @@
+{
+  "date": "2026-10-23",
+  "checks": [
+    {
+      "name": "repeated start reuses service and tunnel",
+      "passed": true,
+      "service_pids": [
+        37788
+      ]
+    },
+    {
+      "name": "close refused during real calculation; service and tunnel retained",
+      "passed": true,
+      "job": "20261022T161636Z-5d7926d3a6e6",
+      "status_after_refusal": "running"
+    },
+    {
+      "name": "owned acceptance calculation cancelled after busy check",
+      "passed": true,
+      "job": "20261022T161636Z-5d7926d3a6e6"
+    },
+    {
+      "name": "start opens default browser after confirmed readiness",
+      "passed": true
+    },
+    {
+      "name": "idle close shuts down remote service then managed SSH tunnel",
+      "passed": true
+    },
+    {
+      "name": "repeated close is idempotent",
+      "passed": true
+    }
+  ],
+  "solver": {
+    "product": "Solver-IBM",
+    "version": "2.0.0",
+    "sha256": "3ab5c696aa38e5fd919a6b1236e0b330347058a097f99f40b2a606d3d908c4cd",
+    "build_commit": "a039a20d32dd4571ebfcd27cd8125c77f7b049f4",
+    "source_tree": "b3b27571e3578e6237986260b1dcbee8774702da",
+    "web_version": "0.2.0-dev",
+    "web_base_commit": "58f44e5013b7b1ffe105107cfa2a27f8d557e45d"
+  },
+  "final_state": {
+    "result": "stopped",
+    "started": false,
+    "active_job": null,
+    "solver": null,
+    "service_pids": [],
+    "solver_processes": [],
+    "listening": false,
+    "managed_tunnel": false,
+    "mac_port_open": false
+  },
+  "unit_tests": {
+    "passed": 26,
+    "failed": 0,
+    "runtime": "Python 3.12; fake execution only"
+  },
+  "passed": true
+}

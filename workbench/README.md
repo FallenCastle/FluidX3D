@@ -27,6 +27,8 @@ Windows 源码工作区使用 `F:\01-Project\Opensource\01-FluidX3D\web-src`，�
 python3 workbench/scripts/mac-workbench.py status
 ```
 
+启动/关闭的实际验收记录见 [mac-lifecycle-validation.md](mac-lifecycle-validation.md)。
+
 也可在 Windows 单独启动服务并保持其终端运行，再从 Mac 只建立隧道：
 
 ```powershell
