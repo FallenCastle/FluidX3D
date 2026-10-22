@@ -155,7 +155,9 @@ class Results:
         root = self.root / ident
         source = {'id': ident, 'name': name, 'kind': 'folder' if directory else 'upload',
                   'ready': False, 'created_at': now()}
-        if directory:
+        if directory is not None:
+            if not isinstance(directory, str) or not directory.strip():
+                raise Problem('请输入 Windows 结果目录')
             # Windows files stay in place. Restrict reads to the configured working directory.
             allowed = self.app.root.parent.resolve()
             path = Path(directory).resolve()
@@ -222,7 +224,9 @@ class Results:
             root = self.import_root(ident)
             source = read_json(root / 'source.json')
             directory = Path(source.get('directory', root / 'files'))
-            self.index(ident, directory=directory, refresh=True)
+            dataset = self.index(ident, directory=directory, refresh=True)
+            if source['name'].lower() in ('results', 'export', 'output'):
+                source['name'] = dataset['metadata']['name']
             source['ready'] = True
             atomic_json(root / 'source.json', source)
             return {'id': ident}
@@ -293,7 +297,7 @@ class Results:
             mode = config.get('units', {}).get('mode', 'unknown')
             mode = mode if mode in ('si', 'lattice') else 'unknown'
             if resolved:
-                if (resolved.get('cells') != dims or not math.isclose(resolved.get('dx', -1), spacing[0], rel_tol=1e-5)
+                if (resolved.get('cells') != dims or any(not math.isclose(resolved.get('dx', -1), dx, rel_tol=1e-5) for dx in spacing)
                     or any(not math.isclose(resolved.get('origin', [math.inf]*3)[a] + spacing[a]/2, origin[a], abs_tol=spacing[a]*1e-4) for a in range(3))):
                     raise Problem('resolved-config 与 VTK 网格不匹配，不能组合此元数据')
             dt = resolved.get('dt') if steps_known else None
@@ -304,7 +308,6 @@ class Results:
             if dt is None:
                 warnings.append('缺少 dt 或文件步号：不推断物理时间。')
             geometries = []
-            configured_files = set()
             for i, g in enumerate(config.get('geometry', [])):
                 geometry = {'id': str(g.get('id', f'body-{i}')), 'transform': g.get('transform'), 'available': False}
                 if g.get('motion'):
@@ -317,7 +320,6 @@ class Results:
                         if path.stat().st_size > MAX_STL:
                             raise Problem('STL 超过 50 MiB')
                         geometry.update(available=True, path=path.relative_to(root).as_posix())
-                        configured_files.add(path)
                     except Problem as exc:
                         geometry['reason'] = str(exc)
                 geometries.append(geometry)

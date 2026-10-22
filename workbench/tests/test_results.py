@@ -114,6 +114,7 @@ class ResultsTest(unittest.TestCase):
         with self.assertRaises(Problem):self.upload(ident,'u.vtk',b'broken')
         self.assertEqual(list((self.results.import_root(ident)/'files').rglob('*')),[])
         with self.assertRaises(Problem):self.results.create('outside',str(self.root))
+        with self.assertRaises(Problem):self.results.create('empty','')
         folder=self.app.root.parent/'old-results';folder.mkdir();(folder/'u-12.vtk').write_bytes(vtk())
         external=self.results.create('old',str(folder))['id']
         self.assertEqual(self.results.index(external)['metadata']['frames'][0]['step'],12)

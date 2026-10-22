@@ -86,7 +86,7 @@ function makeSlice(){
   }
   sliceObject=object(new Float32Array(points),new Uint32Array(polys),category?new Uint8Array(colors):new Float32Array(colors),category);
   sliceObject.actor.getProperty().setLighting(false);sliceObject.actor.setVisibility($('#show-slice').checked);
-  $('#category-legend').hidden=!category;$('#colorbar').hidden=category;
+  $('#category-legend').hidden=!category;$('#colorbar').hidden=category;$('#range-settings').hidden=category;
   if(category){
     const legend=$('#category-legend');legend.replaceChildren();
     const title=document.createElement('strong');title.textContent='离散值 · 无插值';legend.append(title);
@@ -190,7 +190,7 @@ async function loadSource(id){
   const source=sources.find(s=>s.id===id);$('#case-name').textContent=source?.name||'结果数据';
   if(active.has(source?.status)){$('#busy').hidden=true;notice('此任务仍在计算，完成后将自动加载流场。');return;}
   try{
-    const data=await api('/results/'+id+'/metadata');if(epoch!==generation)return;meta=data;frame=data.frames.length-1;axis=2;index=Math.floor((meta.dimensions[axis]-1)/2);shift=meta.bounds.map(b=>(b[0]+b[1])/2);
+    const data=await api('/results/'+id+'/metadata');if(epoch!==generation)return;meta=data;clearTimeout(positionTimer);frame=data.frames.length-1;axis=2;index=Math.floor((meta.dimensions[axis]-1)/2);shift=meta.bounds.map(b=>(b[0]+b[1])/2);
     $('#controls').disabled=false;$('#frame-count').textContent=meta.frames.length+' 帧';$('#provenance').textContent=(meta.unit_mode==='si'?'SI 物理单位':meta.unit_mode==='lattice'?'格子单位':'单位未知')+' · 真实 VTK · '+(source?.kind==='job'?'计算快照':'手动导入');
     $('#monitor-link').hidden=!id.startsWith('job-');$('#monitor-link').href='/?mode=run&job='+encodeURIComponent(id.slice(4));
     const facts=[['网格',meta.dimensions.join(' × ')],['格距',meta.spacing.map(fmt).join(' / ')+' '+meta.coordinate_unit],['坐标', 'VTK 格点中心'],['原始文件',meta.frames.reduce((n,f)=>n+f.fields.length,0)+' 个 VTK']];
@@ -226,10 +226,10 @@ $('#import').onclick=()=>{uploadState('');$('#import-dialog').showModal();};
 $('#choose-folder').onclick=()=>$('#folder-input').click();$('#choose-files').onclick=()=>$('#files-input').click();
 $('#folder-input').onchange=e=>importFiles(e.target.files);$('#files-input').onchange=e=>importFiles(e.target.files);
 $('#import-dialog').addEventListener('cancel',e=>{if(uploading)e.preventDefault();});$('.dialog-head').onsubmit=e=>{if(uploading){e.preventDefault();uploadState('正在上传文件，请等待本次导入结束。');}};
-$('#open-directory').onclick=async()=>{if(uploading)return;uploading=true;try{uploadState('读取 Windows 结果目录…');const {id}=await api('/results/import',{method:'POST',json:{name:$('#server-directory').value.split(/[\\/]/).at(-1),directory:$('#server-directory').value}});await refresh();$('#import-dialog').close();await loadSource(id);}catch(e){uploadState(e.message);}finally{uploading=false;}};
+$('#open-directory').onclick=async()=>{if(uploading)return;uploading=true;try{if(!$('#server-directory').value.trim())throw Error('请输入 Windows 结果目录。');uploadState('读取 Windows 结果目录…');const {id}=await api('/results/import',{method:'POST',json:{name:$('#server-directory').value.split(/[\\/]/).at(-1),directory:$('#server-directory').value}});await refresh();$('#import-dialog').close();await loadSource(id);}catch(e){uploadState(e.message);}finally{uploading=false;}};
 $$('[data-view]').forEach(b=>b.onclick=()=>orient(b.dataset.view));$('#fit').onclick=()=>orient();
 $$('[data-axis]').forEach(b=>b.onclick=()=>{axis=Number(b.dataset.axis);index=Math.floor((meta.dimensions[axis]-1)/2);orient(['yz','xz','xy'][axis]);updateSlice();});
-$('#field').onchange=()=>{fieldUI();updateSlice();};$('#component').onchange=updateSlice;
+$('#field').onchange=()=>{$('#auto-range').checked=true;$('#range-min').disabled=$('#range-max').disabled=true;fieldUI();updateSlice();};$('#component').onchange=updateSlice;
 $('#slice-slider').onchange=e=>{index=Number(e.target.value);updateSlice();};$('#slice-slider').oninput=e=>{$('#position').value=fmt(meta.origin[axis]+Number(e.target.value)*meta.spacing[axis]);};
 let positionTimer;
 function applyPosition(){if(!meta)return;const n=Number($('#position').value);if(!Number.isFinite(n)){sliceUI();return;}index=Math.max(0,Math.min(meta.dimensions[axis]-1,Math.round((n-meta.origin[axis])/meta.spacing[axis])));updateSlice();}

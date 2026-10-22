@@ -74,7 +74,7 @@ python3 -m unittest discover -s workbench/tests -v
 node --check workbench/web/app.js
 ```
 
-单元测试使用明确的假执行器，不启动 EXE，可在 Mac 运行。真实服务启动、配置校验和计算只允许在 Windows。接口验证脚本 `tests/smoke_windows.py` 通过正在运行的真实 Windows 服务提交短算例，检查完成状态、曲线和下载；日志中记录服务及 EXE 身份。正式验证结论见 `validation.md`。
+单元测试使用明确的假执行器，不启动 EXE，可在 Mac 运行。真实服务启动、配置校验和计算只允许在 Windows。接口验证脚本 `tests/smoke_windows.py` 通过正在运行的真实 Windows 服务提交短算例，检查完成状态、曲线和下载；日志中记录服务及 EXE 身份。首版验证见 `validation.md`，结果查看验收见 `results-validation.md`。
 
 ## 结果查看（0.2.0-dev）
 
