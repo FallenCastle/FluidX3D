@@ -223,5 +223,25 @@
   "raw_import_id": "import-a6dfb4a99d244e5db78429c3210c9680",
   "full_import_id": "import-b8a40a49fd1845cd8ad04258537fb073",
   "stl_sha256": "e50f070a254fc6f402c85592a623c12d82c5f5b805cfb4dc27094345460ab040",
-  "import_checks": "passed"
+  "import_checks": "passed",
+  "browser_verification": {
+    "auto_load_run": "20261022T122600Z-8aa9162a20a6",
+    "windows_directory_import": "import-63429db8852946e3a4540c09820ff78c",
+    "xyz_slices": true,
+    "physical_position_input": true,
+    "velocity_components_and_pressure": true,
+    "categorical_flags": true,
+    "stl_visibility_and_opacity": true,
+    "fixed_color_range": true,
+    "time_selection_play_pause": true,
+    "console_errors": [],
+    "screenshot": "results-preview.png"
+  },
+  "deployment": {
+    "runtime_commit": "e1fcb4d",
+    "windows_service_pid": 6636,
+    "active_job": null,
+    "owned_preview_tunnel_pid": 72690,
+    "solver_sha256_verified": "3ab5c696aa38e5fd919a6b1236e0b330347058a097f99f40b2a606d3d908c4cd"
+  }
 }
