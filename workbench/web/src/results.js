@@ -11,7 +11,7 @@ const names = {u:'速度', p:'压力', rho:'密度', T:'温度', phi:'液相体�
 const states = {succeeded:'计算完成', failed:'失败 · 可查看完整输出', cancelled:'终止 · 部分结果', timed_out:'超时 · 部分结果', interrupted:'服务中断', running:'正在计算', starting:'正在启动', validating:'正在校验', cancelling:'正在终止'};
 const active = new Set(['validating','starting','running','cancelling']);
 const fmt = x => Number.isFinite(x) ? Number(x.toPrecision(6)).toString() : '—';
-let token, sources=[], selected=null, meta=null, slice=null, axis=2, frame=0, index=0, view='xy', sequence=0, generation=0, playing=false, uploading=false;
+let token, sources=[], selected=null, meta=null, slice=null, axis=2, frame=0, index=0, view='xy', sequence=0, generation=0, playing=false, uploading=false, playGeneration=0;
 let window3d, renderer, renderWindow, sliceObject, domainObject, geometryObjects=[], shift=[0,0,0];
 const lut=vtkColorTransferFunction.newInstance();
 const ramp=[[0,.129,.224,.592],[.27,.098,.651,.824],[.5,.475,.812,.678],[.74,.965,.863,.412],[1,.808,.271,.169]];
@@ -144,7 +144,6 @@ function fieldUI(){
   const f=meta.fields.find(f=>f.id===$('#field').value),vector=f.components===3,component=$('#component').value;
   selectOptions($('#component'),vector?[['magnitude','速度大小 |u|'],['x','X 分量'],['y','Y 分量'],['z','Z 分量']]:[['scalar','标量']],component);
   $('#component').disabled=!vector;$('#field-note').textContent=f.id==='p'?'相对 fluid.rho 参考密度的表压。':f.id==='flags'?'格点位掩码，编号颜色不表示大小。':('输出单位：'+f.unit);
-  $('#color-unit').textContent=f.unit;
 }
 function sliceUI(){
   $('#slice-slider').max=meta.dimensions[axis]-1;$('#slice-slider').value=index;
@@ -162,7 +161,7 @@ async function updateSlice(){
     const query=new URLSearchParams({field:$('#field').value,step:f.step,axis,index,component:$('#component').value});
     const data=await api('/results/'+id+'/slice?'+query);
     if(seq!==sequence||epoch!==generation)return;
-    slice=data;makeSlice();$('#empty').hidden=true;$('#field-caption').textContent=names[$('#field').value]+' · '+$('#component').selectedOptions[0].textContent;
+    slice=data;$('#color-unit').textContent=meta.fields.find(f=>f.id===$('#field').value).unit;makeSlice();$('#empty').hidden=true;$('#field-caption').textContent=names[$('#field').value]+' · '+$('#component').selectedOptions[0].textContent;
     const t=f.time===null?'时间未知':fmt(f.time)+(meta.unit_mode==='si'?' s':meta.unit_mode==='lattice'?' lu':'（原始时间单位）');
     $('#frame-caption').textContent='Step '+(meta.step_known?f.step:'未知')+' / '+t;
     $('#slice-caption').textContent=['X','Y','Z'][axis]+' = '+fmt(data.position)+' '+meta.coordinate_unit;
@@ -182,7 +181,7 @@ function renderSources(){
   if(!sources.length)list.textContent='暂无计算或导入记录';
 }
 async function refresh(){const next=(await api('/results')).datasets;if(JSON.stringify(next)!==JSON.stringify(sources)){sources=next;renderSources();}}
-function stopPlayback(){playing=false;$('#play').textContent='播放';}
+function stopPlayback(){playing=false;playGeneration++;$('#play').textContent='播放';}
 async function loadSource(id){
   stopPlayback();generation++;sequence++;const epoch=generation;selected=id;meta=null;slice=null;clearScene();notice();renderSources();$('#controls').disabled=true;$('#empty').hidden=false;$('#colorbar').hidden=true;$('#category-legend').hidden=true;$('#geometry-list').replaceChildren();$('#field-caption').textContent='';$('#frame-caption').textContent='';$('#slice-caption').textContent='';$('#busy').hidden=false;
   for(const selector of ['#previous','#play','#next','#time-slider','#frame-select'])$(selector).disabled=true;
@@ -203,7 +202,7 @@ async function loadSource(id){
   finally{if(epoch===generation)$('#busy').hidden=true;}
 }
 async function changeFrame(i){if(!meta)return;frame=Math.max(0,Math.min(meta.frames.length-1,i));await updateSlice();}
-async function play(){if(playing){stopPlayback();return;}playing=true;$('#play').textContent='暂停';const epoch=generation;while(playing&&meta&&epoch===generation){await changeFrame((frame+1)%meta.frames.length);await new Promise(r=>setTimeout(r,400));}}
+async function play(){if(playing){stopPlayback();return;}playing=true;$('#play').textContent='暂停';const epoch=generation,ticket=++playGeneration;while(playing&&meta&&epoch===generation&&ticket===playGeneration){await changeFrame((frame+1)%meta.frames.length);await new Promise(r=>setTimeout(r,400));}}
 function uploadState(message){$('#import-status').textContent=message;}
 async function importFiles(files){
   if(uploading||!files.length)return;uploading=true;let id;
