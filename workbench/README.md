@@ -6,13 +6,26 @@
 
 Windows 要求 Python 3.12+、已验收的 `package/V2.0.0` 及可用 OpenCL 设备。无需 pip/npm 安装。前端资源均从同一个本机服务提供，不依赖外部 CDN。
 
-Windows 源码工作区使用 `F:\01-Project\Opensource\01-FluidX3D\web-src`，与原 `src` 及正在开发的续算分支分开。同步本分支后，在 Mac 双击 `workbench/scripts/open-mac.command`，或执行：
+Windows 源码工作区使用 `F:\01-Project\Opensource\01-FluidX3D\web-src`，与原 `src` 及正在开发的续算分支分开。先在 Windows 同步本分支（需要包含 `manage-windows.ps1`）。Mac 需要 Python 3 和已可通过密钥登录的 `ssh desktop-msi`，无需安装 Python 第三方依赖。
+
+在项目根目录双击 **启动工作台.command** / **关闭工作台.command**。这两个入口指向下列版本管理中的脚本，也可从终端运行：
 
 ```sh
 ./workbench/scripts/open-mac.command
+./workbench/scripts/close-mac.command
 ```
 
-命令启动或复用 Windows 后台执行服务，把 `127.0.0.1:8765` 通过 SSH 转发到 Mac，并自动打开浏览器。保持终端和连接运行以访问网页。关闭终端只断开 SSH 隧道；浏览器关闭、刷新或网络断开均不会终止 Windows 中的任务。重新打开页面会读取已有任务与结果；需要结束计算时使用“终止当前任务”。服务退出则清理自己启动的求解器进程树，不提供续算。后台服务不随 Windows 重启自动启动。
+启动入口启动或复用 Windows 后台服务，建立后台 SSH 隧道，等待 `http://127.0.0.1:8765` 返回正确的 V2.0.0 程序身份后自动打开默认浏览器。重复启动复用同一服务和隧道。终端提示完成后即可关闭窗口；关闭终端、浏览器不会停止后台连接或 Windows 计算。Mac 睡眠/网络断开可能使隧道退出，再次启动即可恢复访问。后台服务不随 Windows 重启自动启动。
+
+关闭入口先检查工作台活动任务和 Windows 上实际的 `Solver-IBM.exe` / `FluidX3D.exe` 进程。有计算、校验或正在取消的任务时拒绝关闭，并显示任务/进程信息；请等待完成，或在网页使用“终止当前任务”后再次关闭。没有任务时通过服务关闭接口退出，核实进程与 Windows 端口释放，再关闭本脚本管理的隧道。接口锁同时防止检查后新任务插入。其他来源的求解器进程会阻止关闭，但脚本不会终止它们。无法连接 Windows 时保留隧道并报错，不把无法检查当成没有任务。
+
+隧道通过用户私有 `/tmp/solver-ibm-<uid>-<标识>/ssh.sock` 管理，不按进程名称批量结束 SSH。日志在同目录 `ssh.log`。遇到其他程序或手动隧道占用 Mac 端口时提示处理，不接管它们。新建隧道失败时尝试撤回本次新启动的空闲服务；如果已出现任务则保留。关闭不会删除算例、结果或日志。
+
+默认连接 `desktop-msi`、端口 `8765`。终端使用时可设置 `SOLVER_WEB_HOST`、`SOLVER_WEB_PORT`、`SOLVER_WEB_ROOT`、`SOLVER_WEB_CHECKOUT`、`SOLVER_WEB_DATA`；启动与关闭需使用相同设置。只读状态检查：
+
+```sh
+python3 workbench/scripts/mac-workbench.py status
+```
 
 也可在 Windows 单独启动服务并保持其终端运行，再从 Mac 只建立隧道：
 
@@ -26,7 +39,7 @@ ssh -N -L 8765:127.0.0.1:8765 desktop-msi
 
 浏览器访问 `http://127.0.0.1:8765`。服务只监听 Windows 回环地址；不需要开放防火墙端口或公网访问。
 
-计算结束后，可关闭 Windows 服务（有活动任务时会拒绝关闭）：
+也可单独关闭 Windows 服务（同样检查任务与实际计算进程，但不管理 Mac 隧道）：
 
 ```sh
 ssh desktop-msi 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File F:\01-Project\Opensource\01-FluidX3D\web-src\workbench\scripts\stop-windows.ps1'
