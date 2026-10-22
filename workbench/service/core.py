@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 
 from winprocess import Job
 
-VERSION = '0.1.0-dev'
+VERSION = '0.2.0-dev'
 BASE_COMMIT = '58f44e5013b7b1ffe105107cfa2a27f8d557e45d'
 MAX_STL = 50 * 1024 * 1024
 ACTIVE = {'validating', 'starting', 'running', 'cancelling'}

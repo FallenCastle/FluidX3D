@@ -1,0 +1,12 @@
+{
+  "dependencies": {
+    "@kitware/vtk.js": "37.4.6"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  },
+  "private": true,
+  "scripts": {
+    "build:results": "node scripts/build-results.mjs"
+  }
+}

@@ -1,6 +1,6 @@
 # Solver-IBM 浏览器工作台
 
-工作台版本为 `0.1.0-dev`，固定对接正式 `Solver-IBM 2.0.0`。基线标签 `v2.0.0`（`58f44e5013b7b1ffe105107cfa2a27f8d557e45d`）；不修改、编译或替换求解器。代码位于独立 `feature/web-workbench-v2` 分支。
+工作台版本为 `0.2.0-dev`，固定对接正式 `Solver-IBM 2.0.0`。基线标签 `v2.0.0`（`58f44e5013b7b1ffe105107cfa2a27f8d557e45d`）；不修改、编译或替换求解器。代码位于独立 `feature/web-workbench-v2` 分支。
 
 ## 开始使用
 
@@ -67,7 +67,7 @@ runs/<UTC-UUID>/
 
 ## 开发验证
 
-前端源文件位于 `web/src/`，修改后运行 `python3 workbench/scripts/build-web.py` 生成并提交 `web/app.js`。不需要 npm 或网络依赖。
+前端源文件位于 `web/src/`，修改后运行 `python3 workbench/scripts/build-web.py` 生成并提交 `web/app.js`。模型编辑器无需 npm。结果查看器使用本地打包的 vtk.js 37.4.6，重建时在 workbench 下运行 `npm ci`、`npm run build:results`；运行部署仍无需 npm。
 
 ```sh
 python3 -m unittest discover -s workbench/tests -v
@@ -75,3 +75,17 @@ node --check workbench/web/app.js
 ```
 
 单元测试使用明确的假执行器，不启动 EXE，可在 Mac 运行。真实服务启动、配置校验和计算只允许在 Windows。接口验证脚本 `tests/smoke_windows.py` 通过正在运行的真实 Windows 服务提交短算例，检查完成状态、曲线和下载；日志中记录服务及 EXE 身份。正式验证结论见 `validation.md`。
+
+## 结果查看（0.2.0-dev）
+
+点击顶部“结果查看”，或打开 `/results.html`。任务完成时，若正处于该任务的运行监控页，会自动打开结果并加载最后一帧；编辑其他配置时只提示完成。结果页选中正在运行的任务，也会在成功后自动加载。刷新页面可恢复 URL 中所选数据集。
+
+- 原生读取 V2.0.0 的 BINARY / STRUCTURED_POINTS / SCALARS 输出，包括三分量速度；按大端 float32 和 unsigned_char 解析。支持速度大小/XYZ 分量、压力、密度、温度、液相体积分数以及离散格点/材料/对象编号。只显示文件实际提供的字段。
+- XY、XZ、YZ 正交切片；物理位置吸附至最近格点中心。三维旋转、平移、缩放、正视/等轴视角，自动或固定色标范围，STL 显隐和透明度，时间步选择与顺序播放。
+- 场值不重复换算。坐标取 VTK 的 ORIGIN/SPACING；完整目录中的 effective-config 和 resolved-config 提供单位、dt 与 STL 变换。缺少元数据时明确显示单位/时间未知，裸 STL 按原始坐标叠加。
+- 支持上传 Mac 文件夹、多个 VTK/STL 文件（也可同时选择对应元数据 JSON），以及只读引用 Windows workingdir 内的已有结果目录。目录导入只筛选 VTK、STL 与 effective-config/resolved-config/manifest JSON；不执行导入内容。同一次导入要求 VTK 位于同一目录，网格一致、同一步变量不重复。
+- 上传单个 VTK ≤ 2 GiB、STL ≤ 50 MiB、单次总量 ≤ 10 GiB；文件流式保存到 imports，校验通过后发布，失败清理未完成导入。已有 Windows 目录不复制文件。已导入数据跨服务重启保留。
+- 每次读取一张切片，每轴最多 257 个实际格点，保留两端；超出时标记“抽样预览”，不改动原文件。连续量在切片节点间插值，离散编号使用最近节点色块，非有限值留下空白并报告数量。色标默认只代表当前切片，固定范围用于跨帧比较。
+- 首版叠加静态 STL。规定运动对象明确提示并隐藏，避免拿初始模型冒充当前位姿；动态位姿、斜切片、流线、体渲染和其他 VTK 格式暂不支持。
+
+结果数据独立于当前编辑草稿。后处理失败只在结果页报告，不改写求解器任务的成功/失败状态。渲染库与许可证随前端分发，不需要浏览器连接 CDN。

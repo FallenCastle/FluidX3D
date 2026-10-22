@@ -12,6 +12,8 @@ from datetime import datetime
 import threading
 from urllib.parse import parse_qs, unquote, urlsplit
 
+from results import Results
+
 from core import MAX_STL, VERSION, WORKBENCH, Package, Problem, Solver, Workbench, inside
 
 
@@ -107,6 +109,40 @@ def make_server(workbench, port=8765):
             self.origin_check()
             url = urlsplit(self.path)
             path, query = unquote(url.path), parse_qs(url.query)
+            if path.startswith('/api/results'):
+                if not getattr(self.server, 'results', None):
+                    with workbench.lock:
+                        if not getattr(self.server, 'results', None):
+                            self.server.results = Results(workbench)
+                results = self.server.results
+                if path == '/api/results' and self.command == 'GET':
+                    return self.reply({'datasets': results.catalog()})
+                if path == '/api/results/import' and self.command == 'POST':
+                    body = self.body()
+                    return self.reply(results.create(body.get('name'), body.get('directory')), 201)
+                parts = path.split('/')
+                if len(parts) == 5:
+                    ident, action = parts[3:]
+                    if action == 'upload' and self.command == 'POST':
+                        if self.headers.get('Transfer-Encoding'):
+                            raise Problem('不支持分块上传')
+                        return self.reply(results.upload(ident, query.get('path', [''])[0], self.rfile,
+                                                         int(self.headers.get('Content-Length', '-1'))), 201)
+                    if action == 'finish' and self.command == 'POST':
+                        self.body()
+                        return self.reply(results.finish(ident))
+                    if action == 'cancel' and self.command == 'POST':
+                        self.body()
+                        return self.reply(results.cancel(ident))
+                    if self.command == 'GET':
+                        if action == 'metadata':
+                            return self.reply(results.index(ident, refresh=True)['metadata'])
+                        if action == 'slice':
+                            return self.reply(results.slice(ident, query.get('field', ['u'])[0],
+                                int(query.get('step', ['0'])[0]), int(query.get('axis', ['2'])[0]),
+                                int(query.get('index', ['0'])[0]), query.get('component', ['magnitude'])[0]))
+                        if action == 'geometry':
+                            return self.file(results.geometry(ident, int(query.get('index', ['0'])[0])))
             if path == '/api/session' and self.command == 'GET':
                 return self.reply({'token': token, 'version': VERSION, 'solver': workbench.package.identity,
                                    'devices': workbench.runner.devices, 'active_job': workbench.active})
