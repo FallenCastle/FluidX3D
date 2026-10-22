@@ -7,6 +7,8 @@ import os
 from pathlib import Path
 import secrets
 import signal
+import sys
+from datetime import datetime
 import threading
 from urllib.parse import parse_qs, unquote, urlsplit
 
@@ -192,7 +194,13 @@ def main():
     parser.add_argument('--package', required=True, type=Path)
     parser.add_argument('--data', required=True, type=Path)
     parser.add_argument('--port', type=int, default=8765)
+    parser.add_argument('--log-root', type=Path)
     args = parser.parse_args()
+    if args.log_root:
+        args.log_root.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now().strftime('%Y%m%d-%H%M%S-%f')
+        sys.stdout = (args.log_root / (stamp + '.stdout.log')).open('w', encoding='utf-8', buffering=1)
+        sys.stderr = (args.log_root / (stamp + '.stderr.log')).open('w', encoding='utf-8', buffering=1)
     if os.name != 'nt':
         parser.error('真实执行服务仅能在 Windows 启动；Mac 使用连接脚本。')
     package = Package(args.package)
