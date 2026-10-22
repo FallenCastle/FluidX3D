@@ -1,0 +1,88 @@
+{
+  "solver": {
+    "product": "Solver-IBM",
+    "version": "2.0.0",
+    "sha256": "3ab5c696aa38e5fd919a6b1236e0b330347058a097f99f40b2a606d3d908c4cd",
+    "build_commit": "a039a20d32dd4571ebfcd27cd8125c77f7b049f4",
+    "source_tree": "b3b27571e3578e6237986260b1dcbee8774702da",
+    "web_version": "0.1.0-dev",
+    "web_base_commit": "58f44e5013b7b1ffe105107cfa2a27f8d557e45d"
+  },
+  "devices": [
+    {
+      "id": 0,
+      "platform": "NVIDIA CUDA",
+      "name": "NVIDIA GeForce RTX 4070 Ti SUPER",
+      "vendor": "NVIDIA Corporation",
+      "driver": "610.88",
+      "version": "OpenCL 3.0 CUDA"
+    },
+    {
+      "id": 1,
+      "platform": "AMD Accelerated Parallel Processing",
+      "name": "gfx1036",
+      "vendor": "Advanced Micro Devices, Inc.",
+      "driver": "3652.0 (PAL,LC)",
+      "version": "OpenCL 2.0 AMD-APP (3652.0)"
+    }
+  ],
+  "checks": [
+    {
+      "name": "STL upload",
+      "passed": true,
+      "sha256": "e50f070a254fc6f402c85592a623c12d82c5f5b805cfb4dc27094345460ab040"
+    },
+    {
+      "name": "V2.0.0 validate",
+      "passed": true
+    },
+    {
+      "name": "reject escape",
+      "passed": true
+    },
+    {
+      "name": "reject refinement",
+      "passed": true
+    },
+    {
+      "name": "reject checkpoint",
+      "passed": true
+    },
+    {
+      "name": "terminate owned process",
+      "passed": true,
+      "job": "20261022T100900Z-79c83f9d1120"
+    },
+    {
+      "name": "timeout cleanup",
+      "passed": true,
+      "job": "20261022T100900Z-31c5ab9ae3dd"
+    },
+    {
+      "name": "solver validation failure",
+      "passed": true,
+      "job": "20261022T100902Z-eda159c519b9"
+    },
+    {
+      "name": "23-step real run, CSV, VTK, immutable snapshot",
+      "passed": true,
+      "job": "20261022T100902Z-e29425109011"
+    }
+  ],
+  "passed": true,
+  "browser_acceptance": {
+    "code_commit": "f6da235",
+    "job": "20261022T114952Z-6adc4bdea1de",
+    "steps": 400,
+    "exit_code": 0,
+    "stl_uploaded_through_browser": true,
+    "saved_draft_roundtrip": true,
+    "physical_dimensions_preserved": true,
+    "domain_boundary_form_json_roundtrip": true
+  },
+  "service_lifecycle": {
+    "background_start_survives_ssh_exit": true,
+    "graceful_stop_restart": true,
+    "records_retained_after_restart": true
+  }
+}

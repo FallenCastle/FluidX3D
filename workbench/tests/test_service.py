@@ -90,6 +90,15 @@ class ServiceTest(unittest.TestCase):
         self.assertFalse(read_json(run / 'refinement-draft.json')['applied'])
         self.assertEqual(sha(run / 'runtime/Solver-IBM.exe'), self.package.identity['sha256'])
 
+    def test_history_orders_runs_within_one_second(self):
+        first = self.submit()
+        self.wait()
+        second = self.submit()
+        self.wait()
+        self.app.update(first['id'], created_at='2026-10-22T10:00:00.100000+00:00')
+        self.app.update(second['id'], created_at='2026-10-22T10:00:00.200000+00:00')
+        self.assertEqual([job['id'] for job in self.app.jobs()], [second['id'], first['id']])
+
     def test_busy_stop_and_own_job_only(self):
         self.runner.delay = 5
         record = self.submit()
