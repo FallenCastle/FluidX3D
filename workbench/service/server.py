@@ -108,6 +108,13 @@ def make_server(workbench, port=8765):
             if path == '/api/session' and self.command == 'GET':
                 return self.reply({'token': token, 'version': VERSION, 'solver': workbench.package.identity,
                                    'devices': workbench.runner.devices, 'active_job': workbench.active})
+            if path == '/api/shutdown' and self.command == 'POST':
+                self.body()
+                if not workbench.operation.acquire(blocking=False):
+                    raise Problem('请先等待校验结束或终止当前计算，再关闭执行服务。', 409)
+                self.reply({'stopping': True})
+                threading.Thread(target=self.server.shutdown, daemon=True).start()
+                return  # Keep the operation lock held so no new task can start.
             if path == '/api/draft':
                 if self.command == 'GET':
                     return self.reply(workbench.draft())

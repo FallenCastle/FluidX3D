@@ -12,7 +12,7 @@ Windows 源码工作区使用 `F:\01-Project\Opensource\01-FluidX3D\web-src`，�
 ./workbench/scripts/open-mac.command
 ```
 
-命令启动 Windows 执行服务，把 `127.0.0.1:8765` 通过 SSH 转发到 Mac，并自动打开浏览器。保持终端和连接运行；关闭前先确认任务结束。浏览器关闭或刷新不会终止服务中的任务。重新打开页面会读取已有任务与结果；服务退出则清理自己启动的求解器进程树，不提供续算。
+命令启动或复用 Windows 后台执行服务，把 `127.0.0.1:8765` 通过 SSH 转发到 Mac，并自动打开浏览器。保持终端和连接运行以访问网页。关闭终端只断开 SSH 隧道；浏览器关闭、刷新或网络断开均不会终止 Windows 中的任务。重新打开页面会读取已有任务与结果；需要结束计算时使用“终止当前任务”。服务退出则清理自己启动的求解器进程树，不提供续算。后台服务不随 Windows 重启自动启动。
 
 也可在 Windows 单独启动服务并保持其终端运行，再从 Mac 只建立隧道：
 
@@ -25,6 +25,12 @@ ssh -N -L 8765:127.0.0.1:8765 desktop-msi
 ```
 
 浏览器访问 `http://127.0.0.1:8765`。服务只监听 Windows 回环地址；不需要开放防火墙端口或公网访问。
+
+计算结束后，可关闭 Windows 服务（有活动任务时会拒绝关闭）：
+
+```sh
+ssh desktop-msi 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File F:\01-Project\Opensource\01-FluidX3D\web-src\workbench\scripts\stop-windows.ps1'
+```
 
 ## 首版功能
 
