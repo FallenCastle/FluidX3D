@@ -100,7 +100,9 @@ def main():
     assert completed['status']=='succeeded',completed
     assert completed['completion']['steps']==23 and completed['exit_code']==0
     series=request('/jobs/'+job['id']+'/series?file=probes.csv')
-    assert series['rows'] and series['rows'][-1]['step']==23
+    # Analysis samples follow analysis.every; V2.0.0 does not force a final probe sample.
+    assert [r['step'] for r in series['rows'] if r['id']=='upstream']==[0,7,14,21]
+    assert {r['id'] for r in series['rows']}=={'upstream','downstream'}
     monitor=request('/jobs/'+job['id']+'/series?file=monitor.csv')
     assert monitor['rows'][-1]['step']==23
     files=request('/jobs/'+job['id']+'/files')['files']

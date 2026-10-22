@@ -392,6 +392,7 @@ class Workbench:
                 self.update(ident, status=result['outcome'], exit_code=result['exit_code'])
                 return
             if result['exit_code']:
+                self.update(ident, exit_code=result['exit_code'])
                 raise Problem(result['stderr'] or result['stdout'] or '配置校验失败')
             resolved = parse_resolved((validation / 'stdout.log').read_text(encoding='utf-8-sig'))
             atomic_json(folder / 'validated-config.json', resolved)
@@ -408,9 +409,10 @@ class Workbench:
                 self.update(ident, status=result['outcome'], exit_code=result['exit_code'])
                 return
             if result['exit_code']:
+                self.update(ident, exit_code=result['exit_code'])
                 raise Problem(result['stderr'] or result['stdout'] or '求解器运行失败')
             completion = read_json(folder / 'results/completion.json')
-            if (completion.get('status') != 'succeeded' or completion.get('version') != '2.0.0'
+            if (completion.get('product') != 'Solver-IBM' or completion.get('status') != 'succeeded' or completion.get('version') != '2.0.0'
                     or completion.get('steps') != completion.get('requested_steps')):
                 raise Problem('进程已退出，但 completion.json 未确认请求步数完成')
             for required in ['manifest.json', 'resolved-config.json', 'effective-config.json', 'monitor.csv']:

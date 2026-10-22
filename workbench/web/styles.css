@@ -60,3 +60,28 @@
 
 
 html{color-scheme:light dark}body{margin:0;padding:16px;background:light-dark(#edf0f4,#12161c)}#solver-boundaries{max-width:1680px;margin:0 auto}#solver-boundaries .ss-icon{font-style:normal;display:inline-flex;align-items:center;justify-content:center;font-size:16px}#solver-boundaries a{color:var(--ss-blue)}#solver-boundaries .ss-log{white-space:pre-wrap;max-height:400px;overflow:auto}#solver-boundaries .ss-project{overflow-wrap:anywhere}#solver-boundaries .ss-project strong{white-space:normal}#solver-boundaries .ss-treefoot .ss-statusmark{background:var(--ss-green)}@media(max-width:680px){body{padding:0}}
+
+/* Keep scene, inspector and monitoring visible together on desktop screens. */
+#ss-plot-legend{display:flex;gap:12px;flex-wrap:wrap}#ss-plot-legend span{display:flex;align-items:center;gap:5px}#ss-plot-legend b{width:14px;height:2px;display:inline-block}
+@media(min-width:900px){
+ #solver-boundaries{height:calc(100dvh - 32px);min-height:640px;display:flex;flex-direction:column}
+ #solver-boundaries .ss-top,#solver-boundaries .ss-modebar,#solver-boundaries .ss-bottom,#solver-boundaries .ss-notice{flex-shrink:0}
+ #solver-boundaries .ss-top{padding-right:16px}
+ #solver-boundaries .ss-workspace{flex:1;min-height:0;grid-template-rows:minmax(0,1fr) 216px}
+ #solver-boundaries .ss-tree{min-height:0}.ss-treebody{overflow:auto}
+ #solver-boundaries .ss-scene{display:flex;flex-direction:column;min-height:0}
+ #solver-boundaries .ss-viewbar,#solver-boundaries .ss-scenefoot{flex-shrink:0}
+ #solver-boundaries .ss-viewport,#solver-boundaries .ss-largeplot{height:auto;flex:1;min-height:0}
+ #solver-boundaries .ss-largeplot{display:flex;flex-direction:column}
+ #solver-boundaries .ss-largeplot .ss-chartbox{flex:1;min-height:0}
+ #solver-boundaries .ss-largeplot .ss-chart{height:100%}
+ #solver-boundaries .ss-inspector{display:flex;flex-direction:column;min-height:0}
+ #solver-boundaries .ss-inspector>.ss-panehead{flex-shrink:0}
+ #solver-boundaries #ss-properties{overflow:auto;min-height:0}
+ #solver-boundaries .ss-dock{overflow:auto;min-height:0}
+ #solver-boundaries .ss-dockhead{position:sticky;top:0;background:var(--ss-panel);z-index:1}
+ #solver-boundaries .ss-dock .ss-chart{height:136px}
+ #solver-boundaries .ss-json-cover{display:flex;flex-direction:column;min-height:0}
+ #solver-boundaries .ss-editor{height:auto;flex:1;min-height:0;resize:none}
+ #solver-boundaries .ss-log{min-height:0}
+}
