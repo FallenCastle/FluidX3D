@@ -55,7 +55,11 @@ function orient(which=view){
   view=which;if(!meta)return;
   const camera=renderer.getActiveCamera(),extent=Math.max(...meta.bounds.map(b=>b[1]-b[0])),dirs={xy:[0,0,1],xz:[0,-1,0],yz:[1,0,0],iso:[1,-1,1]};
   camera.setFocalPoint(0,0,0);camera.setPosition(...dirs[which].map(v=>v*extent*3));camera.setViewUp(...(which==='xy'?[0,1,0]:[0,0,1]));camera.setParallelProjection(true);
-  renderer.resetCamera(meta.bounds.flatMap((b,a)=>b.map(v=>v-shift[a])));camera.setParallelScale(camera.getParallelScale()*1.16);
+  renderer.resetCamera(meta.bounds.flatMap((b,a)=>b.map(v=>v-shift[a])));const direction=dirs[which],length=Math.hypot(...direction),normal=direction.map(v=>v/length),up=which==='xy'?[0,1,0]:[0,0,1];
+  const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+  const right=cross(up,normal),rightLength=Math.hypot(...right),horizontal=right.map(v=>v/rightLength),vertical=cross(normal,horizontal),sizes=meta.bounds.map(b=>b[1]-b[0]);
+  const width=sizes.reduce((sum,x,i)=>sum+x*Math.abs(horizontal[i]),0),height=sizes.reduce((sum,x,i)=>sum+x*Math.abs(vertical[i]),0),rect=$('#renderer').getBoundingClientRect();
+  camera.setParallelScale(Math.max(height/2,width*rect.height/(2*Math.max(rect.width,1)))*1.3);
   renderer.resetCameraClippingRange();renderWindow.render();$$('[data-view]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.view===which));
 }
 function categoryColor(value){return catColors[Math.abs(Math.round(value))%catColors.length];}
@@ -177,7 +181,7 @@ function renderSources(){
   }
   if(!sources.length)list.textContent='暂无计算或导入记录';
 }
-async function refresh(){sources=(await api('/results')).datasets;renderSources();}
+async function refresh(){const next=(await api('/results')).datasets;if(JSON.stringify(next)!==JSON.stringify(sources)){sources=next;renderSources();}}
 function stopPlayback(){playing=false;$('#play').textContent='播放';}
 async function loadSource(id){
   stopPlayback();generation++;sequence++;const epoch=generation;selected=id;meta=null;slice=null;clearScene();notice();renderSources();$('#controls').disabled=true;$('#empty').hidden=false;$('#colorbar').hidden=true;$('#category-legend').hidden=true;$('#geometry-list').replaceChildren();$('#field-caption').textContent='';$('#frame-caption').textContent='';$('#slice-caption').textContent='';$('#busy').hidden=false;
@@ -227,7 +231,10 @@ $$('[data-view]').forEach(b=>b.onclick=()=>orient(b.dataset.view));$('#fit').onc
 $$('[data-axis]').forEach(b=>b.onclick=()=>{axis=Number(b.dataset.axis);index=Math.floor((meta.dimensions[axis]-1)/2);orient(['yz','xz','xy'][axis]);updateSlice();});
 $('#field').onchange=()=>{fieldUI();updateSlice();};$('#component').onchange=updateSlice;
 $('#slice-slider').onchange=e=>{index=Number(e.target.value);updateSlice();};$('#slice-slider').oninput=e=>{$('#position').value=fmt(meta.origin[axis]+Number(e.target.value)*meta.spacing[axis]);};
-$('#position').onchange=e=>{const n=Number(e.target.value);if(!Number.isFinite(n)){sliceUI();return;}index=Math.max(0,Math.min(meta.dimensions[axis]-1,Math.round((n-meta.origin[axis])/meta.spacing[axis])));updateSlice();};
+let positionTimer;
+function applyPosition(){if(!meta)return;const n=Number($('#position').value);if(!Number.isFinite(n)){sliceUI();return;}index=Math.max(0,Math.min(meta.dimensions[axis]-1,Math.round((n-meta.origin[axis])/meta.spacing[axis])));updateSlice();}
+$('#position').onchange=()=>{clearTimeout(positionTimer);applyPosition();};
+$('#position').oninput=()=>{clearTimeout(positionTimer);positionTimer=setTimeout(applyPosition,350);};
 $('#auto-range').onchange=()=>{$('#range-min').disabled=$('#range-max').disabled=$('#auto-range').checked;applyRange();};$('#apply-range').onclick=applyRange;
 $('#show-domain').onchange=()=>{domainObject?.actor.setVisibility($('#show-domain').checked);renderWindow.render();};$('#show-slice').onchange=()=>{sliceObject?.actor.setVisibility($('#show-slice').checked);renderWindow.render();};
 $('#show-stl').onchange=()=>{geometryObjects.forEach(o=>o.actor.setVisibility($('#show-stl').checked));renderWindow.render();};$('#opacity').oninput=()=>{const opacity=Number($('#opacity').value);$('#opacity-value').textContent=Math.round(opacity*100)+'%';geometryObjects.forEach(o=>o.actor.getProperty().setOpacity(opacity));renderWindow.render();};

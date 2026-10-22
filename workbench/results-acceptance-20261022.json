@@ -1,0 +1,227 @@
+{
+  "run_id": "20261022T122532Z-cccfc1b1df14",
+  "solver": {
+    "product": "Solver-IBM",
+    "version": "2.0.0",
+    "sha256": "3ab5c696aa38e5fd919a6b1236e0b330347058a097f99f40b2a606d3d908c4cd",
+    "build_commit": "a039a20d32dd4571ebfcd27cd8125c77f7b049f4",
+    "source_tree": "b3b27571e3578e6237986260b1dcbee8774702da",
+    "web_version": "0.2.0-dev",
+    "web_base_commit": "58f44e5013b7b1ffe105107cfa2a27f8d557e45d"
+  },
+  "frames": [
+    {
+      "step": 0,
+      "time": 0.0,
+      "fields": [
+        "flags",
+        "p",
+        "rho",
+        "u"
+      ]
+    },
+    {
+      "step": 10000,
+      "time": 29.999999999999996,
+      "fields": [
+        "flags",
+        "p",
+        "rho",
+        "u"
+      ]
+    },
+    {
+      "step": 20000,
+      "time": 59.99999999999999,
+      "fields": [
+        "flags",
+        "p",
+        "rho",
+        "u"
+      ]
+    },
+    {
+      "step": 30000,
+      "time": 89.99999999999999,
+      "fields": [
+        "flags",
+        "p",
+        "rho",
+        "u"
+      ]
+    },
+    {
+      "step": 40000,
+      "time": 119.99999999999999,
+      "fields": [
+        "flags",
+        "p",
+        "rho",
+        "u"
+      ]
+    },
+    {
+      "step": 50000,
+      "time": 149.99999999999997,
+      "fields": [
+        "flags",
+        "p",
+        "rho",
+        "u"
+      ]
+    }
+  ],
+  "checks": [
+    {
+      "field": "u",
+      "component": "magnitude",
+      "axis": 0,
+      "samples": 256,
+      "max_abs_error": 1.3877787807814457e-17
+    },
+    {
+      "field": "u",
+      "component": "magnitude",
+      "axis": 1,
+      "samples": 1024,
+      "max_abs_error": 1.3877787807814457e-17
+    },
+    {
+      "field": "u",
+      "component": "magnitude",
+      "axis": 2,
+      "samples": 1024,
+      "max_abs_error": 1.3877787807814457e-17
+    },
+    {
+      "field": "u",
+      "component": "x",
+      "axis": 0,
+      "samples": 256,
+      "max_abs_error": 0.0
+    },
+    {
+      "field": "u",
+      "component": "x",
+      "axis": 1,
+      "samples": 1024,
+      "max_abs_error": 0.0
+    },
+    {
+      "field": "u",
+      "component": "x",
+      "axis": 2,
+      "samples": 1024,
+      "max_abs_error": 0.0
+    },
+    {
+      "field": "u",
+      "component": "y",
+      "axis": 0,
+      "samples": 256,
+      "max_abs_error": 0.0
+    },
+    {
+      "field": "u",
+      "component": "y",
+      "axis": 1,
+      "samples": 1024,
+      "max_abs_error": 0.0
+    },
+    {
+      "field": "u",
+      "component": "y",
+      "axis": 2,
+      "samples": 1024,
+      "max_abs_error": 0.0
+    },
+    {
+      "field": "u",
+      "component": "z",
+      "axis": 0,
+      "samples": 256,
+      "max_abs_error": 0.0
+    },
+    {
+      "field": "u",
+      "component": "z",
+      "axis": 1,
+      "samples": 1024,
+      "max_abs_error": 0.0
+    },
+    {
+      "field": "u",
+      "component": "z",
+      "axis": 2,
+      "samples": 1024,
+      "max_abs_error": 0.0
+    },
+    {
+      "field": "p",
+      "component": "scalar",
+      "axis": 0,
+      "samples": 256,
+      "max_abs_error": 0.0
+    },
+    {
+      "field": "p",
+      "component": "scalar",
+      "axis": 1,
+      "samples": 1024,
+      "max_abs_error": 0.0
+    },
+    {
+      "field": "p",
+      "component": "scalar",
+      "axis": 2,
+      "samples": 1024,
+      "max_abs_error": 0.0
+    },
+    {
+      "field": "rho",
+      "component": "scalar",
+      "axis": 0,
+      "samples": 256,
+      "max_abs_error": 0.0
+    },
+    {
+      "field": "rho",
+      "component": "scalar",
+      "axis": 1,
+      "samples": 1024,
+      "max_abs_error": 0.0
+    },
+    {
+      "field": "rho",
+      "component": "scalar",
+      "axis": 2,
+      "samples": 1024,
+      "max_abs_error": 0.0
+    },
+    {
+      "field": "flags",
+      "component": "scalar",
+      "axis": 0,
+      "samples": 256,
+      "max_abs_error": 0
+    },
+    {
+      "field": "flags",
+      "component": "scalar",
+      "axis": 1,
+      "samples": 1024,
+      "max_abs_error": 0
+    },
+    {
+      "field": "flags",
+      "component": "scalar",
+      "axis": 2,
+      "samples": 1024,
+      "max_abs_error": 0
+    }
+  ],
+  "raw_import_id": "import-a6dfb4a99d244e5db78429c3210c9680",
+  "full_import_id": "import-b8a40a49fd1845cd8ad04258537fb073",
+  "stl_sha256": "e50f070a254fc6f402c85592a623c12d82c5f5b805cfb4dc27094345460ab040",
+  "import_checks": "passed"
+}
