@@ -55,7 +55,7 @@ function orient(which=view){
   view=which;if(!meta)return;
   const camera=renderer.getActiveCamera(),extent=Math.max(...meta.bounds.map(b=>b[1]-b[0])),dirs={xy:[0,0,1],xz:[0,-1,0],yz:[1,0,0],iso:[1,-1,1]};
   camera.setFocalPoint(0,0,0);camera.setPosition(...dirs[which].map(v=>v*extent*3));camera.setViewUp(...(which==='xy'?[0,1,0]:[0,0,1]));camera.setParallelProjection(true);
-  renderer.resetCamera(...meta.bounds.flatMap((b,a)=>b.map(v=>v-shift[a])));camera.setParallelScale(camera.getParallelScale()*1.16);
+  renderer.resetCamera(meta.bounds.flatMap((b,a)=>b.map(v=>v-shift[a])));camera.setParallelScale(camera.getParallelScale()*1.16);
   renderer.resetCameraClippingRange();renderWindow.render();$$('[data-view]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.view===which));
 }
 function categoryColor(value){return catColors[Math.abs(Math.round(value))%catColors.length];}
