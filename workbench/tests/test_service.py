@@ -49,7 +49,7 @@ class FakeRunner:
             return {'exit_code': 2, 'outcome': None, 'stdout': '', 'stderr': 'test solver failure'}
         output = Path(args[args.index('--output') + 1])
         output.mkdir()
-        atomic_json(output / 'completion.json', {'status': 'succeeded', 'version': '2.0.0', 'steps': 23, 'requested_steps': 23})
+        atomic_json(output / 'completion.json', {'product': 'Solver-IBM', 'status': 'succeeded', 'version': '2.0.0', 'steps': 23, 'requested_steps': 23})
         for name in ['manifest.json', 'resolved-config.json', 'effective-config.json']:
             atomic_json(output / name, {'test_only': True})
         (output / 'monitor.csv').write_text('step,time,mass_lattice\n0,0,10\n23,.069,10\n')
