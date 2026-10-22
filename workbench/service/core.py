@@ -439,8 +439,8 @@ class Workbench:
 
     def jobs(self):
         with self.lock:
-            paths = sorted((self.root / 'runs').glob('*/run.json'), reverse=True)[:200]
-            return [read_json(path) for path in paths]
+            records = [read_json(path) for path in (self.root / 'runs').glob('*/run.json')]
+            return sorted(records, key=lambda item: item['created_at'], reverse=True)[:200]
 
     def files(self, ident):
         folder = self.record_path(ident).parent

@@ -8,6 +8,11 @@ if [[ "$remote_checkout" == *'"'* || "$remote_checkout" == *'$'* || "$remote_che
   print -u2 'Invalid SOLVER_WEB_CHECKOUT'; exit 1
 fi
 url="http://127.0.0.1:$port"
+if /usr/bin/curl --noproxy '*' -fsS --max-time 2 "$url/api/session" 2>/dev/null | /usr/bin/grep -q '"product": "Solver-IBM"'; then
+  print "工作台已连接：$url"
+  /usr/bin/open "$url"
+  exit 0
+fi
 print "工作台地址：$url"
 print '请保持此终端运行以访问网页；关闭终端只断开连接，Windows 任务会继续。'
 ssh -o ConnectTimeout=10 desktop-msi \

@@ -85,3 +85,5 @@ html{color-scheme:light dark}body{margin:0;padding:16px;background:light-dark(#e
  #solver-boundaries .ss-editor{height:auto;flex:1;min-height:0;resize:none}
  #solver-boundaries .ss-log{min-height:0}
 }
+
+#solver-boundaries .ss-detailrow>span:first-child{flex-shrink:0}
